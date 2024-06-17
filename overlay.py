@@ -2,14 +2,18 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout,
 from PyQt5.QtCore import Qt, QDateTime
 from PyQt5.QtGui import QPixmap, QIcon
 from recording import RecorderThread
+from audio import AudioRecorderThread
 
 class TransparentOverlay(QMainWindow):
     def __init__(self):
         super().__init__()
         self.initUI()
         self.recorderThread = RecorderThread()
-        self.recorderThread.recordingStopped.connect(self.onRecordingStopped)
+        self.recorderThread.recordingStatus.connect(self.onRecordingStopped)
+        self.recorderThread.recordingStatus.connect(self.onRecordingStarted)
         self.isRecording = False
+        self.audioRecorderThread = AudioRecorderThread()
+        self.isAudioRecording = False
 
     def initUI(self):
         self.setWindowTitle('Transparent Overlay')
@@ -42,18 +46,19 @@ class TransparentOverlay(QMainWindow):
 
         # Create the screenshot button
         self.screenshotButton = QPushButton(self)
-        self.screenshotButton.setFixedSize(100, 100)  # Set fixed size for the button
+        self.screenshotButton.setFixedSize(200, 200)  # Set fixed size for the button
         self.screenshotButton.setIcon(QIcon('icons/screenshot.svg'))
         self.screenshotButton.setIconSize(self.screenshotButton.size())
         self.screenshotButton.setStyleSheet("""
                     QPushButton {
                         background-color: lightgray;
-                        border-radius: 50px;
+                        border-radius: 100px;
                     }
                     QPushButton:hover {
                         background-color: gray;
                     }
                 """)
+        self.screenshotButton.move(50, 800)
         self.screenshotButton.clicked.connect(self.takeScreenshot)
 
         # Create the kill switch button
@@ -71,26 +76,39 @@ class TransparentOverlay(QMainWindow):
                 """)
         self.killSwitchButton.clicked.connect(self.closeApplication)
 
-        self.recordButton = QPushButton(buttonFrame)
-        self.recordButton.setFixedSize(100, 100)
+        self.recordButton = QPushButton(self)
+        self.recordButton.setFixedSize(200, 200)
         self.recordButton.setIcon(QIcon('icons/record-start.svg'))
         self.recordButton.setIconSize(self.recordButton.size())
         self.recordButton.setStyleSheet("""
                     QPushButton {
                         background-color: lightgray;
-                        border-radius: 50px;
+                        border-radius: 100px;
                         font-size: 24px;
                     }
                     QPushButton:hover {
                         background-color: gray;
                     }
                 """)
+        self.recordButton.move(50, 400)
         self.recordButton.clicked.connect(self.toggleRecording)
 
-        # Add the buttons to the layout
-        self.layout.addWidget(self.screenshotButton)
-        self.layout.addWidget(self.killSwitchButton)
-        self.layout.addWidget(self.recordButton)
+        self.audioButton = QPushButton(self)
+        self.audioButton.setFixedSize(200,200)
+        self.audioButton.setIcon(QIcon('icons/audio-start.svg'))
+        self.audioButton.setIconSize(self.audioButton.size())
+        self.audioButton.setStyleSheet("""
+                            QPushButton {
+                                background-color: lightgray;
+                                border-radius: 100px;
+                                font-size: 24px;
+                            }
+                            QPushButton:hover {
+                                background-color: gray;
+                            }
+                        """)
+        self.audioButton.move(50, 0)
+        self.audioButton.clicked.connect(self.toggleAudio)
 
     def takeScreenshot(self):
         # Generate a filename with date and time
@@ -104,19 +122,32 @@ class TransparentOverlay(QMainWindow):
     def toggleRecording(self):
         if self.isRecording:
             self.recorderThread.stop()
+            self.recordButton.setIcon(QIcon('icons/record-start.svg'))
         else:
             self.recorderThread.start()
+            self.recordButton.setIcon(QIcon('icons/record-stop.svg'))
         self.isRecording = not self.isRecording
+
+    def toggleAudio(self):
+        if self.isAudioRecording:
+            self.audioRecorderThread.stop()
+            self.audioButton.setIcon(QIcon('icons/audio-start.svg'))
+        else:
+            self.audioRecorderThread.start()
+            self.audioButton.setIcon(QIcon('icons/record-stop.svg'))
+        self.isAudioRecording = not self.isAudioRecording
 
     def onRecordingStopped(self):
         self.isRecording = False
 
-    # def toggleRecording(self):
-    #     if self.recorderThread.recording:
-    #         self.recordButton.setIcon(QIcon('icons/record_start.svg'))
-    #     else:
-    #         self.recordButton.setIcon(QIcon('icons/record_stop.svg'))
-    #     self.recorderThread.toggle()
+    def onRecordingStarted(self):
+        self.isRecording = True
+
+    def onAudioStopped(self):
+        self.isAudioRecording = False
+
+    def onAudioStarted(self):
+        self.isAudioRecording = True
 
     def closeApplication(self):
         QApplication.instance().quit()

@@ -5,7 +5,7 @@ import numpy as np
 from PyQt5.QtCore import Qt, QDateTime, QThread, pyqtSignal
 
 class RecorderThread(QThread):
-    recordingStopped = pyqtSignal()
+    recordingStatus = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -15,7 +15,7 @@ class RecorderThread(QThread):
         screen_size = pyautogui.size()
         fourcc = cv2.VideoWriter_fourcc(*"XVID")
         now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
-        video_path = f"output/recording_{now}.mp4"
+        video_path = f"output/recording_{now}.avi"
         out = cv2.VideoWriter(video_path, fourcc, 10.0, (screen_size.width, screen_size.height))
 
         self.recording = True
@@ -27,7 +27,7 @@ class RecorderThread(QThread):
             time.sleep(0.1)
 
         out.release()
-        self.recordingStopped.emit()
+        self.recordingStatus.emit()
 
     def stop(self):
         self.recording = False

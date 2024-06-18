@@ -10,13 +10,14 @@ class RecorderThread(QThread):
     def __init__(self):
         super().__init__()
         self.recording = False
+        self.video_path = None
 
     def run(self):
         screen_size = pyautogui.size()
         fourcc = cv2.VideoWriter_fourcc(*"XVID")
         now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
-        video_path = f"output/recording_{now}.avi"
-        out = cv2.VideoWriter(video_path, fourcc, 10.0, (screen_size.width, screen_size.height))
+        self.video_path = f"recordings/recording_{now}.avi"
+        out = cv2.VideoWriter(self.video_path, fourcc, 10.0, (screen_size.width, screen_size.height))
 
         self.recording = True
         while self.recording:

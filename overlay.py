@@ -1,8 +1,16 @@
+import os
+
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QFrame
 from PyQt5.QtCore import Qt, QDateTime
 from PyQt5.QtGui import QPixmap, QIcon
 from recording import RecorderThread
 from audio import AudioRecorderThread
+from window import OutputWindow
+
+# Ensure directories exist
+os.makedirs("screenshots", exist_ok=True)
+os.makedirs("recordings", exist_ok=True)
+os.makedirs("audio", exist_ok=True)
 
 class TransparentOverlay(QMainWindow):
     def __init__(self):
@@ -13,7 +21,10 @@ class TransparentOverlay(QMainWindow):
         self.recorderThread.recordingStatus.connect(self.onRecordingStarted)
         self.isRecording = False
         self.audioRecorderThread = AudioRecorderThread()
+        self.audioRecorderThread.recordingStatus.connect(self.onAudioRecordingStopped)
+        self.audioRecorderThread.recordingStatus.connect(self.onAudioStarted)
         self.isAudioRecording = False
+        self.outputWindow = OutputWindow()
 
     def initUI(self):
         self.setWindowTitle('Transparent Overlay')
@@ -113,11 +124,13 @@ class TransparentOverlay(QMainWindow):
     def takeScreenshot(self):
         # Generate a filename with date and time
         now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
-        screenshotPath = f'output/screenshot_{now}.png'
+        screenshotPath = f'screenshots/screenshot_{now}.png'
 
         # Take the screenshot and save it
         screenshot = QApplication.primaryScreen().grabWindow(0)
         screenshot.save(screenshotPath, 'png')
+        self.outputWindow.show()
+        self.outputWindow.showScreenshot(screenshotPath)
 
     def toggleRecording(self):
         if self.isRecording:
@@ -139,12 +152,17 @@ class TransparentOverlay(QMainWindow):
 
     def onRecordingStopped(self):
         self.isRecording = False
+        self.outputWindow.show()
+        self.outputWindow.showVideo(self.recorderThread.video_path)
+
+    def onAudioRecordingStopped(self):
+        self.isAudioRecording = False
+        self.audioButton.setIcon(QIcon('icons/audio-start.svg'))
+        self.outputWindow.show()
+        self.outputWindow.showAudio(self.audioRecorderThread.audio_path)
 
     def onRecordingStarted(self):
         self.isRecording = True
-
-    def onAudioStopped(self):
-        self.isAudioRecording = False
 
     def onAudioStarted(self):
         self.isAudioRecording = True

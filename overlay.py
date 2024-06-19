@@ -1,4 +1,5 @@
 import os
+import sys
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QFrame
 from PyQt5.QtCore import Qt, QDateTime
@@ -11,6 +12,11 @@ from window import OutputWindow
 os.makedirs("screenshots", exist_ok=True)
 os.makedirs("recordings", exist_ok=True)
 os.makedirs("audio", exist_ok=True)
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
 
 class TransparentOverlay(QMainWindow):
     def __init__(self):
@@ -58,7 +64,7 @@ class TransparentOverlay(QMainWindow):
         # Create the screenshot button
         self.screenshotButton = QPushButton(self)
         self.screenshotButton.setFixedSize(200, 200)  # Set fixed size for the button
-        self.screenshotButton.setIcon(QIcon('icons/screenshot.svg'))
+        self.screenshotButton.setIcon(QIcon(resource_path('icons/screenshot.svg')))
         self.screenshotButton.setIconSize(self.screenshotButton.size())
         self.screenshotButton.setStyleSheet("""
                     QPushButton {
@@ -89,7 +95,7 @@ class TransparentOverlay(QMainWindow):
 
         self.recordButton = QPushButton(self)
         self.recordButton.setFixedSize(200, 200)
-        self.recordButton.setIcon(QIcon('icons/record-start.svg'))
+        self.recordButton.setIcon(QIcon(resource_path('icons/record-start.svg')))
         self.recordButton.setIconSize(self.recordButton.size())
         self.recordButton.setStyleSheet("""
                     QPushButton {
@@ -106,7 +112,7 @@ class TransparentOverlay(QMainWindow):
 
         self.audioButton = QPushButton(self)
         self.audioButton.setFixedSize(200,200)
-        self.audioButton.setIcon(QIcon('icons/audio-start.svg'))
+        self.audioButton.setIcon(QIcon(resource_path('icons/audio-start.svg')))
         self.audioButton.setIconSize(self.audioButton.size())
         self.audioButton.setStyleSheet("""
                             QPushButton {
@@ -135,19 +141,19 @@ class TransparentOverlay(QMainWindow):
     def toggleRecording(self):
         if self.isRecording:
             self.recorderThread.stop()
-            self.recordButton.setIcon(QIcon('icons/record-start.svg'))
+            self.recordButton.setIcon(QIcon(resource_path('icons/record-start.svg')))
         else:
             self.recorderThread.start()
-            self.recordButton.setIcon(QIcon('icons/record-stop.svg'))
+            self.recordButton.setIcon(QIcon(resource_path('icons/record-stop.svg')))
         self.isRecording = not self.isRecording
 
     def toggleAudio(self):
         if self.isAudioRecording:
             self.audioRecorderThread.stop()
-            self.audioButton.setIcon(QIcon('icons/audio-start.svg'))
+            self.audioButton.setIcon(QIcon(resource_path('icons/audio-start.svg')))
         else:
             self.audioRecorderThread.start()
-            self.audioButton.setIcon(QIcon('icons/record-stop.svg'))
+            self.audioButton.setIcon(QIcon(resource_path('icons/record-stop.svg')))
         self.isAudioRecording = not self.isAudioRecording
 
     def onRecordingStopped(self):
@@ -157,7 +163,7 @@ class TransparentOverlay(QMainWindow):
 
     def onAudioRecordingStopped(self):
         self.isAudioRecording = False
-        self.audioButton.setIcon(QIcon('icons/audio-start.svg'))
+        self.audioButton.setIcon(QIcon(resource_path('icons/audio-start.svg')))
         self.outputWindow.show()
         self.outputWindow.showAudio(self.audioRecorderThread.audio_path)
 

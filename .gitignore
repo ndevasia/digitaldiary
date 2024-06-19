@@ -1,0 +1,52 @@
+# Ignore files in the screenshots/, audio/, and recordings/ folders in the main directory
+/screenshots/*
+/audio/*
+/recordings/*
+
+# Ignore files in the screenshots/, audio/, and recordings/ folders under the dist/ directory
+/dist/screenshots/*
+/dist/audio/*
+/dist/recordings/*
+
+# If you want to ensure that the directories themselves are kept (but empty), you can add a .gitkeep file in each.
+# Uncomment the lines below if you are using .gitkeep files to keep empty directories in your repository
+# !/screenshots/.gitkeep
+# !/audio/.gitkeep
+# !/recordings/.gitkeep
+# !/dist/screenshots/.gitkeep
+# !/dist/audio/.gitkeep
+# !/dist/recordings/.gitkeep
+
+# PyInstaller build directory
+/build/
+#/dist/
+#/*.spec
+
+# Python-specific ignores
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE-specific ignores (add or remove based on your IDE)
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Ignore log files
+*.log
+
+# Ignore temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~

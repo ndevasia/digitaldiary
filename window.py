@@ -39,8 +39,10 @@ class OutputWindow(QWidget):
         label.setAlignment(Qt.AlignCenter)
         self.screenshotLayout.addWidget(label)
 
-    def showVideo(self, video_path):
-        label = QLabel(f"Video recording: {video_path}")
+    def showVideo(self, thumbnail_path):
+        label = QLabel(f"Video recording: {thumbnail_path}")
+        pixmap = QPixmap(thumbnail_path)
+        label.setPixmap(pixmap.scaled(200, 200, Qt.KeepAspectRatio))
         label.setAlignment(Qt.AlignCenter)
         self.videoLayout.addWidget(label)
 

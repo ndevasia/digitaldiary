@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QFrame
 from PyQt5.QtCore import Qt, QDateTime
@@ -142,6 +143,10 @@ class TransparentOverlay(QMainWindow):
         if self.isRecording:
             self.recorderThread.stop()
             self.recordButton.setIcon(QIcon(resource_path('icons/record-start.svg')))
+
+            # Generate the thumbnail after stopping the recording
+            # now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
+            self.recorderThread.generate_thumbnail()
         else:
             self.recorderThread.start()
             self.recordButton.setIcon(QIcon(resource_path('icons/record-stop.svg')))
@@ -159,7 +164,7 @@ class TransparentOverlay(QMainWindow):
     def onRecordingStopped(self):
         self.isRecording = False
         self.outputWindow.show()
-        self.outputWindow.showVideo(self.recorderThread.video_path)
+        self.outputWindow.showVideo(self.recorderThread.thumbnail_path)
 
     def onAudioRecordingStopped(self):
         self.isAudioRecording = False

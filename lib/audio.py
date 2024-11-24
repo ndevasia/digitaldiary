@@ -4,7 +4,8 @@ import soundfile as sf
 import numpy as np
 
 class AudioRecorderThread(QThread):
-    recordingStatus = pyqtSignal()
+    started = pyqtSignal()  # Signal for when recording starts
+    stopped = pyqtSignal()  # Signal for when recording stops
 
     def __init__(self):
         super().__init__()
@@ -20,15 +21,27 @@ class AudioRecorderThread(QThread):
                 print(status)
             self.frames.append(indata.copy())
 
-        self.recording = True
-        with sd.InputStream(samplerate=self.samplerate, channels=self.channels, callback=callback):
-            while self.recording:
-                sd.sleep(100)
+        # Emit started signal when audio recording begins
+        self.started.emit()
 
-        now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
-        self.audio_path = f"audio/audio_recording_{now}.wav"
-        sf.write(self.audio_path, np.concatenate(self.frames), self.samplerate)
-        self.recordingStatus.emit()
+        self.recording = True
+        try:
+            with sd.InputStream(samplerate=self.samplerate, channels=self.channels, callback=callback):
+                while self.recording:
+                    sd.sleep(100)  # Sleep to allow audio recording to happen
+        except Exception as e:
+            print(f"Error during audio recording: {e}")
+        finally:
+            now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
+            self.audio_path = f"audio/audio_recording_{now}.wav"
+            # Save the audio data to a file
+            sf.write(self.audio_path, np.concatenate(self.frames), self.samplerate)
+
+            # Emit stopped signal when audio recording ends
+            self.stopped.emit()  # Emit stop signal when recording ends
+
+            print(f"Audio recording finalized at {self.audio_path}")
+            self.recordingStatus.emit()  # This signal might be emitted to notify that the recording is complete
 
     def stop(self):
         self.recording = False

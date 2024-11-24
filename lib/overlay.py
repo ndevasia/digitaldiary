@@ -25,12 +25,12 @@ class TransparentOverlay(QMainWindow):
         super().__init__()
         self.initUI()
         self.recorderThread = RecorderThread()
-        self.recorderThread.recordingStatus.connect(self.onRecordingStopped)
-        self.recorderThread.recordingStatus.connect(self.onRecordingStarted)
+        self.recorderThread.started.connect(self.onRecordingStarted)  # Connect to onRecordingStarted
+        self.recorderThread.stopped.connect(self.onRecordingStopped)  # Connect to onRecordingStopped
         self.isRecording = False
         self.audioRecorderThread = AudioRecorderThread()
-        self.audioRecorderThread.recordingStatus.connect(self.onAudioRecordingStopped)
-        self.audioRecorderThread.recordingStatus.connect(self.onAudioStarted)
+        self.audioRecorderThread.stopped.connect(self.onAudioRecordingStopped)
+        self.audioRecorderThread.started.connect(self.onAudioStarted)
         self.isAudioRecording = False
         self.outputWindow = OutputWindow()
         s3_client_instance = S3()
@@ -146,44 +146,42 @@ class TransparentOverlay(QMainWindow):
     def toggleRecording(self):
         if self.isRecording:
             self.recorderThread.stop()
-            self.recordButton.setIcon(QIcon(resource_path('../icons/record-start.svg')))
 
             # Generate the thumbnail after stopping the recording
             # now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
             self.recorderThread.generate_thumbnail()
         else:
             self.recorderThread.start()
-            self.recordButton.setIcon(QIcon(resource_path('../icons/record-stop.svg')))
         self.isRecording = not self.isRecording
 
     def toggleAudio(self):
         if self.isAudioRecording:
             self.audioRecorderThread.stop()
-            self.audioButton.setIcon(QIcon(resource_path('../icons/audio-start.svg')))
         else:
             self.audioRecorderThread.start()
-            self.audioButton.setIcon(QIcon(resource_path('../icons/record-stop.svg')))
         self.isAudioRecording = not self.isAudioRecording
 
     def onRecordingStopped(self):
-        self.isRecording = False
+        self.recordButton.setIcon(QIcon(resource_path('../icons/record-start.svg')))
         self.client.upload(self.recorderThread.video_path)
         self.client.upload(self.recorderThread.thumbnail_path)
         self.outputWindow.show()
         self.outputWindow.showVideo(self.recorderThread.thumbnail_path)
 
     def onAudioRecordingStopped(self):
-        self.isAudioRecording = False
         self.audioButton.setIcon(QIcon(resource_path('../icons/audio-start.svg')))
+        self.client.upload(self.audioRecorderThread.audio_path)
         self.outputWindow.show()
         self.outputWindow.showAudio(self.audioRecorderThread.audio_path)
-        self.client.upload(self.audioRecorderThread.audio_path)
+
 
     def onRecordingStarted(self):
+        self.recordButton.setIcon(QIcon(resource_path('../icons/record-stop.svg')))
         self.isRecording = True
 
     def onAudioStarted(self):
         self.isAudioRecording = True
+        self.audioButton.setIcon(QIcon(resource_path('../icons/record-stop.svg')))
 
     def closeApplication(self):
         QApplication.instance().quit()

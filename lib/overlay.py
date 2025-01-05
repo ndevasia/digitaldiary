@@ -1,6 +1,10 @@
 import os
 import sys
 from datetime import datetime
+import threading
+from flask import Flask, render_template  # Assuming you have a Flask app that serves a page
+import subprocess
+
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QFrame
 from PyQt5.QtCore import Qt, QDateTime
@@ -19,6 +23,12 @@ def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, relative_path)
+
+def run_flask_app():
+    """ This function runs the Flask app from the app.py located in lib/window/ """
+    flask_app_path = os.path.join(os.path.dirname(__file__), 'window', 'app.py')  # Adjust path to app.py
+    # Run the Flask app using subprocess
+    subprocess.run([sys.executable, flask_app_path])
 
 class TransparentOverlay(QMainWindow):
     def __init__(self):
@@ -134,14 +144,21 @@ class TransparentOverlay(QMainWindow):
     def takeScreenshot(self):
         # Generate a filename with date and time
         now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
-        screenshotPath = f'screenshots/screenshot_{now}.png'
+        screenshotPath = os.path.abspath(f'../screenshots/screenshot_{now}.png')
 
         # Take the screenshot and save it
         screenshot = QApplication.primaryScreen().grabWindow(0)
         screenshot.save(screenshotPath, 'png')
+
+        # Upload to S3
         self.client.upload(screenshotPath)
-        self.outputWindow.show()
-        self.outputWindow.showScreenshot(screenshotPath)
+
+        # Start Flask app in a separate thread
+        flask_thread = threading.Thread(target=run_flask_app, daemon=True)
+        flask_thread.start()
+
+        print(f"Screenshot saved at {screenshotPath} and Flask app started!")
+
 
     def toggleRecording(self):
         if self.isRecording:

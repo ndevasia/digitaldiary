@@ -6,12 +6,9 @@ class S3:
     def __init__(self):
         self.client = boto3.client(
             's3',
-            endpoint_url='http://localhost:4566',
-            aws_access_key_id='test',
-            aws_secret_access_key='test',
-            region_name='us-east-1'
+            region_name='us-west-2'
         )
-        self.bucket_name = "my-local-bucket"
+        self.bucket_name = "digital-diary"
 
     def bucket_exists(self):
         # Check if a bucket exists
@@ -37,7 +34,7 @@ class S3:
 
     def upload(self, fileName):
         remote_fileName = fileName + USERNAME
-        self.client.upload_file(fileName, 'my-local-bucket', remote_fileName)
+        self.client.upload_file(fileName, self.bucket_name, remote_fileName)
         #need to append user to the remote file name at some point
         #probably need to manually build different versions for every user
 

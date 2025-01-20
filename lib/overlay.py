@@ -11,7 +11,6 @@ from PyQt5.QtCore import Qt, QDateTime
 from PyQt5.QtGui import QPixmap, QIcon
 from .recording import RecorderThread
 from .audio import AudioRecorderThread
-from .window import OutputWindow
 from lib.server.aws import S3
 
 # Ensure directories exist
@@ -42,7 +41,6 @@ class TransparentOverlay(QMainWindow):
         self.audioRecorderThread.stopped.connect(self.onAudioRecordingStopped)
         self.audioRecorderThread.started.connect(self.onAudioStarted)
         self.isAudioRecording = False
-        self.outputWindow = OutputWindow()
         s3_client_instance = S3()
         self.client = s3_client_instance.get()
 
@@ -182,15 +180,10 @@ class TransparentOverlay(QMainWindow):
         self.recordButton.setIcon(QIcon(resource_path('../icons/record-start.svg')))
         self.client.upload(self.recorderThread.video_path)
         self.client.upload(self.recorderThread.thumbnail_path)
-        self.outputWindow.show()
-        self.outputWindow.showVideo(self.recorderThread.thumbnail_path)
 
     def onAudioRecordingStopped(self):
         self.audioButton.setIcon(QIcon(resource_path('../icons/audio-start.svg')))
         self.client.upload(self.audioRecorderThread.audio_path)
-        self.outputWindow.show()
-        self.outputWindow.showAudio(self.audioRecorderThread.audio_path)
-
 
     def onRecordingStarted(self):
         self.recordButton.setIcon(QIcon(resource_path('../icons/record-stop.svg')))

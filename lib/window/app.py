@@ -34,26 +34,34 @@ def generate_presigned_url():
     
 @app.route('/')
 def index():
-    """Displays the latest screenshot from S3."""
-    # List all files in the bucket
-    response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix="user123/")
+    """Displays the latest screenshot from S3 using a pre-signed URL."""
+    # List all files in the bucket with a specific prefix ("screenshot_")
+    prefix = "ndevasia/screenshot_"
+    response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
+    print(response)
+    
     if 'Contents' in response:
-        files = sorted(
-            response['Contents'],
-            key=lambda x: x['LastModified'],
-            reverse=True
-        )
-        latest_file = files[0]['Key']
+        # Filter files with prefix "screenshot_"
+        files = [file for file in response['Contents'] if file['Key'].startswith(prefix)]
+        
+        if files:
+            # Sort the files by LastModified to get the latest one
+            latest_file = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+        else:
+            latest_file = None
     else:
         latest_file = None
 
     if latest_file:
-        # Download the latest file to display
-        download_path = f"static/{latest_file.split('/')[-1]}"
-        s3_client.download_file(BUCKET_NAME, latest_file, download_path)
-        return render_template('layout.html', screenshot=download_path)
+        # Generate a pre-signed URL for the latest file
+        screenshot_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': latest_file},
+            ExpiresIn=3600  # URL expires in 1 hour
+        )
+        return render_template('layout.html', screenshot_url=screenshot_url)
     else:
-        return render_template('layout.html', screenshot=None)
+        return render_template('layout.html', screenshot_url=None)
 
 @app.route('/screenshots/<filename>')
 def get_screenshot(filename):

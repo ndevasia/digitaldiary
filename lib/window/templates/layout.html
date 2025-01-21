@@ -31,13 +31,10 @@
             <section class="memories">
                 <h2>Memories</h2>
                 <div class="cards">
-                    {% if screenshot %}
-                        <div class="card">
-                            <h3>Latest Screenshot</h3>
-                            <img src="{{ url_for('get_screenshot', filename=screenshot) }}" alt="Latest Screenshot" class="screenshot-image">
-                        </div>
+                    {% if screenshot_url %}
+                        <img src="{{ screenshot_url }}" alt="Latest Screenshot" class="screenshot-image" />
                     {% else %}
-                        <p>No screenshots available yet. Take one to see it here!</p>
+                        <p>No screenshot available.</p>
                     {% endif %}
                     <div class="card">1 week ago</div>
                     <div class="card">1 month ago</div>

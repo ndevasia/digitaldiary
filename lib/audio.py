@@ -38,10 +38,8 @@ class AudioRecorderThread(QThread):
             sf.write(self.audio_path, np.concatenate(self.frames), self.samplerate)
 
             # Emit stopped signal when audio recording ends
-            self.stopped.emit()  # Emit stop signal when recording ends
-
             print(f"Audio recording finalized at {self.audio_path}")
-            self.recordingStatus.emit()  # This signal might be emitted to notify that the recording is complete
+            self.stopped.emit()  # Emit stop signal when recording ends
 
     def stop(self):
         self.recording = False

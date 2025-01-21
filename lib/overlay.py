@@ -2,16 +2,16 @@ import os
 import sys
 from datetime import datetime
 import threading
+import requests
 from flask import Flask, render_template  # Assuming you have a Flask app that serves a page
 import subprocess
-
+from lib.globals import USERNAME
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QFrame
 from PyQt5.QtCore import Qt, QDateTime
 from PyQt5.QtGui import QPixmap, QIcon
 from .recording import RecorderThread
 from .audio import AudioRecorderThread
-from .window import OutputWindow
 from lib.server.aws import S3
 
 # Ensure directories exist
@@ -42,7 +42,6 @@ class TransparentOverlay(QMainWindow):
         self.audioRecorderThread.stopped.connect(self.onAudioRecordingStopped)
         self.audioRecorderThread.started.connect(self.onAudioStarted)
         self.isAudioRecording = False
-        self.outputWindow = OutputWindow()
         s3_client_instance = S3()
         self.client = s3_client_instance.get()
 
@@ -150,15 +149,22 @@ class TransparentOverlay(QMainWindow):
         screenshot = QApplication.primaryScreen().grabWindow(0)
         screenshot.save(screenshotPath, 'png')
 
-        # Upload to S3
-        self.client.upload(screenshotPath)
+        screenshot_url = self.client.get_presigned_url(screenshotPath)
+        print(f"Screenshot URL: {screenshot_url}")  # Debugging: check if the URL is correct
+
+        try:
+            with open(screenshotPath, 'rb') as f:
+                response = requests.put(screenshot_url, data=f)
+                if response.status_code == 200:
+                    print("Screenshot uploaded successfully.")
+                else:
+                    print(f"Failed to upload screenshot. Status Code: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            print(f"Error uploading screenshot: {str(e)}")
 
         # Start Flask app in a separate thread
-        flask_thread = threading.Thread(target=run_flask_app, daemon=True)
-        flask_thread.start()
-
-        print(f"Screenshot saved at {screenshotPath} and Flask app started!")
-
+        # flask_thread = threading.Thread(target=run_flask_app, daemon=True)
+        # flask_thread.start()
 
     def toggleRecording(self):
         if self.isRecording:
@@ -180,17 +186,49 @@ class TransparentOverlay(QMainWindow):
 
     def onRecordingStopped(self):
         self.recordButton.setIcon(QIcon(resource_path('../icons/record-start.svg')))
-        self.client.upload(self.recorderThread.video_path)
-        self.client.upload(self.recorderThread.thumbnail_path)
-        self.outputWindow.show()
-        self.outputWindow.showVideo(self.recorderThread.thumbnail_path)
+        # Generate pre-signed URL for the video file
+        video_url = self.client.get_presigned_url(self.recorderThread.video_path)
+        print(f"Video URL: {video_url}")  # Debugging: check if the URL is correct
+
+        try:
+            with open(self.recorderThread.video_path, 'rb') as f:
+                response = requests.put(video_url, data=f)
+                if response.status_code == 200:
+                    print("Video uploaded successfully.")
+                else:
+                    print(f"Failed to upload video. Status Code: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            print(f"Error uploading video: {str(e)}")
+
+        # Generate pre-signed URL for the thumbnail file
+        thumbnail_url = self.client.get_presigned_url(self.recorderThread.thumbnail_path)
+        print(f"Thumbnail URL: {thumbnail_url}")  # Debugging: check if the URL is correct
+
+        try:
+            with open(self.recorderThread.thumbnail_path, 'rb') as f:
+                response = requests.put(thumbnail_url, data=f)
+                if response.status_code == 200:
+                    print("Thumbnail uploaded successfully.")
+                else:
+                    print(f"Failed to upload thumbnail. Status Code: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            print(f"Error uploading thumbnail: {str(e)}")
 
     def onAudioRecordingStopped(self):
         self.audioButton.setIcon(QIcon(resource_path('../icons/audio-start.svg')))
-        self.client.upload(self.audioRecorderThread.audio_path)
-        self.outputWindow.show()
-        self.outputWindow.showAudio(self.audioRecorderThread.audio_path)
+        # Generate pre-signed URL 
+        audio_url = self.client.get_presigned_url(self.audioRecorderThread.audio_path)
+        print(f"Audio URL: {audio_url}")  # Debugging: check if the URL is correct
 
+        try:
+            with open(self.audioRecorderThread.audio_path, 'rb') as f:
+                response = requests.put(audio_url, data=f)
+                if response.status_code == 200:
+                    print("Audio uploaded successfully.")
+                else:
+                    print(f"Failed to upload audio. Status Code: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            print(f"Error uploading audio: {str(e)}")
 
     def onRecordingStarted(self):
         self.recordButton.setIcon(QIcon(resource_path('../icons/record-stop.svg')))

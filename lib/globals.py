@@ -1,2 +1,2 @@
-USERNAME = 'ndevasia'
+USERNAME = 'bella'
 FLASK_SERVER_URL = 'http://127.0.0.1:5000'

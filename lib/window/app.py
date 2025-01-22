@@ -22,6 +22,11 @@ def index():
 
     return render_template('layout.html', screenshot=latest_screenshot)
 
+@app.route('/files')
+def files():
+
+    return render_template('files.html')
+
 @app.route('/screenshots/<filename>')
 def get_screenshot(filename):
     """Serves the screenshot file."""

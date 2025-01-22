@@ -56,7 +56,9 @@ class TransparentOverlay(QMainWindow):
         # Set window size to cover the right side of the screen
         screen = QApplication.primaryScreen()
         screenGeometry = screen.geometry()
-        self.setGeometry(screenGeometry.width() - 300, screenGeometry.height()/4, 300, screenGeometry.height()/2)
+        self.setGeometry(int(screenGeometry.width() - 300), int(screenGeometry.height() / 4), 300, int(screenGeometry.height() / 2)
+)
+
 
         # Create a central widget with a transparent background
         self.centralWidget = QWidget(self)

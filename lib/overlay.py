@@ -74,23 +74,7 @@ class TransparentOverlay(QMainWindow):
         buttonLayout.setContentsMargins(0, 0, 0, 0)
         buttonLayout.setAlignment(Qt.AlignTop)
 
-        # Create the screenshot button
-        self.screenshotButton = QPushButton(self)
-        self.screenshotButton.setFixedSize(200, 200)  # Set fixed size for the button
-        self.screenshotButton.setIcon(QIcon(resource_path('../icons/screenshot.svg')))
-        self.screenshotButton.setIconSize(self.screenshotButton.size())
-        self.screenshotButton.setStyleSheet("""
-                    QPushButton {
-                        background-color: lightgray;
-                        border-radius: 100px;
-                    }
-                    QPushButton:hover {
-                        background-color: gray;
-                    }
-                """)
-        self.screenshotButton.move(50, 800)
-        self.screenshotButton.clicked.connect(self.takeScreenshot)
-
+        
         # Create the kill switch button
         self.killSwitchButton = QPushButton('X', self)
         self.killSwitchButton.setFixedSize(50, 50)  # Set fixed size for the button
@@ -107,7 +91,7 @@ class TransparentOverlay(QMainWindow):
         self.killSwitchButton.clicked.connect(self.closeApplication)
 
         self.recordButton = QPushButton(self)
-        self.recordButton.setFixedSize(200, 200)
+        self.recordButton.setFixedSize(50,50)
         self.recordButton.setIcon(QIcon(resource_path('../icons/record-start.svg')))
         self.recordButton.setIconSize(self.recordButton.size())
         self.recordButton.setStyleSheet("""
@@ -124,7 +108,7 @@ class TransparentOverlay(QMainWindow):
         self.recordButton.clicked.connect(self.toggleRecording)
 
         self.audioButton = QPushButton(self)
-        self.audioButton.setFixedSize(200,200)
+        self.audioButton.setFixedSize(50,50)
         self.audioButton.setIcon(QIcon(resource_path('../icons/audio-start.svg')))
         self.audioButton.setIconSize(self.audioButton.size())
         self.audioButton.setStyleSheet("""
@@ -139,6 +123,24 @@ class TransparentOverlay(QMainWindow):
                         """)
         self.audioButton.move(50, 0)
         self.audioButton.clicked.connect(self.toggleAudio)
+
+        # Create the screenshot button
+        self.screenshotButton = QPushButton(self)
+        self.screenshotButton.setFixedSize(50,50)  # Set fixed size for the button
+        self.screenshotButton.setIcon(QIcon(resource_path('../icons/screenshot.svg')))
+        self.screenshotButton.setIconSize(self.screenshotButton.size())
+        self.screenshotButton.setStyleSheet("""
+                    QPushButton {
+                        background-color: lightgray;
+                        border-radius: 100px;
+                    }
+                    QPushButton:hover {
+                        background-color: gray;
+                    }
+                """)
+        self.screenshotButton.move(200, 200)
+        self.screenshotButton.clicked.connect(self.takeScreenshot)
+
 
     def takeScreenshot(self):
         # Generate a filename with date and time
@@ -205,6 +207,7 @@ class TransparentOverlay(QMainWindow):
         print(f"Thumbnail URL: {thumbnail_url}")  # Debugging: check if the URL is correct
 
         try:
+            # perhaps path issue too 
             with open(self.recorderThread.thumbnail_path, 'rb') as f:
                 response = requests.put(thumbnail_url, data=f)
                 if response.status_code == 200:

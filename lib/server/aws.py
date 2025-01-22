@@ -48,7 +48,9 @@ class S3:
     
     def get_presigned_url(self, file_path):
         response = requests.post(
-            'http://localhost:5000/generate-presigned-url',
+            #'http://localhost:5000/generate-presigned-url',
+
+            'http://127.0.0.1:5000/generate-presigned-url',
             json={'file_name': os.path.basename(file_path), 'username': USERNAME}
         )
         response.raise_for_status()

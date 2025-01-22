@@ -36,7 +36,7 @@ def generate_presigned_url():
 def index():
     """Displays the latest screenshot from S3 using a pre-signed URL."""
     # List all files in the bucket with a specific prefix ("screenshot_")
-    prefix = "ndevasia/screenshot_"
+    prefix = "bella/screenshot_"
     response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
     print(response)
     

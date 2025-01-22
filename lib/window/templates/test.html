@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Files Layout</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Additional styles specific to files page */
+        .sort-button {
+            background-color: #3da37a;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .sort-button:hover {
+            background-color: #62c2a0;
+        }
+        
+        .files {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        
+        .files-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .file-card {
+            aspect-ratio: 16/9;
+            text-align: center;
+            padding: 20px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .file-card.video {
+            background-color: #fbd5d5;
+        }
+        
+        .file-card.screenshot {
+            background-color: #c3d7f5;
+        }
+        
+        .file-card.audio {
+            background-color: #c3e5d4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="avatar"></div>
+            <nav>
+                <ul>
+                    <li><a href="#">Home</a></li>
+                    <li><a href="#">Games</a></li>
+                    <li class="active"><a href="#">Files</a></li>
+                    <li><a href="#">Journals</a></li>
+                </ul>
+            </nav>
+            <div class="bottom-links">
+                <a href="#">Settings</a>
+                <a href="#">Quit</a>
+            </div>
+        </div>
+        <div class="main-content">
+            <header>
+                <h1>Hello, User 1 & User 2</h1>
+                <button class="sort-button">Sort by ▼</button>
+            </header>
+            <section class="files">
+                <h2>Files</h2>
+                <div class="files-grid">
+                    <div class="file-card video">Video</div>
+                    <div class="file-card screenshot">Screenshot</div>
+                    <div class="file-card video">Video</div>
+                    <div class="file-card screenshot">Screenshot</div>
+                    <div class="file-card audio">Audio</div>
+                    <div class="file-card screenshot">Screenshot</div>
+                </div>
+            </section>
+        </div>
+    </div>
+</body>
+</html>

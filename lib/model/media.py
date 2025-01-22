@@ -9,7 +9,6 @@ class Media:
     media_url: str
     timestamp: datetime
     owner_user_id: int
-    members_present: Optional[List[int]] = None # Optional list of user IDs
 
 @dataclass
 class Game:

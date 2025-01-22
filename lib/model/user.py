@@ -10,5 +10,5 @@ class User:
 
 @dataclass
 class Partner:
-    partner_id: int
+    user_id: int
     name: str

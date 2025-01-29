@@ -5,6 +5,7 @@ import requests
 import os
 
 ARN = 'arn:aws:iam::378382627972:role/digitaldiary-devteam'
+localhost = 'http://127.0.0.1:5000/'
 
 class S3:
     def __init__(self):
@@ -46,8 +47,9 @@ class S3:
         return self
     
     def get_presigned_url(self, file_path):
+        localhost_url = localhost + 'generate-presigned-url'
         response = requests.post(
-            'http://localhost:5000/generate-presigned-url',
+            localhost_url,
             json={'file_name': os.path.basename(file_path), 'username': USERNAME}
         )
         response.raise_for_status()

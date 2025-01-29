@@ -9,6 +9,7 @@ class Media:
     media_url: str
     timestamp: datetime
     owner_user_id: int
+    game: str
 
 @dataclass
 class Game:

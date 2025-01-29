@@ -2,6 +2,7 @@ from flask import Flask, render_template, send_from_directory, request, jsonify
 import os
 import boto3
 from lib.globals import USERNAME
+import json
 
 app = Flask(__name__)
 
@@ -71,21 +72,27 @@ def get_screenshot(filename):
 
 @app.route('/api/media', methods=['GET'])
 def get_media():
-    media_type = request.args.get('media_type')
-    user_id = request.args.get('user_id')
-    
-    with open('../model/media.json', 'r') as file:
-        data = json.load(file)
-    
-    media = data['media']
-    
-    if media_type:
-        media = [item for item in media if item['type'] == media_type]
-    
-    if user_id:
-        media = [item for item in media if item['owner_user_id'] == int(user_id)]
-    
-    return jsonify(media)
+    try:
+        # Get query parameters for filtering
+        media_type = request.args.get('media_type')
+        user_id = request.args.get('user_id')
+        
+        with open('../data/media.json', 'r') as file:
+            data = json.load(file)
+        
+        print("data", data)
+        media = data['media']
+        print("media", media)
+        if media_type:
+            media = [item for item in media if item['type'] == media_type]
+
+        if user_id:
+            media = [item for item in media if str(item['owner_user_id']) == str(user_id)]
+
+        
+        return jsonify(media)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 

@@ -4,10 +4,25 @@ from lib.globals import USERNAME
 import requests
 import os
 
+ARN = 'arn:aws:iam::378382627972:role/digitaldiary-devteam'
+
 class S3:
     def __init__(self):
-        # Credentials are automatically retrieved if the backend has an IAM Role
-        self.client = boto3.client('s3', region_name='us-west-2')
+        sts_client = boto3.client('sts')
+        assumed_role = sts_client.assume_role(
+            RoleArn=ARN,
+            RoleSessionName="SessionName"
+        )
+        credentials = assumed_role['Credentials']
+        
+        # Use the temporary credentials to create the S3 client
+        self.client = boto3.client(
+            's3',
+            region_name='us-west-2',
+            aws_access_key_id=credentials['AccessKeyId'],
+            aws_secret_access_key=credentials['SecretAccessKey'],
+            aws_session_token=credentials['SessionToken']
+        )
         self.bucket_name = "digital-diary"
 
     def bucket_exists(self):
@@ -29,22 +44,6 @@ class S3:
 
     def get(self):
         return self
-
-    def upload(self, fileName):
-        remote_fileName = fileName + USERNAME
-        self.client.upload_file(fileName, self.bucket_name, remote_fileName)
-
-    def list(self):
-        response = self.client.list_buckets()
-        print('Existing buckets:')
-        for bucket in response['Buckets']:
-            print(f'  {bucket["Name"]}')
-
-    def download(self, object_name):
-        remote_objectName = object_name + USERNAME
-        response = self.client.get_object(Bucket=self.bucket_name, Key=remote_objectName)
-        file_content = response['Body'].read()
-        return io.BytesIO(file_content)
     
     def get_presigned_url(self, file_path):
         response = requests.post(

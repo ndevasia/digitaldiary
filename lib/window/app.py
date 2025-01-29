@@ -77,7 +77,9 @@ def get_media():
         media_type = request.args.get('media_type')
         user_id = request.args.get('user_id')
         
-        with open('../data/media.json', 'r') as file:
+        MEDIA_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '../model/media.json'))
+
+        with open(MEDIA_FOLDER, 'r') as file:
             data = json.load(file)
         
         print("data", data)

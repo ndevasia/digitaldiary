@@ -1,7 +1,6 @@
 from flask import Flask, render_template, send_from_directory, request, jsonify
 import os
 import boto3
-from lib.globals import USERNAME
 
 app = Flask(__name__)
 
@@ -38,7 +37,7 @@ def index():
     """Displays the latest screenshot from S3 using a pre-signed URL."""
     # List all files in the bucket with a specific prefix ("screenshot_")
 
-    prefix = USERNAME+"/screenshot_"
+    prefix = "bella"+"/screenshot_"
     response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
     print(response)
     

@@ -8,6 +8,7 @@
   </head>
   <body>
     <div class="container">
+<<<<<<< HEAD
       <div class="sidebar">
         <div class="avatar"></div>
         <nav>
@@ -21,6 +22,41 @@
         <div class="bottom-links">
           <a href="#">Settings</a>
           <a href="#">Quit</a>
+=======
+        <div class="sidebar">
+            <div class="avatar"></div>
+            <nav>
+                <ul>
+                    <li class="active"><a href="#">Home</a></li>
+                    <li><a href="#">Games</a></li>
+                    <li><a href="#">Files</a></li>
+                    <li><a href="#">Journals</a></li>
+                </ul>
+            </nav>
+            <div class="bottom-links">
+                <a href="#">Settings</a>
+                <a href="#">Quit</a>
+            </div>
+        </div>
+        <div class="main-content">
+            <header>
+                <h1>Hello, User 1 & User 2</h1>
+                <button class="new-session">+ New Session</button>
+            </header>
+            <section class="memories">
+                <h2>Memories</h2>
+                <div class="cards">
+                    {% if screenshot_url %}
+                        <img src="{{ screenshot_url }}" alt="Latest Screenshot" class="screenshot-image" />
+                    {% else %}
+                        <p>No screenshot available.</p>
+                    {% endif %}
+                    <div class="card">1 week ago</div>
+                    <div class="card">1 month ago</div>
+                    <div class="card">1 year ago</div>
+                </div>
+            </section>
+>>>>>>> 64270fbc52aed91a5f3672349cdd06688290fa89
         </div>
       </div>
       <div class="main-content">

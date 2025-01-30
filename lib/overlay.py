@@ -148,6 +148,7 @@ class TransparentOverlay(QMainWindow):
         self.layout.addWidget(self.screenshotButton, alignment=Qt.AlignCenter)
 
 
+
     def takeScreenshot(self):
         # Generate a filename with date and time
         now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
@@ -214,6 +215,7 @@ class TransparentOverlay(QMainWindow):
         print(f"Thumbnail URL: {thumbnail_url}")  # Debugging: check if the URL is correct
 
         try:
+            # perhaps path issue too
             with open(self.recorderThread.thumbnail_path, 'rb') as f:
                 response = requests.put(thumbnail_url, data=f)
                 if response.status_code == 200:

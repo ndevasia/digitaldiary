@@ -12,7 +12,14 @@ class AudioRecorderThread(QThread):
         self.recording = False
         self.frames = []
         self.samplerate = 44100
-        self.channels = 2
+        # Detect the default input device
+        default_device = sd.query_devices(kind='input')
+
+        # Ensure the device supports at least 1 channel
+        self.channels = min(default_device['max_input_channels'], 2)
+        if self.channels < 1:
+            raise ValueError("No valid input channels found on the default recording device.")
+
         self.audio_path = None
 
     def run(self):
@@ -38,10 +45,8 @@ class AudioRecorderThread(QThread):
             sf.write(self.audio_path, np.concatenate(self.frames), self.samplerate)
 
             # Emit stopped signal when audio recording ends
-            self.stopped.emit()  # Emit stop signal when recording ends
-
             print(f"Audio recording finalized at {self.audio_path}")
-            self.recordingStatus.emit()  # This signal might be emitted to notify that the recording is complete
+            self.stopped.emit()  # Emit stop signal when recording ends
 
     def stop(self):
         self.recording = False

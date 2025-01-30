@@ -1,7 +1,6 @@
 from flask import Flask, render_template, send_from_directory, request, jsonify
 import os
 import boto3
-from lib.globals import USERNAME
 
 app = Flask(__name__)
 
@@ -10,7 +9,7 @@ SCREENSHOTS_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..
 # S3 Setup
 s3_client = boto3.client('s3', region_name='us-west-2')
 BUCKET_NAME = "digital-diary"
-
+USERNAME = "sophia"
 
 @app.route('/generate-presigned-url', methods=['POST'])
 def generate_presigned_url():
@@ -32,7 +31,7 @@ def generate_presigned_url():
         return jsonify({"url": url}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 @app.route('/')
 def index():
     """Displays the latest screenshot from S3 using a pre-signed URL."""
@@ -40,11 +39,11 @@ def index():
     prefix = USERNAME+"/screenshot_"
     response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
     print(response)
-    
+
     if 'Contents' in response:
         # Filter files with prefix "screenshot_"
         files = [file for file in response['Contents'] if file['Key'].startswith(prefix)]
-        
+
         if files:
             # Sort the files by LastModified to get the latest one
             latest_file = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']

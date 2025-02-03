@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Files</title>
+  <script src="{{ url_for('static', filename='index.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -29,15 +30,13 @@
       </header>
       <section class="files">
         <h2>Files</h2>
-        <div class="sort-container">
-          <button class="sort-button">Sort by <span>▼</span></button>
-          <ul class="dropdown-menu">
-            <li><a href="#" class="dropdown-item" data-filter="all">All</a></li>
-            <li><a href="#" class="dropdown-item" data-filter="screenshots">Screenshots</a></li>
-            <li><a href="#" class="dropdown-item" data-filter="audio">Audio</a></li>
-            <li><a href="#" class="dropdown-item" data-filter="video">Video</a></li>
-          </ul>
-        </div>
+        <select id="media-filter">
+          <option value="all">All</option>
+          <option value="screenshot">Screenshot</option>
+          <option value="video">Video</option>
+          <option value="audio">Audio</option>
+        </select>
+        <div id="media-list"></div>
         <div class="cards">
           {% for file in files %}
             <div class="card {{ file.type }}">

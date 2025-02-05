@@ -34,6 +34,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+lib/globals.py
+
 
 # IDE-specific ignores (add or remove based on your IDE)
 .vscode/

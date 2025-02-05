@@ -1,7 +1,6 @@
 from flask import Flask, render_template, send_from_directory, request, jsonify
 import os
 import boto3
-from lib.globals import USERNAME
 
 app = Flask(__name__)
 
@@ -10,6 +9,7 @@ SCREENSHOTS_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..
 # S3 Setup
 s3_client = boto3.client('s3', region_name='us-west-2')
 BUCKET_NAME = "digital-diary"
+USERNAME = "serena"
 
 
 @app.route('/generate-presigned-url', methods=['POST'])

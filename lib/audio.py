@@ -12,7 +12,14 @@ class AudioRecorderThread(QThread):
         self.recording = False
         self.frames = []
         self.samplerate = 44100
-        self.channels = 2
+        # Detect the default input device
+        default_device = sd.query_devices(kind='input')
+
+        # Ensure the device supports at least 1 channel
+        self.channels = min(default_device['max_input_channels'], 2)
+        if self.channels < 1:
+            raise ValueError("No valid input channels found on the default recording device.")
+
         self.audio_path = None
 
     def run(self):

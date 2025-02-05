@@ -146,6 +146,7 @@ class TransparentOverlay(QMainWindow):
         screenshotPath = os.path.abspath(f'../screenshots/screenshot_{now}.png')
 
         # Take the screenshot and save it
+        print("Taking screenshot")
         screenshot = QApplication.primaryScreen().grabWindow(0)
         screenshot.save(screenshotPath, 'png')
 

@@ -8,15 +8,14 @@ const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
   <div className="relative group">
     <button
       onClick={onClick}
-      className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
+      className={`aspect-square p-4 rounded-lg flex items-center justify-center transition-all duration-200 ${
         isActive 
-          ? 'bg-white bg-opacity-20 shadow-lg' 
-          : 'bg-transparent hover:bg-white hover:bg-opacity-10'
+          ? 'bg-blue-500 text-zinc-50 ' 
+          : 'bg-zinc-100 hover:bg-zinc-200 border border-zinc-200/50'
       }`}
     >
       <Icon 
         size={20} 
-        className={`${isActive ? 'text-red-500' : 'text-gray-800'} transition-colors duration-200`} 
       />
     </button>
     {/* {tooltip && (
@@ -26,8 +25,6 @@ const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
         </div>
       </div>
     )} */}
-    <div className="h-6" /> {/* This creates the line break space */}
-    
 
   </div>
 );
@@ -132,31 +129,30 @@ function App() {
 
     return (
         <div 
-            className="h-screen w-24 bg-white bg-opacity-5 backdrop-blur-sm"
+            className="border border-red-500 h-56 w-16 bg-white "
             onMouseDown={handleMouseDown}
         >
-            <div className="flex flex-col w-full h-full">
+            <div className="flex flex-col w-full h-full p-1 gap-2 items-center justify-between">
                 {/* Title bar */}
-                <div className="flex justify-end p-1">
-                    <div className="flex flex-row item-">
+                    <div className="flex flex-row  w-full justify-center gap-1">
                         <button
-                            className="w-2 h-2 rounded-full inline-flex items-center justify-center hover:bg-gray-200 hover:bg-opacity-20 transition-colors"
+                            className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-amber-950 bg-amber-400 hover:bg-amber-500"
                             onClick={() => ipcRenderer.send('minimize-window')}
                         >
-                          <span className="text-red-500">test</span>
-                            <Minus size={8} className="text-gray-600" />
+                            <Minus size={14}  />
                         </button>
                         <button
-                            className="w-2 h-2 rounded-full inline-flex items-center justify-center hover:bg-red-500 transition-colors"
+                            className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-red-950 bg-red-400 hover:bg-red-500"
                             onClick={() => ipcRenderer.send('close-window')}
                         >
-                            <X size={8} className="text-gray-600 hover:text-white" />
+
+                          
+                            <X size={14}  />
                         </button>
                     </div>
-                </div>
 
                 {/* Main toolbar */}
-                <div className="flex-1 flex flex-col items-center pt-2 gap-4">
+                <div className="flex flex-col items-center gap-1">
                     <IconButton 
                         icon={Camera} 
                         onClick={handleScreenshot}

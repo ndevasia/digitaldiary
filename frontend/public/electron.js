@@ -22,8 +22,8 @@ function createWindow() {
     const { width } = display.workAreaSize;
 
     mainWindow = new BrowserWindow({
-        width: 64,     // Width for icons (16px * 4)
-        height: 230,   // Height for 3 icons + close button + spacing
+        width: 800,     // w-16 == 64 Width for icons (16px * 4)
+        height: 224,   // h-56 == 224 Height for 3 icons + close button + spacing
         x: width - 100,
         y: 100,
         transparent: true,
@@ -39,7 +39,20 @@ function createWindow() {
         }
     });
 
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    // DEVELOPMENT: Load from Vite dev server
+//   if (isDev) {
+//     mainWindow.loadURL('http://localhost:5173')
+//     mainWindow.webContents.openDevTools()
+//   } else {
+//     // PRODUCTION: Load built files
+//     // Fix the path resolution for production
+//     const publicPath = path.join(__dirname, '..')
+//     mainWindow.loadFile(path.join(publicPath, 'dist', 'index.html'))
+//   }
+    
+   mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+
+
 
     // Handle drag events
     ipcMain.on('dragging', (event, { x, y }) => {

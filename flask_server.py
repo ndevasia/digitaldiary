@@ -108,4 +108,4 @@ def stop_audio_recording():
     return jsonify({"error": "Not recording"}), 400
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    app.run(port=5060, debug=True)

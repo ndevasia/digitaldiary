@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Video, Camera, X, Minus } from 'lucide-react';
 const { ipcRenderer } = window.require('electron');
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'http://localhost:5050/api';
 
 const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
   <div className="relative group">

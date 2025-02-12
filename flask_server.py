@@ -7,6 +7,12 @@ from lib.recording import RecorderThread
 from lib.server.aws import S3
 import io
 
+
+from PyQt5.QtCore import Qt, QDateTime
+import os
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QFrame
+import sys
+
 app = Flask(__name__)
 CORS(app)
 
@@ -44,20 +50,51 @@ def get_media_file(filepath):
 
 # Update the existing endpoints to track media files
 
-@app.route('/api/screenshot', methods=['POST'])
+# @app.route('/api/screenshot', methods=['POST'])
 def take_screenshot():
-    try:
-        # Your existing screenshot logic
-        screenshot_path = f"screenshots/screenshot_{timestamp}.png"
-        # After saving screenshot
-        s3_client.upload(screenshot_path)
-        media_files['screenshots'].append({
-            'path': screenshot_path,
-            'timestamp': timestamp
-        })
-        return jsonify({"path": screenshot_path})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    # Generate a filename with date and time
+    now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
+    screenshotPath = os.path.abspath(f'../screenshots/screenshot_{now}.png')
+
+    # Take the screenshot and save it
+    print("Taking screenshot")
+    app = QApplication(sys.argv)
+    screen = QApplication.primaryScreen()
+    w = QWidget()
+    screenshot = screen.grabWindow( w.winId() )
+    # screenshot = QApplication.primaryScreen().grabWindow(0)
+    screenshot.save(screenshotPath, 'png')
+    w.close()
+
+    screenshot_url = S3.get_presigned_url(screenshotPath)
+    # screenshot_url = self.client.get_presigned_url(screenshotPath)
+    print(f"Screenshot URL: {screenshot_url}")  # Debugging: check if the URL is correct
+
+    # try:
+    #     with open(screenshotPath, 'rb') as f:
+    #         response = requests.put(screenshot_url, data=f)
+    #         if response.status_code == 200:
+    #             print("Screenshot uploaded successfully.")
+    #         else:
+    #             print(f"Failed to upload screenshot. Status Code: {response.status_code}, Response: {response.text}")
+    # except Exception as e:
+    #     print(f"Error uploading screenshot: {str(e)}")
+
+
+    # print("Yes you are taking a screenshot")
+    # return jsonify({'test': 'test success!'})
+    # try:
+    #     # Your existing screenshot logic
+    #     screenshot_path = f"screenshots/screenshot_{timestamp}.png"
+    #     # After saving screenshot
+    #     s3_client.upload(screenshot_path)
+    #     media_files['screenshots'].append({
+    #         'path': screenshot_path,
+    #         'timestamp': timestamp
+    #     })
+    #     return jsonify({"path": screenshot_path})
+    # except Exception as e:
+    #     return jsonify({"error": str(e)}), 500
 
 @app.route('/api/recording/stop', methods=['POST'])
 def stop_screen_recording():
@@ -108,4 +145,4 @@ def stop_audio_recording():
     return jsonify({"error": "Not recording"}), 400
 
 if __name__ == '__main__':
-    app.run(port=5060, debug=True)
+    app.run(port=5050, debug=True)

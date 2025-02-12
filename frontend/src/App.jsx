@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Video, Camera, X, Minus } from 'lucide-react';
 const { ipcRenderer } = window.require('electron');
 
-const API_URL = 'http://localhost:5050/api';
+const API_URL = 'http://localhost:5000/api';
 
 const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
   <div className="relative group">
@@ -66,17 +66,28 @@ function App() {
     };
 
     const handleScreenshot = async () => {
+        // try {
+        //     const response = await fetch(`${API_URL}/screenshot`, {
+        //         method: 'POST'
+        //     });
+        //     const data = await response.json();
+            
+        //     if (data.path) {
+        //         console.log('Screenshot saved:', data.path);
+        //     }
+        // } catch (error) {
+        //     console.error('Screenshot error:', error);
+        // }
         try {
-            const response = await fetch(`${API_URL}/screenshot`, {
+            const response = await fetch(`${API_URL}/screenshot`, {  // Make sure API_URL is correct
                 method: 'POST'
             });
             const data = await response.json();
-            if (data.path) {
-                console.log('Screenshot saved:', data.path);
-            }
+            console.log("Response data:", data);  // This should show {test: 'test success!'}
         } catch (error) {
             console.error('Screenshot error:', error);
         }
+
     };
 
     const handleScreenRecording = async () => {

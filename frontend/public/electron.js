@@ -7,9 +7,13 @@ let mainWindow;
 let pythonProcess;
 
 function startPythonBackend() {
-    pythonProcess = spawn('python', ['../flask_server.py'], {
+    // pythonProcess = spawn('python', ['../flask_server.py'], {
+    //     stdio: 'inherit'
+    // });
+    pythonProcess = spawn('python', ['../lib/window/app.py'], {
         stdio: 'inherit'
     });
+
 
     pythonProcess.on('error', (err) => {
         console.error('Failed to start Python process:', err);
@@ -41,7 +45,7 @@ function createWindow() {
 
     // DEVELOPMENT: Load from Vite dev server
 //   if (isDev) {
-//     mainWindow.loadURL('http://localhost:5173')
+//     mainWindow.loadURL('http://localhost:5050')
 //     mainWindow.webContents.openDevTools()
 //   } else {
 //     // PRODUCTION: Load built files
@@ -51,6 +55,8 @@ function createWindow() {
 //   }
     
    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+   mainWindow.webContents.openDevTools()
+
 
 
 

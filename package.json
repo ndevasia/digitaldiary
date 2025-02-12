@@ -3,7 +3,6 @@
     "version": "1.0.0",
     "main": "frontend/public/electron.js",
     "scripts": {
-        "start": "concurrently \"python flask_server.py\" \"cd frontend && npm run dev\"",
         "build": "cd frontend && npm run build",
         "dev": "cd frontend && npm run build && npm run electron:dev",
         "electron:start": "cd frontend && electron ."

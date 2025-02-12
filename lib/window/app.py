@@ -69,5 +69,10 @@ def get_screenshot(filename):
     """Serves the screenshot file."""
     return send_from_directory(SCREENSHOTS_FOLDER, filename)
 
+@app.route('/api/screenshot', methods=['POST'])
+def take_screenshot():
+    print("Yes you are taking a screenshot")
+    return jsonify({'test': 'test success!'})
+    
 if __name__ == '__main__':
     app.run(debug=True)

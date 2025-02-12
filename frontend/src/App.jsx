@@ -18,14 +18,6 @@ const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
         size={20} 
       />
     </button>
-    {/* {tooltip && (
-      <div className="absolute left-12 top-1/2 -translate-y-1/2 hidden group-hover:block">
-        <div className="bg-gray-800 text-white text-xs py-1 px-2 rounded-md whitespace-nowrap">
-          {tooltip}
-        </div>
-      </div>
-    )} */}
-
   </div>
 );
 
@@ -66,27 +58,27 @@ function App() {
     };
 
     const handleScreenshot = async () => {
-        // try {
-        //     const response = await fetch(`${API_URL}/screenshot`, {
-        //         method: 'POST'
-        //     });
-        //     const data = await response.json();
-            
-        //     if (data.path) {
-        //         console.log('Screenshot saved:', data.path);
-        //     }
-        // } catch (error) {
-        //     console.error('Screenshot error:', error);
-        // }
         try {
-            const response = await fetch(`${API_URL}/screenshot`, {  // Make sure API_URL is correct
+            const response = await fetch(`${API_URL}/screenshot`, {
                 method: 'POST'
             });
             const data = await response.json();
             console.log("Response data:", data);  // This should show {test: 'test success!'}
+            if (data.path) {
+                console.log('Screenshot saved:', data.path);
+            }
         } catch (error) {
             console.error('Screenshot error:', error);
         }
+        // try {
+        //     const response = await fetch(`${API_URL}/screenshot`, {  // Make sure API_URL is correct
+        //         method: 'POST'
+        //     });
+        //     const data = await response.json();
+        //     console.log("Response data:", data);  // This should show {test: 'test success!'}
+        // } catch (error) {
+        //     console.error('Screenshot error:', error);
+        // }
 
     };
 
@@ -167,19 +159,17 @@ function App() {
                     <IconButton 
                         icon={Camera} 
                         onClick={handleScreenshot}
-                        tooltip="Take Screenshot"
                     />
                     <IconButton 
                         icon={Video} 
                         onClick={handleScreenRecording}
                         isActive={isScreenRecording}
-                        tooltip={isScreenRecording ? "Stop Recording" : "Start Screen Recording"}
+                        //isActive={true}
                     />
                     <IconButton 
                         icon={Mic} 
                         onClick={handleAudioRecording}
                         isActive={isAudioRecording}
-                        tooltip={isAudioRecording ? "Stop Audio" : "Start Audio Recording"}
                     />
                 </div>
             </div>

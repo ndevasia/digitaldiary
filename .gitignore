@@ -30,8 +30,8 @@ __pycache__/
 *.pyd
 .Python
 env/
-/.venv/
-/activate/
+.venv/
+activate/
 ENV/
 env.bak/
 venv.bak/

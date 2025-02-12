@@ -52,29 +52,48 @@ class TransparentOverlay(QMainWindow):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
-        # Set window size to cover more of the right side of the screen
+        # Set window size to cover the right side of the screen
         screen = QApplication.primaryScreen()
         screenGeometry = screen.geometry()
-        self.setGeometry(
-            screenGeometry.width() - 300,
-            int(screenGeometry.height() / 6),
-            300,
-            int(screenGeometry.height() * 2 / 3)
-        )
+        self.setGeometry(screenGeometry.width() - 300, screenGeometry.height()/4, 300, screenGeometry.height()/2)
 
         # Create a central widget with a transparent background
         self.centralWidget = QWidget(self)
         self.centralWidget.setStyleSheet("background-color: rgba(240, 240, 240, 50);")
         self.setCentralWidget(self.centralWidget)
 
-        # Set up a vertical layout to hold all buttons evenly spaced
+        # Create a layout and set it for the central widget
         self.layout = QVBoxLayout(self.centralWidget)
-        self.layout.setContentsMargins(20, 20, 20, 20)
-        self.layout.setSpacing(20)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setAlignment(Qt.AlignTop)
+
+        buttonFrame = QFrame(self.centralWidget)
+        buttonFrame.setFixedSize(200, 200)
+        buttonFrame.setStyleSheet("background:transparent;")
+        buttonLayout = QVBoxLayout(buttonFrame)
+        buttonLayout.setContentsMargins(0, 0, 0, 0)
+        buttonLayout.setAlignment(Qt.AlignTop)
+
+        # Create the screenshot button
+        self.screenshotButton = QPushButton(self)
+        self.screenshotButton.setFixedSize(200, 200)  # Set fixed size for the button
+        self.screenshotButton.setIcon(QIcon(resource_path('../icons/screenshot.svg')))
+        self.screenshotButton.setIconSize(self.screenshotButton.size())
+        self.screenshotButton.setStyleSheet("""
+                    QPushButton {
+                        background-color: lightgray;
+                        border-radius: 100px;
+                    }
+                    QPushButton:hover {
+                        background-color: gray;
+                    }
+                """)
+        self.screenshotButton.move(50, 800)
+        self.screenshotButton.clicked.connect(self.takeScreenshot)
 
         # Create the kill switch button
-        self.killSwitchButton = QPushButton('X', self.centralWidget)
-        self.killSwitchButton.setFixedSize(50, 50)
+        self.killSwitchButton = QPushButton('X', self)
+        self.killSwitchButton.setFixedSize(50, 50)  # Set fixed size for the button
         self.killSwitchButton.setStyleSheet("""
                     QPushButton {
                         background-color: rgb(255, 0, 0);
@@ -87,65 +106,39 @@ class TransparentOverlay(QMainWindow):
                 """)
         self.killSwitchButton.clicked.connect(self.closeApplication)
 
-        # Add kill switch button to the layout
-        self.layout.addWidget(self.killSwitchButton, alignment=Qt.AlignCenter)
-
-        # Create the record button
-        self.recordButton = QPushButton(self.centralWidget)
-        self.recordButton.setFixedSize(100, 100)
+        self.recordButton = QPushButton(self)
+        self.recordButton.setFixedSize(200, 200)
         self.recordButton.setIcon(QIcon(resource_path('../icons/record-start.svg')))
         self.recordButton.setIconSize(self.recordButton.size())
         self.recordButton.setStyleSheet("""
                     QPushButton {
                         background-color: lightgray;
-                        border-radius: 50px;
+                        border-radius: 100px;
+                        font-size: 24px;
                     }
                     QPushButton:hover {
                         background-color: gray;
                     }
                 """)
+        self.recordButton.move(50, 400)
         self.recordButton.clicked.connect(self.toggleRecording)
 
-        # Add record button to the layout
-        self.layout.addWidget(self.recordButton, alignment=Qt.AlignCenter)
-
-        # Create the audio button
-        self.audioButton = QPushButton(self.centralWidget)
-        self.audioButton.setFixedSize(100, 100)
+        self.audioButton = QPushButton(self)
+        self.audioButton.setFixedSize(200,200)
         self.audioButton.setIcon(QIcon(resource_path('../icons/audio-start.svg')))
         self.audioButton.setIconSize(self.audioButton.size())
         self.audioButton.setStyleSheet("""
-                    QPushButton {
-                        background-color: lightgray;
-                        border-radius: 50px;
-                    }
-                    QPushButton:hover {
-                        background-color: gray;
-                    }
-                """)
+                            QPushButton {
+                                background-color: lightgray;
+                                border-radius: 100px;
+                                font-size: 24px;
+                            }
+                            QPushButton:hover {
+                                background-color: gray;
+                            }
+                        """)
+        self.audioButton.move(50, 0)
         self.audioButton.clicked.connect(self.toggleAudio)
-
-        # Add audio button to the layout
-        self.layout.addWidget(self.audioButton, alignment=Qt.AlignCenter)
-
-        # Create the screenshot button
-        self.screenshotButton = QPushButton(self.centralWidget)
-        self.screenshotButton.setFixedSize(100, 100)
-        self.screenshotButton.setIcon(QIcon(resource_path('../icons/screenshot.svg')))
-        self.screenshotButton.setIconSize(self.screenshotButton.size())
-        self.screenshotButton.setStyleSheet("""
-                    QPushButton {
-                        background-color: lightgray;
-                        border-radius: 50px;
-                    }
-                    QPushButton:hover {
-                        background-color: gray;
-                    }
-                """)
-        self.screenshotButton.clicked.connect(self.takeScreenshot)
-
-        # Add screenshot button to the layout
-        self.layout.addWidget(self.screenshotButton, alignment=Qt.AlignCenter)
 
     def takeScreenshot(self):
         # Generate a filename with date and time

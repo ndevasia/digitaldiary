@@ -75,6 +75,31 @@ def get_screenshot(filename):
     """Serves the screenshot file."""
     return send_from_directory(SCREENSHOTS_FOLDER, filename)
 
+@app.route('/api/screenshot', methods=['POST'])
+def take_screenshot():
+    print("Yes you are taking a screenshot")
+    return jsonify({'test': 'test success for screenshot!', 'path':'some_fake_path/screenshot/xxx.png'})
+
+@app.route('/api/recording/start', methods=['POST'])
+def start_screen_recording():
+    print("Yes you are STARTING a screen recording")
+    return jsonify({'test': 'test success for starting screen recording!', 'status':'started'})
+
+@app.route('/api/recording/stop', methods=['POST'])
+def stop_screen_recording():
+    print("Yes you are STOPPING a screen recording")
+    return jsonify({'test': 'test success for stopping screen recording!', 'status':'stopped'})
+
+@app.route('/api/audio/start', methods=['POST'])
+def start_audio_recording():
+    print("Yes you are STARTING an audio recording")
+    return jsonify({'test': 'test success for starting audio recording!', 'status':'started'})
+
+@app.route('/api/audio/stop', methods=['POST'])
+def stop_audio_recording():
+    print("Yes you are STOPPING an audio recording")
+    return jsonify({'test': 'test success for stopping audio recording!', 'status':'stopped'})
+
 @app.route('/api/media', methods=['GET'])
 def get_media():
     try:
@@ -100,7 +125,6 @@ def get_media():
         return jsonify(media)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 
 if __name__ == '__main__':

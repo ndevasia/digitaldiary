@@ -42,8 +42,9 @@ function createWindow() {
 
     
    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-   // DEVELOPMENT: Load the developer tool to see log.console messages and fix bug
-   //mainWindow.webContents.openDevTools()
+   //DEVELOPMENT: Load the developer tool to see log.console messages and fix bug
+   //Comment this line to make develoepr tool disapper for production
+   mainWindow.webContents.openDevTools()
 
 
 

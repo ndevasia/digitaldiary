@@ -91,6 +91,7 @@ function App() {
                 const data = await response.json();
                 if (data.status === 'started') {
                     setIsScreenRecording(true);
+                    console.log("Response data:", data);
                 }
             } else {
                 const response = await fetch(`${API_URL}/recording/stop`, {
@@ -99,6 +100,7 @@ function App() {
                 const data = await response.json();
                 if (data.status === 'stopped') {
                     setIsScreenRecording(false);
+                    console.log("Response data:", data);
                 }
             }
         } catch (error) {
@@ -115,6 +117,7 @@ function App() {
                 const data = await response.json();
                 if (data.status === 'started') {
                     setIsAudioRecording(true);
+                    console.log("Response data:", data);
                 }
             } else {
                 const response = await fetch(`${API_URL}/audio/stop`, {
@@ -123,6 +126,7 @@ function App() {
                 const data = await response.json();
                 if (data.status === 'stopped') {
                     setIsAudioRecording(false);
+                    console.log("Response data:", data);
                 }
             }
         } catch (error) {

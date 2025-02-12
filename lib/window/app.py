@@ -1,6 +1,7 @@
 from flask import Flask, render_template, send_from_directory, request, jsonify
 import os
 import boto3
+from lib.globals import USERNAME
 
 app = Flask(__name__)
 
@@ -9,7 +10,7 @@ SCREENSHOTS_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..
 # S3 Setup
 s3_client = boto3.client('s3', region_name='us-west-2')
 BUCKET_NAME = "digital-diary"
-USERNAME = "serena"
+# USERNAME = "serena"
 
 
 @app.route('/generate-presigned-url', methods=['POST'])
@@ -93,6 +94,32 @@ def start_audio_recording():
 def stop_audio_recording():
     print("Yes you are STOPPING an audio recording")
     return jsonify({'test': 'test success for stopping audio recording!', 'status':'stopped'})
+
+@app.route('/api/media', methods=['GET'])
+def get_media():
+    try:
+        # Get query parameters for filtering
+        media_type = request.args.get('media_type')
+        user_id = request.args.get('user_id')
+        
+        MEDIA_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '../model/media.json'))
+
+        with open(MEDIA_FOLDER, 'r') as file:
+            data = json.load(file)
+        
+        print("data", data)
+        media = data['media']
+        print("media", media)
+        if media_type:
+            media = [item for item in media if item['type'] == media_type]
+
+        if user_id:
+            media = [item for item in media if str(item['owner_user_id']) == str(user_id)]
+
+        
+        return jsonify(media)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':

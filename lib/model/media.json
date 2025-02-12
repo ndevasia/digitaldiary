@@ -1,0 +1,28 @@
+{
+  "media": [
+    {
+      "media_id": 1,
+      "type": "video",
+      "media_url": "https://github.com/rafaelreis-hotmart/Audio-Sample-files/raw/master/sample.mp4",
+      "timestamp": "2025-01-29T13:45:00Z",
+      "owner_user_id": 1001,
+      "game": "Cyberpunk 2077"
+    },
+    {
+      "media_id": 2,
+      "type": "screenshot",
+      "media_url": "https://picsum.photos/800/600",
+      "timestamp": "2025-01-29T14:30:00Z",
+      "owner_user_id": 1002,
+      "game": "The Legend of Zelda: Breath of the Wild"
+    },
+    {
+      "media_id": 3,
+      "type": "audio",
+      "media_url": "https://github.com/rafaelreis-hotmart/Audio-Sample-files/raw/master/sample.mp3",
+      "timestamp": "2025-01-29T15:15:00Z",
+      "owner_user_id": 1003,
+      "game": "Elden Ring"
+    }
+  ]
+}

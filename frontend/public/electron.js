@@ -7,9 +7,6 @@ let mainWindow;
 let pythonProcess;
 
 function startPythonBackend() {
-    // pythonProcess = spawn('python', ['../flask_server.py'], {
-    //     stdio: 'inherit'
-    // });
     pythonProcess = spawn('python', ['../lib/window/app.py'], {
         stdio: 'inherit'
     });
@@ -43,19 +40,10 @@ function createWindow() {
         }
     });
 
-    // DEVELOPMENT: Load from Vite dev server
-//   if (isDev) {
-//     mainWindow.loadURL('http://localhost:5050')
-//     mainWindow.webContents.openDevTools()
-//   } else {
-//     // PRODUCTION: Load built files
-//     // Fix the path resolution for production
-//     const publicPath = path.join(__dirname, '..')
-//     mainWindow.loadFile(path.join(publicPath, 'dist', 'index.html'))
-//   }
     
    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-   mainWindow.webContents.openDevTools()
+   // DEVELOPMENT: Load the developer tool to see log.console messages and fix bug
+   //mainWindow.webContents.openDevTools()
 
 
 

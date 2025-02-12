@@ -1,130 +1,163 @@
 body {
-    font-family: Arial, sans-serif;
-    background-color: #e6eef5;
-    margin: 0;
-    display: flex;
-    height: 100vh;
+  font-family: Arial, sans-serif;
+  background-color: #e6eef5;
+  margin: 0;
+  display: flex;
+  height: 100vh;
 }
 
 .container {
-    display: flex;
-    width: 100%;
+  display: flex;
+  width: 100%;
 }
 
 .sidebar {
-    width: 250px;
-    background-color: #3da37a;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
+  width: 250px;
+  background-color: #3da37a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
 }
 
 .avatar {
-    width: 100px;
-    height: 100px;
-    background-color: #c3e5d4;
-    border-radius: 50%;
-    margin-bottom: 20px;
+  width: 100px;
+  height: 100px;
+  background-color: #c3e5d4;
+  border-radius: 50%;
+  margin-bottom: 20px;
 }
 
 nav ul {
-    list-style: none;
-    padding: 0;
-    width: 100%;
+  list-style: none;
+  padding: 0;
+  width: 100%;
 }
 
 nav ul li {
-    margin: 10px 0;
-    text-align: left;
+  margin: 10px 0;
+  text-align: left;
 }
 
 nav ul li a {
-    text-decoration: none;
-    color: white;
-    padding: 10px;
-    display: block;
-    border-radius: 5px;
+  text-decoration: none;
+  color: white;
+  padding: 10px;
+  display: block;
+  border-radius: 5px;
 }
 
 nav ul li.active a, nav ul li a:hover {
-    background-color: #62c2a0;
+  background-color: #62c2a0;
 }
 
 .bottom-links {
-    margin-top: auto;
-    text-align: center;
+  margin-top: auto;
+  text-align: center;
 }
 
 .bottom-links a {
-    color: white;
-    text-decoration: none;
-    display: block;
-    margin: 10px 0;
+  color: white;
+  text-decoration: none;
+  display: block;
+  margin: 10px 0;
 }
 
 .main-content {
-    flex-grow: 1;
-    padding: 20px;
+  flex-grow: 1;
+  padding: 20px;
 }
 
 header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
 .new-session {
-    background-color: #3da37a;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 5px;
-    cursor: pointer;
+  background-color: #3da37a;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
 }
 
 .new-session:hover {
-    background-color: #62c2a0;
+  background-color: #62c2a0;
 }
 
-.memories {
-    background-color: white;
-    padding: 20px;
-    border-radius: 5px;
+.memories, .files {
+  background-color: white;
+  padding: 20px;
+  border-radius: 5px;
 }
 
 .cards {
-    display: flex;
-    gap: 20px;
+  display: flex;
+  gap: 20px;
 }
 
 .card {
-    background-color: #c3d7f5;
-    flex-grow: 1;
-    text-align: center;
-    padding: 20px;
-    border-radius: 5px;
+  background-color: #c3d7f5;
+  flex-grow: 1;
+  text-align: center;
+  padding: 20px;
+  border-radius: 5px;
 }
 
 .screenshot-image {
-    width: 100%; /* The image will scale to fit the container */
-    max-width: 300px; /* Set a reasonable max width for larger screens */
-    height: auto; /* Maintain the aspect ratio */
-    border-radius: 10px;
-    margin: 10px 0;
-    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+  width: 100%; /* The image will scale to fit the container */
+  max-width: 300px; /* Set a reasonable max width for larger screens */
+  height: auto; /* Maintain the aspect ratio */
+  border-radius: 10px;
+  margin: 10px 0;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
 }
+
+/* Dropdown Menu */
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: white;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  list-style: none;
+  padding: 10px 0;
+  margin: 0;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  text-align: left;
+}
+
+.dropdown-menu li {
+  margin: 0;
+}
+
+.dropdown-menu li a {
+  display: block;
+  padding: 8px 15px;
+  text-decoration: none;
+  color: #333;
+}
+
+.dropdown-menu li a:hover {
+  background-color: #f0f0f0;
+}
+
 
 /* Adjust the layout for smaller screens */
 @media (max-width: 768px) {
-    .screenshot-image {
-        max-width: 200px; /* Make it even smaller on small devices */
-    }
+  .screenshot-image {
+    max-width: 200px; /* Make it even smaller on small devices */
+}
 
-    .cards {
-        display: flex;
-        flex-direction: column; /* Stack cards vertically on small screens */
-        align-items: center;
-    }
+  .cards {
+    display: flex;
+    flex-direction: column; /* Stack cards vertically on small screens */
+    align-items: center;
+  }
 }

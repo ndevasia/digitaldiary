@@ -11,6 +11,13 @@ body {
     width: 100%;
 }
 
+input[type=submit] {
+    background-color: #3da37a;
+    color: white;
+    border-color: white;
+    font-size: 15px;
+}
+
 .sidebar {
     width: 250px;
     background-color: #3da37a;

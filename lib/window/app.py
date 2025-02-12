@@ -101,8 +101,8 @@ def get_media():
 @app.route('/run_main', methods=['POST'])
 def run_main():
     try:
-        # Assuming main.py is in the project root directory
-        result = subprocess.run([sys.executable, 'main.py'], cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')), capture_output=True, text=True)
+        result = subprocess.run([sys.executable, 'main.py'],
+                                cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')), capture_output=True, text=True)
         if result.returncode == 0:
             return f"Success: {result.stdout}"
         else:

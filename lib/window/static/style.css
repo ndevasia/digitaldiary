@@ -11,6 +11,7 @@ body {
     width: 100%;
 }
 
+/* CSS styling for submit input */
 input[type=submit] {
     background-color: #3da37a;
     color: white;

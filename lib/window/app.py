@@ -98,6 +98,7 @@ def get_media():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Runs main after pressing submit in html
 @app.route('/run_main', methods=['POST'])
 def run_main():
     try:

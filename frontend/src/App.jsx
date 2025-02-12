@@ -63,22 +63,13 @@ function App() {
                 method: 'POST'
             });
             const data = await response.json();
-            console.log("Response data:", data);  // This should show {test: 'test success!'}
+            console.log("Response data:", data);  // This should show {test: 'test success for screenshot!'}
             if (data.path) {
                 console.log('Screenshot saved:', data.path);
             }
         } catch (error) {
             console.error('Screenshot error:', error);
         }
-        // try {
-        //     const response = await fetch(`${API_URL}/screenshot`, {  // Make sure API_URL is correct
-        //         method: 'POST'
-        //     });
-        //     const data = await response.json();
-        //     console.log("Response data:", data);  // This should show {test: 'test success!'}
-        // } catch (error) {
-        //     console.error('Screenshot error:', error);
-        // }
 
     };
 
@@ -91,7 +82,7 @@ function App() {
                 const data = await response.json();
                 if (data.status === 'started') {
                     setIsScreenRecording(true);
-                    console.log("Response data:", data);
+                    console.log("Response data:", data);// This should show {test: 'test success for starting screen recording!'}
                 }
             } else {
                 const response = await fetch(`${API_URL}/recording/stop`, {
@@ -100,7 +91,7 @@ function App() {
                 const data = await response.json();
                 if (data.status === 'stopped') {
                     setIsScreenRecording(false);
-                    console.log("Response data:", data);
+                    console.log("Response data:", data);// This should show {test: 'test success for stopping screen recording!'}
                 }
             }
         } catch (error) {
@@ -117,7 +108,7 @@ function App() {
                 const data = await response.json();
                 if (data.status === 'started') {
                     setIsAudioRecording(true);
-                    console.log("Response data:", data);
+                    console.log("Response data:", data);//This should show {test: 'test success for starting audio recording!'}
                 }
             } else {
                 const response = await fetch(`${API_URL}/audio/stop`, {
@@ -126,7 +117,7 @@ function App() {
                 const data = await response.json();
                 if (data.status === 'stopped') {
                     setIsAudioRecording(false);
-                    console.log("Response data:", data);
+                    console.log("Response data:", data);//This should show {test: 'test success for stopping audio recording!'}
                 }
             }
         } catch (error) {

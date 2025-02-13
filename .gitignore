@@ -20,6 +20,7 @@
 
 # PyInstaller build directory
 /build/
+/digitaldiary/bin/
 #/dist/
 #/*.spec
 

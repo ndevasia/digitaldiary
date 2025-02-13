@@ -20,6 +20,7 @@
 
 # PyInstaller build directory
 /build/
+/digitaldiary/
 #/dist/
 #/*.spec
 
@@ -30,7 +31,8 @@ __pycache__/
 *.pyd
 .Python
 env/
-venv/
+.venv/
+activate/
 ENV/
 env.bak/
 venv.bak/

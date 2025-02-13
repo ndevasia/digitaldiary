@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Files</title>
+  <script src="{{ url_for('static', filename='index.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <div class="sidebar">
+      <div class="avatar"></div>
+      <nav>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="#">Games</a></li>
+          <li class="active"><a href="/files">Files</a></li>
+          <li><a href="#">Journals</a></li>
+        </ul>
+      </nav>
+      <div class="bottom-links">
+        <a href="#">Settings</a>
+        <a href="#">Quit</a>
+      </div>
+    </div>
+    <div class="main-content">
+      <header>
+        <h1>Hello, User 1 & User 2</h1>
+      </header>
+      <section class="files">
+        <h2>Files</h2>
+        <select id="media-filter">
+          <option value="all">All</option>
+          <option value="screenshot">Screenshot</option>
+          <option value="video">Video</option>
+          <option value="audio">Audio</option>
+        </select>
+        <div id="media-list"></div>
+        <div class="cards">
+          {% for file in files %}
+            <div class="card {{ file.type }}">
+              <h3>{{ file.type }}</h3>
+                <img src="{{ url_for('static', filename=file.thumbnail) }}" alt="{{ file.type }}" class="file-thumbnail">
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

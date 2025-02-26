@@ -3,8 +3,7 @@ import os
 import subprocess
 import sys
 import boto3
-from lib.globals import USERNAME
-import json
+# from lib.globals import USERNAME
 
 app = Flask(__name__)
 
@@ -13,6 +12,8 @@ SCREENSHOTS_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..
 # S3 Setup
 s3_client = boto3.client('s3', region_name='us-west-2')
 BUCKET_NAME = "digital-diary"
+# Change this to your username
+USERNAME = "serena"
 
 
 @app.route('/generate-presigned-url', methods=['POST'])
@@ -72,6 +73,31 @@ def get_screenshot(filename):
     """Serves the screenshot file."""
     return send_from_directory(SCREENSHOTS_FOLDER, filename)
 
+@app.route('/api/screenshot', methods=['POST'])
+def take_screenshot():
+    print("Yes you are taking a screenshot")
+    return jsonify({'test': 'test success for screenshot!', 'path':'some_fake_path/screenshot/xxx.png'})
+
+@app.route('/api/recording/start', methods=['POST'])
+def start_screen_recording():
+    print("Yes you are STARTING a screen recording")
+    return jsonify({'test': 'test success for starting screen recording!', 'status':'started'})
+
+@app.route('/api/recording/stop', methods=['POST'])
+def stop_screen_recording():
+    print("Yes you are STOPPING a screen recording")
+    return jsonify({'test': 'test success for stopping screen recording!', 'status':'stopped'})
+
+@app.route('/api/audio/start', methods=['POST'])
+def start_audio_recording():
+    print("Yes you are STARTING an audio recording")
+    return jsonify({'test': 'test success for starting audio recording!', 'status':'started'})
+
+@app.route('/api/audio/stop', methods=['POST'])
+def stop_audio_recording():
+    print("Yes you are STOPPING an audio recording")
+    return jsonify({'test': 'test success for stopping audio recording!', 'status':'stopped'})
+
 @app.route('/api/media', methods=['GET'])
 def get_media():
     try:
@@ -110,7 +136,6 @@ def run_main():
             return f"Error: {result.stderr}"
     except Exception as e:
         return f"An error occurred: {str(e)}"
-
 
 if __name__ == '__main__':
     app.run(debug=True)

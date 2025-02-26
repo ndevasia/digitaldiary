@@ -2,6 +2,10 @@ from flask import Flask, render_template, send_from_directory, request, jsonify
 import os
 import boto3
 # from lib.globals import USERNAME
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QDateTime
+from lib.recording import RecorderThread
+from lib.audio import AudioRecorderThread
 
 app = Flask(__name__)
 
@@ -13,6 +17,21 @@ BUCKET_NAME = "digital-diary"
 # Change this to your username
 USERNAME = "serena"
 
+# Global recorder instances
+screen_recorder = None
+audio_recorder = None
+
+def get_screen_recorder():
+    global screen_recorder
+    if screen_recorder is None:
+        screen_recorder = RecorderThread()
+    return screen_recorder
+
+def get_audio_recorder():
+    global audio_recorder
+    if audio_recorder is None:
+        audio_recorder = AudioRecorderThread()
+    return audio_recorder
 
 @app.route('/generate-presigned-url', methods=['POST'])
 def generate_presigned_url():
@@ -73,28 +92,101 @@ def get_screenshot(filename):
 
 @app.route('/api/screenshot', methods=['POST'])
 def take_screenshot():
-    print("Yes you are taking a screenshot")
-    return jsonify({'test': 'test success for screenshot!', 'path':'some_fake_path/screenshot/xxx.png'})
+    try:
+        # Generate filename with date and time
+        now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
+        screenshot_path = os.path.abspath(f'screenshots/screenshot_{now}.png')
+        
+        # Take the screenshot
+        screenshot = QApplication.primaryScreen().grabWindow(0)
+        screenshot.save(screenshot_path, 'png')
+        
+        # Upload to S3
+        s3_client = boto3.client('s3', region_name='us-west-2')
+        remote_path = f"{USERNAME}/screenshot_{now}.png"
+        s3_client.upload_file(screenshot_path, BUCKET_NAME, remote_path)
+        
+        return jsonify({
+            'status': 'success',
+            'path': screenshot_path,
+            's3_path': remote_path
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/recording/start', methods=['POST'])
 def start_screen_recording():
-    print("Yes you are STARTING a screen recording")
-    return jsonify({'test': 'test success for starting screen recording!', 'status':'started'})
+    try:
+        recorder = RecorderThread()
+        recorder.start()
+        return jsonify({
+            'status': 'started',
+            'message': 'Screen recording started successfully'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/recording/stop', methods=['POST'])
 def stop_screen_recording():
-    print("Yes you are STOPPING a screen recording")
-    return jsonify({'test': 'test success for stopping screen recording!', 'status':'stopped'})
+    try:
+        recorder = RecorderThread()
+        recorder.stop()
+        
+        # Generate thumbnail
+        recorder.generate_thumbnail()
+        
+        # Upload video to S3
+        if os.path.exists(recorder.video_path):
+            s3_client = boto3.client('s3', region_name='us-west-2')
+            video_name = os.path.basename(recorder.video_path)
+            remote_video_path = f"{USERNAME}/{video_name}"
+            s3_client.upload_file(recorder.video_path, BUCKET_NAME, remote_video_path)
+            
+            # Upload thumbnail if it exists
+            if os.path.exists(recorder.thumbnail_path):
+                thumbnail_name = os.path.basename(recorder.thumbnail_path)
+                remote_thumbnail_path = f"{USERNAME}/thumbnails/{thumbnail_name}"
+                s3_client.upload_file(recorder.thumbnail_path, BUCKET_NAME, remote_thumbnail_path)
+        
+        return jsonify({
+            'status': 'stopped',
+            'video_path': recorder.video_path,
+            'thumbnail_path': recorder.thumbnail_path
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/audio/start', methods=['POST'])
 def start_audio_recording():
-    print("Yes you are STARTING an audio recording")
-    return jsonify({'test': 'test success for starting audio recording!', 'status':'started'})
+    try:
+        audio_recorder = AudioRecorderThread()
+        audio_recorder.start()
+        return jsonify({
+            'status': 'started',
+            'message': 'Audio recording started successfully'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/audio/stop', methods=['POST'])
 def stop_audio_recording():
-    print("Yes you are STOPPING an audio recording")
-    return jsonify({'test': 'test success for stopping audio recording!', 'status':'stopped'})
+    try:
+        audio_recorder = AudioRecorderThread()
+        audio_recorder.stop()
+        
+        # Upload audio to S3
+        if os.path.exists(audio_recorder.audio_path):
+            s3_client = boto3.client('s3', region_name='us-west-2')
+            audio_name = os.path.basename(audio_recorder.audio_path)
+            remote_audio_path = f"{USERNAME}/audio/{audio_name}"
+            s3_client.upload_file(audio_recorder.audio_path, BUCKET_NAME, remote_audio_path)
+        
+        return jsonify({
+            'status': 'stopped',
+            'audio_path': audio_recorder.audio_path
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/media', methods=['GET'])
 def get_media():

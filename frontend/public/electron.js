@@ -6,17 +6,6 @@ const { spawn } = require('child_process');
 let mainWindow;
 let pythonProcess;
 
-function startPythonBackend() {
-    pythonProcess = spawn('python', ['../lib/window/app.py'], {
-        stdio: 'inherit'
-    });
-
-
-    pythonProcess.on('error', (err) => {
-        console.error('Failed to start Python process:', err);
-    });
-}
-
 function createWindow() {
     const screen = require('electron').screen;
     const display = screen.getPrimaryDisplay();
@@ -75,7 +64,6 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-    startPythonBackend();
     createWindow();
 });
 

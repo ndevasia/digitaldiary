@@ -10,7 +10,7 @@ if __name__ == '__main__':
 
     try:
         # Run `npm run dev` to start the Electron app
-        subprocess.run(['npm', 'run', 'dev'], check=True)
+        subprocess.run(['npm', 'run', 'dev'], shell=True, check=True, stdin=subprocess.DEVNULL)
 
     except subprocess.CalledProcessError as e:
         print(f"Error running Electron app: {e}")

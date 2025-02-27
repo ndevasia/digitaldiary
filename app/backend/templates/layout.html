@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Output Layout</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="avatar"></div>
+            <nav>
+                <ul>
+                    <li class="active"><a href="#">Home</a></li>
+                    <li><a href="#">Games</a></li>
+                    <li><a href="/files">Files</a></li>
+                    <li><a href="#">Journals</a></li>
+                </ul>
+            </nav>
+            <div class="bottom-links">
+                <a href="#">Settings</a>
+                <a href="#">Quit</a>
+            </div>
+        </div>
+        <div class="main-content">
+            <header>
+                <h1>Hello, User 1 & User 2</h1>
+                <button class="new-session">+ New Session</button>
+            </header>
+            <section class="memories">
+                <h2>Memories</h2>
+                <div class="cards">
+                    {% if screenshot_url %}
+                        <img src="{{ screenshot_url }}" alt="Latest Screenshot" class="screenshot-image" />
+                    {% else %}
+                        <p>No screenshots available yet. Take one to see it here!</p>
+                    {% endif %}
+                    <div class="card">1 week ago</div>
+                    <div class="card">1 month ago</div>
+                    <div class="card">1 year ago</div>
+                </div>
+            </section>
+        </div>
+    </div>
+</body>
+</html>

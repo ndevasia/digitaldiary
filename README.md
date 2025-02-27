@@ -6,9 +6,6 @@ My current flow is as follows:
 
 The backend is in Python currently, so I use Miniconda and pip install for all package needs. 
 
-I then run ```python main.py``` from the main repo. There's also a barebones Flask app under lib/window. From there, you can run ```flask run``` if you have it installed. 
+To build Flask: run ```pyinstaller --onefile --add-data "templates;templates" --add-data "static;static" --hidden-import boto3 --name server app.py``` from app/backend.
 
-To build the .exe, run:
-```pyinstaller main.spec```
-
-If the icons are messed up, run: ```pyinstaller --onefile --windowed --add-data "icons/;icons" main.py```
+To build the Electron desktop window, run: ```npx electron-packager . MyFlaskApp --platform=win32 --arch=x64 --out=dist --overwrite``` from app/frontend. Then you can just run the .exe file and everything should open! Yay. ```.\dist\MyFlaskApp-win32-x64\MyFlaskApp.exe```

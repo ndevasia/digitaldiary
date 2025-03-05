@@ -23,7 +23,7 @@ function createOverlayWindow() {
     const { width } = display.workAreaSize;
 
     overlayWindow = new BrowserWindow({
-        width: 100,     // w-16 == 64 Width for icons (16px * 4)
+        width: 64,     // w-16 == 64 Width for icons (16px * 4)
         height: 300,    // h-56 == 224 Height for 3 icons + close button + spacing
         x: width - 100,
         y: 100,

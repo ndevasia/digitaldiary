@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 
-const API_URL = 'http://localhost:5000/api';
 
 function HomePage() {
     const [screenshotUrl, setScreenshotUrl] = useState(null);
@@ -16,7 +15,8 @@ function HomePage() {
     const fetchLatestScreenshot = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/latest-screenshot`);
+            // Use the relative URL
+            const response = await fetch('/api/latest-screenshot');
             const data = await response.json();
             setScreenshotUrl(data.screenshot_url);
         } catch (error) {

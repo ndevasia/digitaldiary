@@ -12,6 +12,10 @@ s3_client = boto3.client('s3', region_name='us-west-2')
 BUCKET_NAME = "digital-diary"
 USERNAME = "sophia"
 
+@app.route('/api/test', methods=['GET'])
+def test_endpoint():
+    return jsonify({"message": "API is working!"})
+
 @app.route('/api/generate-presigned-url', methods=['POST'])
 def generate_presigned_url():
     try:
@@ -36,22 +40,31 @@ def generate_presigned_url():
 @app.route('/api/latest-screenshot', methods=['GET'])
 def latest_screenshot():
     """Returns the URL for the latest screenshot"""
-    prefix = USERNAME+"/screenshot_"
-    response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
-    
-    if 'Contents' in response:
-        files = [file for file in response['Contents'] if file['Key'].startswith(prefix)]
+    try:
+        prefix = USERNAME + "/screenshot_"
+        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
+        
+        if 'Contents' in response:
+            files = [file for file in response['Contents'] if file['Key'].startswith(prefix)]
 
-        if files:
-            latest_file = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
-            screenshot_url = s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': BUCKET_NAME, 'Key': latest_file},
-                ExpiresIn=3600
-            )
-            return jsonify({"screenshot_url": screenshot_url})
-    
-    return jsonify({"screenshot_url": None})
+            if files:
+                latest_file = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+                screenshot_url = s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': BUCKET_NAME, 'Key': latest_file},
+                    ExpiresIn=3600
+                )
+                return jsonify({"screenshot_url": screenshot_url})
+        
+        return jsonify({"screenshot_url": None})
+    except Exception as e:
+        print(f"Error in latest_screenshot: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/screenshots/<filename>')
+def get_screenshot(filename):
+    """Serves the screenshot file."""
+    return send_from_directory(SCREENSHOTS_FOLDER, filename)
 
 @app.route('/api/screenshot', methods=['POST'])
 def take_screenshot():
@@ -65,7 +78,7 @@ def start_screen_recording():
 
 @app.route('/api/recording/stop', methods=['POST'])
 def stop_screen_recording():
-    print("Stopping a screen recording")
+    print("Yes you are STOPPING a screen recording")
     return jsonify({'test': 'test success for stopping screen recording!', 'status':'stopped'})
 
 @app.route('/api/audio/start', methods=['POST'])
@@ -102,4 +115,4 @@ def get_media():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001, host='0.0.0.0')

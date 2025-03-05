@@ -7,18 +7,19 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: './',
   server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-        secure: false,
-      }
-    },
     watch: {
       usePolling: true,
     },
     hmr: {
       overlay: true,
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '/api')  // Optional: keeps '/api' prefix
+      }
     },
   },
 })

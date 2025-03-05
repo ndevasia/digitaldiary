@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 
-const API_URL = 'http://localhost:5000/api';
-
 function FilesPage() {
     const [mediaList, setMediaList] = useState([]);
     const [filteredMedia, setFilteredMedia] = useState([]);
@@ -25,7 +23,7 @@ function FilesPage() {
     const fetchMedia = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/media`);
+            const response = await fetch(`/api/media`);
             if (!response.ok) {
                 throw new Error('Failed to fetch media');
             }

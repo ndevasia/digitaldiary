@@ -7,7 +7,7 @@ let mainWindow;
 let pythonProcess;
 
 function startPythonBackend() {
-    pythonProcess = spawn('python', ['../lib/window/app.py'], {
+    pythonProcess = spawn('python', ['../backend/window/app.py'], {
         stdio: 'inherit'
     });
 

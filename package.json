@@ -5,7 +5,8 @@
     "scripts": {
         "build": "cd frontend && npm run build",
         "dev": "cd frontend && npm run build && npm run electron:dev",
-        "electron:start": "cd frontend && electron ."
+        "electron:start": "cd frontend && electron .",
+        "start": "concurrently \"python backend/window/app.py\" \"cd frontend && npm run dev\""
     },
     "devDependencies": {
         "concurrently": "^8.2.2",

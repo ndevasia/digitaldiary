@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Games</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <div class="sidebar">
+      <div class="avatar"></div>
+      <nav>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li class="active"><a href="/games">Games</a></li>
+          <li><a href="/files">Files</a></li>
+          <li><a href="#">Journals</a></li>
+        </ul>
+      </nav>
+      <div class="bottom-links">
+        <a href="#">Settings</a>
+        <a href="#">Quit</a>
+      </div>
+    </div>
+    <div class="main-content">
+      <header>
+        <h1>Hello, User 1 & User 2</h1>
+      </header>
+      <section class="games-section">
+        <h2>Games</h2>
+        <!-- Games list view (default view) -->
+        <div id="games-container">
+          <div class="loading">Loading games...</div>
+        </div>
+        
+        <!-- Game detail view (hidden by default) -->
+        <div id="game-detail" style="display: none;">
+          <div class="back-button">
+            <button onclick="showGamesList()">← Back to Games</button>
+          </div>
+          <h3 id="selected-game-title">Game Title</h3>
+          <div id="game-media-container" class="media-grid">
+            <!-- Media items will be loaded here -->
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  
+  <!-- Include the JavaScript file at the end for better performance -->
+  <script src="{{ url_for('static', filename='games.js') }}"></script>
+</body>
+</html>

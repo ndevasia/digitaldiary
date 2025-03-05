@@ -65,6 +65,27 @@ def index():
     else:
         return render_template('layout.html', screenshot_url=None)
 
+@app.route('/games')
+def games():
+    # try:
+    #     # Make an HTTP request to your own API endpoint
+    #     # Assuming your Flask app is running on localhost:5000
+    #     response = requests.get('http://localhost:5000/api/media')
+        
+    #     # Check if the request was successful
+    #     if response.status_code == 200:
+    #         files_data = response.json()
+    #         return render_template('games.html', files_data=files_data)
+    #     else:
+    #         error_message = f"API returned status code {response.status_code}"
+    #         return render_template('games.html', files_data=[], error=error_message)
+            
+    # except Exception as e:
+    #     # Handle any errors (network issues, etc.)
+    #     error_message = f"Error fetching media: {str(e)}"
+    #     return render_template('games.html', files_data=[], error=error_message)
+    return render_template('games.html')
+
 @app.route('/files')
 def files():
 
@@ -112,7 +133,7 @@ def get_media():
         with open(MEDIA_FOLDER, 'r') as file:
             data = json.load(file)
 
-        print("data", data)
+        print("data",data)
         media = data['media']
         print("media", media)
         if media_type:

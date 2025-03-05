@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ChevronDown } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 
 function FilesPage() {
@@ -7,6 +8,8 @@ function FilesPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState('all');
+    const [showDropdown, setShowDropdown] = useState(false);
+    
     
     useEffect(() => {
         fetchMedia();
@@ -38,10 +41,12 @@ function FilesPage() {
         }
     };
     
-    const handleFilterChange = (e) => {
-        setFilter(e.target.value);
+    const handleFilterChange = (filterType) => {
+        setFilter(filterType);
+        setShowDropdown(false);
     };
-    
+
+
     const renderMediaItem = (item) => {
         switch (item.type) {
             case 'video':
@@ -77,56 +82,94 @@ function FilesPage() {
     };
     
     return (
-        <div className="flex h-screen bg-gray-100">
+        <div className="flex h-screen bg-blue-50">
             <Sidebar />
             
             <div className="flex-1 p-8 overflow-y-auto">
-                <header className="flex justify-between items-center mb-8">
-                    <h1 className="text-2xl font-bold">Files</h1>
+                <header className="flex justify-between items-center mb-6">
+                    <h1 className="text-2xl font-semibold text-gray-700">Hello, User 1 & User 2</h1>
                 </header>
                 
-                <section className="bg-white p-6 rounded-lg shadow">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-semibold">Media Files</h2>
-                        <select 
-                            className="border rounded py-2 px-4 bg-white" 
-                            value={filter}
-                            onChange={handleFilterChange}
-                        >
-                            <option value="all">All</option>
-                            <option value="screenshot">Screenshots</option>
-                            <option value="video">Videos</option>
-                            <option value="audio">Audio</option>
-                        </select>
-                    </div>
+                <section className="mb-8">
+                    <h2 className="text-xl font-medium text-gray-700 mb-4">Files</h2>
                     
-                    {loading ? (
-                        <div className="flex justify-center py-8">
-                            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
-                        </div>
-                    ) : error ? (
-                        <div className="text-red-500 text-center py-8">
-                            <p>Error loading media: {error}</p>
+                    <div className="bg-white rounded-lg border border-gray-200 p-8">
+                        <div className="relative flex justify-end mb-4">
                             <button 
-                                className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-                                onClick={fetchMedia}
+                                className="bg-teal-500 text-white px-4 py-2 rounded flex items-center"
+                                onClick={() => setShowDropdown(!showDropdown)}
                             >
-                                Try Again
+                                Sort by <ChevronDown size={18} className="ml-2" />
                             </button>
-                        </div>
-                    ) : filteredMedia.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {filteredMedia.map((item) => (
-                                <div key={item.media_id}>
-                                    {renderMediaItem(item)}
+                            
+                            {showDropdown && (
+                                <div className="absolute top-full right-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-40 z-10">
+                                    <ul>
+                                        <li className="px-4 py-2 hover:bg-gray-100 text-teal-500 cursor-pointer" onClick={() => handleFilterChange('screenshot')}>
+                                            Screenshots
+                                        </li>
+                                        <li className="px-4 py-2 hover:bg-gray-100 text-teal-500 cursor-pointer" onClick={() => handleFilterChange('audio')}>
+                                            Audio
+                                        </li>
+                                        <li className="px-4 py-2 hover:bg-gray-100 text-teal-500 cursor-pointer" onClick={() => handleFilterChange('video')}>
+                                            Video
+                                        </li>
+                                    </ul>
                                 </div>
-                            ))}
+                            )}
                         </div>
-                    ) : (
-                        <div className="text-center py-8 text-gray-500">
-                            <p>No media files found for this filter.</p>
-                        </div>
-                    )}
+                        
+                        {loading ? (
+                            <div className="grid grid-cols-3 gap-6">
+                                {[1, 2, 3, 4, 5, 6].map((_, index) => (
+                                    <div key={index} className="animate-pulse bg-blue-100 h-48 rounded"></div>
+                                ))}
+                            </div>
+                        ) : error ? (
+                            <div className="text-center py-12">
+                                <p className="text-red-500">{error}</p>
+                                <button 
+                                    className="mt-4 bg-teal-500 text-white px-4 py-2 rounded hover:bg-teal-600"
+                                    onClick={fetchMedia}
+                                >
+                                    Try Again
+                                </button>
+                            </div>
+                        ) : filteredMedia.length === 0 ? (
+                            <div className="text-center py-12">
+                                <p className="text-gray-500">No media files found.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {filteredMedia.map((item) => {
+                                    let mediaClass = '';
+                                    
+                                    switch(item.type) {
+                                        case 'video':
+                                            mediaClass = 'bg-pink-200';
+                                            break;
+                                        case 'screenshot':
+                                            mediaClass = 'bg-blue-100';
+                                            break;
+                                        case 'audio':
+                                            mediaClass = 'bg-green-200';
+                                            break;
+                                        default:
+                                            mediaClass = 'bg-blue-100';
+                                    }
+                                    
+                                    return (
+                                        <div 
+                                            key={item.media_id} 
+                                            className={`${mediaClass} h-48 rounded flex items-center justify-center`}
+                                        >
+                                            {renderMediaItem(item)}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </section>
             </div>
         </div>

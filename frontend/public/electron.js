@@ -7,11 +7,11 @@ let mainWindow;
 let pythonProcess;
 
 function startPythonBackend() {
+    // Path to your Python API server script
     pythonProcess = spawn('python', ['../backend/window/app.py'], {
         stdio: 'inherit'
     });
-
-
+    
     pythonProcess.on('error', (err) => {
         console.error('Failed to start Python process:', err);
     });
@@ -40,16 +40,19 @@ function createWindow() {
         }
     });
 
+    // Load the React app
+    const startUrl = isDev 
+        ? 'http://localhost:5173' // Vite dev server default port
+        : `file://${path.join(__dirname, '../dist/index.html')}`;
+        
+    mainWindow.loadURL(startUrl);
     
-   mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-   //DEVELOPMENT: Load the developer tool to see log.console messages and fix bug
-   //Comment this line to make develoepr tool disapper for production
-   mainWindow.webContents.openDevTools()
+    // Development tools
+    if (isDev) {
+        mainWindow.webContents.openDevTools();
+    }
 
-
-
-
-    // Handle drag events
+    // Handle window events
     ipcMain.on('dragging', (event, { x, y }) => {
         const position = mainWindow.getPosition();
         mainWindow.setPosition(position[0] + x, position[1] + y);
@@ -62,16 +65,16 @@ function createWindow() {
     ipcMain.on('close-window', () => {
         const currentWindow = BrowserWindow.getFocusedWindow();
         if(currentWindow){
-            currentWindow.close()
+            currentWindow.close();
         }
-    })
+    });
 
     ipcMain.on('minimize-window', () => {
         const currentWindow = BrowserWindow.getFocusedWindow();
         if(currentWindow){
-            currentWindow.minimize()
+            currentWindow.minimize();
         }
-    })
+    });
 }
 
 app.whenReady().then(() => {

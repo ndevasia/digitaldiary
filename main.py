@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication
-from lib.overlay import TransparentOverlay
-from lib.server.aws import S3
+from backend.overlay import TransparentOverlay
+from backend.server.aws import S3
 
 if __name__ == '__main__':
     client = S3()

@@ -6,7 +6,7 @@ My current flow is as follows:
 
 The backend is in Python currently, so I use Miniconda and pip install for all package needs.
 
-I then run ```python main.py``` from the main repo. There's also a barebones Flask app under lib/window. From there, you can run ```flask run``` if you have it installed.
+I then run ```python main.py``` from the main repo. There's also a barebones Flask app under backend/window. From there, you can run ```flask run``` if you have it installed.
 
 To build the .exe, run:
 ```pyinstaller main.spec```

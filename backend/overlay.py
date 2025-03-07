@@ -5,14 +5,14 @@ import threading
 import requests
 from flask import Flask, render_template  # Assuming you have a Flask app that serves a page
 import subprocess
-from lib.globals import USERNAME
+from backend.globals import USERNAME
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QFrame
 from PyQt5.QtCore import Qt, QDateTime
 from PyQt5.QtGui import QPixmap, QIcon
 from .recording import RecorderThread
 from .audio import AudioRecorderThread
-from lib.server.aws import S3
+from backend.server.aws import S3
 
 # Ensure directories exist
 os.makedirs("../screenshots", exist_ok=True)
@@ -25,7 +25,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 def run_flask_app():
-    """ This function runs the Flask app from the app.py located in lib/window/ """
+    """ This function runs the Flask app from the app.py located in backend/window/ """
     flask_app_path = os.path.join(os.path.dirname(__file__), 'window', 'app.py')  # Adjust path to app.py
     # Run the Flask app using subprocess
     subprocess.run([sys.executable, flask_app_path])

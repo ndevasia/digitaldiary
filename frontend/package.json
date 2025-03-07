@@ -33,5 +33,24 @@
     "tailwindcss": "^4.0.5",
     "vite": "^5.0.8",
     "wait-on": "^8.0.2"
-  }
+  },
+  "build": {
+    "directories": {
+      "output": "../dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/**/*",
+      "!dist/**/*",
+      "!package-lock.json",
+      "!vite.config.*",
+      "!*.md"
+    ],
+    "extraResources": [
+    {
+      "from": "../backend",
+      "to": "backend"
+    }
+  ]
+}
 }

@@ -2,7 +2,16 @@ from flask import Flask, jsonify, request
 import os
 import boto3
 import json
+import sys
 from flask_cors import CORS  # You'll need to install flask-cors
+
+# Fix issue where sys.stdin, sys.stdout, or sys.stderr is None in PyInstaller
+if sys.stdin is None:
+    sys.stdin = open(os.devnull)
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS to allow React app to communicate with Flask

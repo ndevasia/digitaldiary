@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const backendPath = path.join(process.resourcesPath, 'backend');
 const isDev = require('electron-is-dev');
 const { spawn } = require('child_process');
 
@@ -7,13 +8,26 @@ let overlayWindow;
 let mainWindow;
 let pythonProcess;
 
+function getPythonScriptPath() {
+    if (isDev) {
+        console.log("dev mode")
+        return path.join(__dirname, "../../backend/window/app.py"); // Dev mode
+    } else {
+        console.log("prod mode")
+        return path.join(backendPath, "/window/app.py"); // Production mode
+    }
+}
+
 function startPythonBackend() {
-    pythonProcess = spawn('python', ['../lib/window/app.py'], {
-        stdio: 'inherit'
+    const scriptPath = getPythonScriptPath();
+    console.log("Starting Python backend at:", scriptPath);
+
+    pythonProcess = spawn("python", [scriptPath], {
+        stdio: "inherit"
     });
 
-    pythonProcess.on('error', (err) => {
-        console.error('Failed to start Python process:', err);
+    pythonProcess.on("error", (err) => {
+        console.error("❌ Failed to start Python process:", err);
     });
 }
 
@@ -43,7 +57,7 @@ function createOverlayWindow() {
     // Load the overlay UI
     const startUrl = isDev 
         ? 'http://localhost:5173/?overlay=true' 
-        : `file://${path.join(__dirname, '../dist/index.html?overlay=true')}`;
+        : `file://${path.join(__dirname, '../index.html?overlay=true')}`;
         
     overlayWindow.loadURL(startUrl);
     
@@ -74,9 +88,10 @@ function createMainWindow() {
     // Load the main React UI
     const startUrl = isDev 
         ? 'http://localhost:5173/' 
-        : `file://${path.join(__dirname, '../dist/index.html')}`;
+        : `file://${path.join(__dirname, '../index.html')}`;
         
     mainWindow.loadURL(startUrl);
+    console.log("we are using startURL ", startUrl)
     
     if (isDev) {
         mainWindow.webContents.openDevTools();

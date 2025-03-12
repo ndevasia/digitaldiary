@@ -13,8 +13,9 @@ SCREENSHOTS_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..
 s3_client = boto3.client('s3', region_name='us-west-2')
 BUCKET_NAME = "digital-diary"
 # Change this to your username
-USERNAME = "serena"
+USERNAME = "joey"
 
+npm_process = None
 
 @app.route('/generate-presigned-url', methods=['POST'])
 def generate_presigned_url():
@@ -124,17 +125,14 @@ def get_media():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/run_main', methods=['POST'])
-def run_main():
+@app.route('/run_overlay', methods=['POST'])
+def run_overlay():
     try:
-        result = subprocess.run([sys.executable, 'main.py'],
-                                cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')), capture_output=True, text=True)
-        if result.returncode == 0:
-            return f"Success: {result.stdout}"
-        else:
-            return f"Error: {result.stderr}"
-    except Exception as e:
-        return f"An error occurred: {str(e)}"
+        # Run `npm run dev` to start the Electron app
+        subprocess.Popen(['npm', 'run', 'dev'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, shell=True)
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error running Electron app: {e}")
 
 if __name__ == '__main__':
     app.run(debug=True)

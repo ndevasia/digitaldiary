@@ -3,18 +3,58 @@ const path = require('path');
 const isDev = require('electron-is-dev');
 const { spawn } = require('child_process');
 
-let mainWindow;
+let mainWindow;  // Overlay window
+let inputWindow; // Input window
 let inputWindow;
 let pythonProcess;
+let gameName = '';
 
-function createWindow() {
+function createInputWindow() {
+    inputWindow = new BrowserWindow({
+        width: 400,
+        height: 200,
+        frame: false,
+        alwaysOnTop: true,
+        transparent: true,
+        backgroundColor: '#00ffffff',
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')  // Set preload script
+        }
+    });
+
+    inputWindow.loadFile(path.join(__dirname, 'input.html')); // Create a new HTML file for the input window
+    // mainWindow.webContents.openDevTools(); // For debugging
+
+    // When user submits the text, show the overlay window and close the input window
+    ipcMain.on('submit-text', (event, game) => {
+        // Store the game name in the main process
+        gameName = game;
+        console.log('Game name received:', gameName); // Test to see if the name passes through
+
+        if (!mainWindow) {
+            createOverlayWindow();  // Create the overlay window only when needed
+        }
+
+        if (mainWindow) {
+            mainWindow.show();  // Show the overlay window
+        }
+
+        if (inputWindow) {
+            inputWindow.close();  // Close the input window
+        }
+    });
+}
+
+function createOverlayWindow() {
     const screen = require('electron').screen;
     const display = screen.getPrimaryDisplay();
     const { width } = display.workAreaSize;
 
     mainWindow = new BrowserWindow({
-        width: 800,     // w-16 == 64 Width for icons (16px * 4)
-        height: 224,   // h-56 == 224 Height for 3 icons + close button + spacing
+        width: 800,
+        height: 224,
         x: width - 100,
         y: 100,
         transparent: true,
@@ -30,14 +70,7 @@ function createWindow() {
         }
     });
 
-    
-   mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-   //DEVELOPMENT: Load the developer tool to see log.console messages and fix bug
-   //Comment this line to make develoepr tool disapper for production
-   mainWindow.webContents.openDevTools()
-
-
-
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
 
     // Handle drag events
     ipcMain.on('dragging', (event, { x, y }) => {
@@ -51,21 +84,21 @@ function createWindow() {
 
     ipcMain.on('close-window', () => {
         const currentWindow = BrowserWindow.getFocusedWindow();
-        if(currentWindow){
-            currentWindow.close()
+        if (currentWindow) {
+            currentWindow.close();
         }
-    })
+    });
 
     ipcMain.on('minimize-window', () => {
         const currentWindow = BrowserWindow.getFocusedWindow();
-        if(currentWindow){
-            currentWindow.minimize()
+        if (currentWindow) {
+            currentWindow.minimize();
         }
-    })
+    });
 }
 
 app.whenReady().then(() => {
-    createWindow();
+    createInputWindow();  // First create the input window
 });
 
 app.on('window-all-closed', () => {
@@ -79,6 +112,7 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
+        createInputWindow();
+        createOverlayWindow();
     }
 });

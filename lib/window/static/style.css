@@ -15,8 +15,10 @@ body {
 input[type=submit] {
     background-color: #3da37a;
     color: white;
-    border-color: white;
     font-size: 15px;
+    height: 40px;
+    align-content: center;
+    border-radius: 5px;
 }
 
 .sidebar {

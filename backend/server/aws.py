@@ -1,6 +1,6 @@
 import boto3
 import io
-from lib.globals import USERNAME
+from backend.globals import USERNAME
 import requests
 import os
 

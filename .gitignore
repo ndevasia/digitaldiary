@@ -20,6 +20,7 @@
 
 # PyInstaller build directory
 /build/
+/digitaldiary/
 #/dist/
 #/*.spec
 
@@ -30,11 +31,12 @@ __pycache__/
 *.pyd
 .Python
 env/
-venv/
+.venv/
+activate/
 ENV/
 env.bak/
 venv.bak/
-lib/globals.py
+backend/globals.py
 
 
 # IDE-specific ignores (add or remove based on your IDE)

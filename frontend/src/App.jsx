@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Video, Camera, X, Minus } from 'lucide-react';
+import { Mic, Video, Camera, X, Minus, Maximize, Minimize } from 'lucide-react';
 const { ipcRenderer } = window.require('electron');
 
 const API_URL = 'http://localhost:5000/api';
@@ -25,7 +25,22 @@ function App() {
     const [isAudioRecording, setIsAudioRecording] = useState(false);
     const [isScreenRecording, setIsScreenRecording] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
+    const [isMaximized, setIsMaximized] = useState(false);
     const dragStartPos = useRef(null);
+
+    // Add effect to listen for main window open/close events
+    useEffect(() => {
+        const handleMainWindowOpen = () => setIsMaximized(true);
+        const handleMainWindowClose = () => setIsMaximized(false);
+
+        ipcRenderer.on('main-window-opened', handleMainWindowOpen);
+        ipcRenderer.on('main-window-closed', handleMainWindowClose);
+
+        return () => {
+            ipcRenderer.removeListener('main-window-opened', handleMainWindowOpen);
+            ipcRenderer.removeListener('main-window-closed', handleMainWindowClose);
+        };
+    }, []);
 
     useEffect(() => {
         const handleMouseMove = (e) => {
@@ -70,7 +85,6 @@ function App() {
         } catch (error) {
             console.error('Screenshot error:', error);
         }
-
     };
 
     const handleScreenRecording = async () => {
@@ -125,9 +139,25 @@ function App() {
         }
     };
 
+    // Toggle main window function
+    const toggleMainWindow = () => {
+        if (isMaximized) {
+            ipcRenderer.send('close-main-window');
+            setIsMaximized(false);
+        } else {
+            ipcRenderer.send('open-main-window');
+            setIsMaximized(true);
+        }
+    };
+
+    // Open main window function
+    const openMainWindow = () => {
+        ipcRenderer.send('open-main-window');
+    };
+    
     return (
         <div 
-            className="border border-red-500 h-56 w-16 bg-white "
+        className="border border-red-500 bg-white flex flex-col p-1 rounded-lg" 
             onMouseDown={handleMouseDown}
         >
             <div className="flex flex-col w-full h-full p-1 gap-2 items-center justify-between">
@@ -165,6 +195,11 @@ function App() {
                         icon={Mic} 
                         onClick={handleAudioRecording}
                         isActive={isAudioRecording}
+                    />
+                    <IconButton 
+                        icon={isMaximized ? Minimize : Maximize}
+                        onClick={toggleMainWindow}
+                        tooltip={isMaximized ? "Close Main Window" : "Open Main Window"}
                     />
                 </div>
             </div>

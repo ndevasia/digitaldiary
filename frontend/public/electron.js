@@ -4,6 +4,7 @@ const isDev = require('electron-is-dev');
 const { spawn } = require('child_process');
 
 let mainWindow;
+let inputWindow;
 let pythonProcess;
 
 function createWindow() {

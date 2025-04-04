@@ -78,10 +78,11 @@ function App() {
                 method: 'POST'
             });
             const data = await response.json();
-            console.log("Response data:", data);  // This should show {test: 'test success for screenshot!'}
-            if (data.path) {
-                console.log('Screenshot saved:', data.path);
+            if (data.error) {
+                console.error('Screenshot error:', data.error);
+                return;
             }
+            console.log('Screenshot saved:', data.path);
         } catch (error) {
             console.error('Screenshot error:', error);
         }
@@ -94,19 +95,24 @@ function App() {
                     method: 'POST'
                 });
                 const data = await response.json();
-                if (data.status === 'started') {
-                    setIsScreenRecording(true);
-                    console.log("Response data:", data);// This should show {test: 'test success for starting screen recording!'}
+                if (data.error) {
+                    console.error('Recording error:', data.error);
+                    return;
                 }
+                setIsScreenRecording(true);
+                console.log('Recording started:', data.path);
             } else {
                 const response = await fetch(`${API_URL}/recording/stop`, {
                     method: 'POST'
                 });
                 const data = await response.json();
-                if (data.status === 'stopped') {
-                    setIsScreenRecording(false);
-                    console.log("Response data:", data);// This should show {test: 'test success for stopping screen recording!'}
+                if (data.error) {
+                    console.error('Recording error:', data.error);
+                    return;
                 }
+                setIsScreenRecording(false);
+                console.log('Recording stopped:', data.video_path);
+                console.log('Thumbnail created:', data.thumbnail_path);
             }
         } catch (error) {
             console.error('Recording error:', error);
@@ -120,19 +126,23 @@ function App() {
                     method: 'POST'
                 });
                 const data = await response.json();
-                if (data.status === 'started') {
-                    setIsAudioRecording(true);
-                    console.log("Response data:", data);//This should show {test: 'test success for starting audio recording!'}
+                if (data.error) {
+                    console.error('Audio recording error:', data.error);
+                    return;
                 }
+                setIsAudioRecording(true);
+                console.log('Audio recording started:', data.path);
             } else {
                 const response = await fetch(`${API_URL}/audio/stop`, {
                     method: 'POST'
                 });
                 const data = await response.json();
-                if (data.status === 'stopped') {
-                    setIsAudioRecording(false);
-                    console.log("Response data:", data);//This should show {test: 'test success for stopping audio recording!'}
+                if (data.error) {
+                    console.error('Audio recording error:', data.error);
+                    return;
                 }
+                setIsAudioRecording(false);
+                console.log('Audio recording stopped:', data.path);
             }
         } catch (error) {
             console.error('Audio recording error:', error);

@@ -14,6 +14,8 @@ import requests
 import sounddevice as sd  # Used in AudioRecorderThread
 import soundfile as sf    # Used in AudioRecorderThread
 from PyQt5.QtCore import QDateTime  # For consistent date formatting
+import time
+import threading
 
 # Fix issue where sys.stdin, sys.stdout, or sys.stderr is None in PyInstaller
 if sys.stdin is None:
@@ -31,13 +33,18 @@ s3_client = boto3.client('s3', region_name='us-west-2')
 BUCKET_NAME = "digital-diary"
 USERNAME = "sophia"
 
-# Create necessary directories
-RECORDINGS_DIR = os.path.abspath("../recordings")
-SCREENSHOTS_DIR = os.path.abspath("../screenshots")
-AUDIO_DIR = os.path.abspath("../audio")
+# Get the base directory (similar to how overlay.py gets to "recordings")
+# This ensures we save to the project's root recordings directory
+base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+RECORDINGS_DIR = os.path.join(base_dir, "recordings")
+SCREENSHOTS_DIR = os.path.join(base_dir, "screenshots")
+AUDIO_DIR = os.path.join(base_dir, "audio")
+THUMBNAILS_DIR = os.path.join(RECORDINGS_DIR, "thumbnails")
+
+# Create directories (same as in overlay.py)
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
-os.makedirs(os.path.join(RECORDINGS_DIR, "thumbnails"), exist_ok=True)
+os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
 # Global variables for recording state
@@ -136,37 +143,78 @@ def start_screen_recording():
     try:
         global video_recorder
         
-        now = datetime.now().strftime('%Y%m%d_%H%M%S')
-        video_path = os.path.join(RECORDINGS_DIR, f'recording_{now}.mp4')
+        # Use QDateTime exactly like in RecorderThread
+        now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
+        
+        # Use exact same paths as RecorderThread but with full paths
+        video_path = os.path.join(RECORDINGS_DIR, f"recording_{now}.mp4")
+        thumbnail_path = os.path.join(THUMBNAILS_DIR, f"recording_{now}.png")
+        
+        # Store relative paths for S3 compatibility with overlay.py
+        relative_video_path = f"recordings/recording_{now}.mp4"
+        relative_thumbnail_path = f"recordings/thumbnails/recording_{now}.png"
+        
+        print("VIDEO WRITER BEING CALLED")  # Same log as in RecorderThread
         
         screen_size = pyautogui.size()
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # Same codec as RecorderThread
         
+        # Create writer exactly like in RecorderThread
+        writer = cv2.VideoWriter(
+            video_path,
+            fourcc,
+            10.0,  # Same framerate
+            (screen_size.width, screen_size.height)
+        )
+        
+        if not writer.isOpened():
+            print("Failed to create VideoWriter")
+            return jsonify({'error': "Failed to create video writer"}), 500
+        
+        # Store the same properties as RecorderThread
         video_recorder = {
-            'writer': cv2.VideoWriter(
-                video_path,
-                fourcc,
-                10.0,
-                (screen_size.width, screen_size.height)
-            ),
+            'writer': writer,
             'path': video_path,
-            'recording': True
+            'thumbnail_path': thumbnail_path,
+            'relative_path': relative_video_path,
+            'relative_thumbnail_path': relative_thumbnail_path,
+            'recording': True,
+            'screen_size': screen_size
         }
         
+        # Define recording function exactly like in RecorderThread.run()
         def record_screen():
-            while video_recorder['recording']:
-                img = pyautogui.screenshot()
-                frame = np.array(img)
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                video_recorder['writer'].write(frame)
+            try:
+                while video_recorder and video_recorder['recording']:
+                    img = pyautogui.screenshot()
+                    frame = np.array(img)
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    
+                    # Same resolution mismatch check as in RecorderThread
+                    if frame.shape[1::-1] != (screen_size.width, screen_size.height):
+                        print("Frame size mismatch!")
+                        break
+                    
+                    video_recorder['writer'].write(frame)
+                    time.sleep(0.1)  # Same sleep time
+            except Exception as e:
+                print(f"Error during recording: {e}")
+            finally:
+                # Same cleanup as in RecorderThread.run()
+                if video_recorder and video_recorder['writer'] and video_recorder['writer'].isOpened():
+                    video_recorder['writer'].release()
+                    print(f"Recording finalized at {video_path}")
         
-        import threading
+        # Start recording in a separate thread (same as overlay.py threading approach)
         recording_thread = threading.Thread(target=record_screen)
+        recording_thread.daemon = True
         recording_thread.start()
+        
+        print("onRecordingStarted called!")  # Same log as in overlay.py
         
         return jsonify({
             'status': 'started',
-            'path': video_path
+            'path': relative_video_path
         })
     except Exception as e:
         print(f"Recording start error: {str(e)}")
@@ -177,41 +225,99 @@ def stop_screen_recording():
     try:
         global video_recorder
         if video_recorder and video_recorder['recording']:
-            video_recorder['recording'] = False
-            video_recorder['writer'].release()
+            print("recording stopped")  # Same log as in overlay.py
+            print(f"video path {video_recorder['path']}")  # Same log as in overlay.py
             
-            # Generate thumbnail
+            # Get all paths before we do anything else
             video_path = video_recorder['path']
-            thumbnail_path = video_path.replace('.mp4', '_thumb.jpg')
+            thumbnail_path = video_recorder['thumbnail_path']
+            relative_video_path = video_recorder['relative_path']
+            relative_thumbnail_path = video_recorder['relative_thumbnail_path']
             
-            clip = VideoFileClip(video_path)
-            frame = clip.get_frame(0)
-            Image.fromarray(frame).save(thumbnail_path)
-            clip.close()
+            # Same stop approach as RecorderThread.stop()
+            video_recorder['recording'] = False
+            time.sleep(1)  # Same sleep time
             
-            # Generate presigned URLs and upload both files
-            for file_path in [video_path, thumbnail_path]:
-                object_name = f"{USERNAME}/{os.path.basename(file_path)}"
-                url = s3_client.generate_presigned_url(
-                    'put_object',
-                    Params={'Bucket': BUCKET_NAME, 'Key': object_name},
-                    ExpiresIn=3600
-                )
+            if video_recorder['writer'] and video_recorder['writer'].isOpened():
+                video_recorder['writer'].release()
+                print("VideoWriter released")  # Same log
+            
+            # Same thumbnail generation as RecorderThread.generate_thumbnail()
+            try:
+                print("GENERATE THUMBNAIL CALLED !!!")
                 
-                with open(file_path, 'rb') as f:
-                    response = requests.put(url, data=f)
-                    if response.status_code != 200:
-                        raise Exception(f"Failed to upload {os.path.basename(file_path)}")
+                if not os.path.exists(video_path) or os.path.getsize(video_path) == 0:
+                    print(f"File {video_path} is invalid or incomplete.")
+                    return jsonify({'error': "Video file is invalid or incomplete"}), 500
+                
+                # Exactly the same thumbnail generation logic
+                clip = VideoFileClip(video_path)
+                frame_time = min(1, clip.duration / 2)
+                frame = clip.get_frame(frame_time)
+                image = Image.fromarray(frame)
+                image.save(thumbnail_path)
+                print(f"Thumbnail generated at {thumbnail_path}")
+                clip.close()
+                
+            except Exception as e:
+                print(f"Failed to generate thumbnail for {video_path}: {e}")
+                # Try a fallback method if the primary method fails
+                try:
+                    cap = cv2.VideoCapture(video_path)
+                    success, frame = cap.read()
+                    if success:
+                        cv2.imwrite(thumbnail_path, frame)
+                        print(f"Thumbnail generated using fallback method at {thumbnail_path}")
+                    else:
+                        print("Failed to read frame from video for thumbnail")
+                    cap.release()
+                except Exception as e2:
+                    print(f"Fallback thumbnail also failed: {str(e2)}")
             
+            # Import S3 client from backend.server.aws to match overlay.py usage
+            try:
+                from backend.server.aws import S3
+                s3_client_instance = S3()
+                client = s3_client_instance.get()
+                
+                # Generate pre-signed URL for the video file exactly as in overlay.py
+                video_url = client.get_presigned_url(relative_video_path)
+                print(f"Video URL: {video_url}")  # Same log
+                
+                with open(video_path, 'rb') as f:
+                    response = requests.put(video_url, data=f)
+                    if response.status_code == 200:
+                        print("Video uploaded successfully.")  # Same log
+                    else:
+                        print(f"Failed to upload video. Status Code: {response.status_code}, Response: {response.text}")
+                
+                # Generate pre-signed URL for the thumbnail file
+                thumbnail_url = client.get_presigned_url(relative_thumbnail_path)
+                print(f"Thumbnail URL: {thumbnail_url}")  # Same log
+                
+                with open(thumbnail_path, 'rb') as f:
+                    response = requests.put(thumbnail_url, data=f)
+                    if response.status_code == 200:
+                        print("Thumbnail uploaded successfully.")  # Same log
+                    else:
+                        print(f"Failed to upload thumbnail. Status Code: {response.status_code}, Response: {response.text}")
+            except Exception as e:
+                print(f"Error with S3 upload: {str(e)}")
+            
+            # Clear recorder
             video_recorder = None
+            
             return jsonify({
                 'status': 'stopped',
-                'video_path': video_path,
-                'thumbnail_path': thumbnail_path
+                'video_path': relative_video_path,
+                'thumbnail_path': relative_thumbnail_path
             })
-        return jsonify({'error': 'No active recording'}), 400
+        else:
+            return jsonify({'error': 'No active recording'}), 400
     except Exception as e:
         print(f"Recording stop error: {str(e)}")
+        import traceback
+        traceback.print_exc()  # Additional debug info
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/audio/start', methods=['POST'])

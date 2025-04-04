@@ -36,6 +36,7 @@ class RecorderThread(QThread):
                 img = pyautogui.screenshot()
                 frame = np.array(img)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame = cv2.resize(frame, (screen_size.width, screen_size.height))
 
                 # Check for resolution mismatch
                 if frame.shape[1::-1] != (screen_size.width, screen_size.height):

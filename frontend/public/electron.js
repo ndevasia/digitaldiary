@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
 const { spawn } = require('child_process');
+const fs = require('fs');
 
 let overlayWindow;  // Overlay window
 let inputWindow; // Input window

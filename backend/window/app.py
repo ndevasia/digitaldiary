@@ -124,17 +124,5 @@ def get_media():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/run_main', methods=['POST'])
-def run_main():
-    try:
-        result = subprocess.run([sys.executable, 'main.py'],
-                                cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')), capture_output=True, text=True)
-        if result.returncode == 0:
-            return f"Success: {result.stdout}"
-        else:
-            return f"Error: {result.stderr}"
-    except Exception as e:
-        return f"An error occurred: {str(e)}"
-
 if __name__ == '__main__':
     app.run(debug=True)

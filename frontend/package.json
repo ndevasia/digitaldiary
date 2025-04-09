@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@electron/remote": "^2.1.2",
-    "@tailwindcss/postcss": "^4.0.9",
+    "@tailwindcss/postcss": "^4.0.13",
     "axios": "^1.8.1",
     "electron-is-dev": "^2.0.0",
     "lucide-react": "^0.303.0",
@@ -32,7 +32,7 @@
     "electron-reloader": "^1.2.3",
     "tailwindcss": "^4.0.5",
     "vite": "^5.0.8",
-    "wait-on": "^8.0.2"
+    "wait-on": "^8.0.3"
   },
   "build": {
     "directories": {
@@ -47,10 +47,10 @@
       "!*.md"
     ],
     "extraResources": [
-    {
-      "from": "../backend",
-      "to": "backend"
-    }
-  ]
-}
+      {
+        "from": "../backend",
+        "to": "backend"
+      }
+    ]
+  }
 }

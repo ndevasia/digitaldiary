@@ -148,7 +148,6 @@ header {
   background-color: #f0f0f0;
 }
 
-
 /* Adjust the layout for smaller screens */
 @media (max-width: 768px) {
   .screenshot-image {

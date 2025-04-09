@@ -7,6 +7,7 @@ import os
 ARN = 'arn:aws:iam::378382627972:role/digitaldiary-devteam'
 localhost = 'http://127.0.0.1:5000/'
 
+
 class S3:
     def __init__(self):
         sts_client = boto3.client('sts')
@@ -15,7 +16,7 @@ class S3:
             RoleSessionName="SessionName"
         )
         credentials = assumed_role['Credentials']
-        
+
         # Use the temporary credentials to create the S3 client
         self.client = boto3.client(
             's3',
@@ -45,7 +46,7 @@ class S3:
 
     def get(self):
         return self
-    
+
     def get_presigned_url(self, file_path):
         localhost_url = localhost + 'generate-presigned-url'
         response = requests.post(

@@ -86,9 +86,9 @@ function createOverlayWindow() {
         backgroundColor: '#00ffffff',
         hasShadow: false,
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
-            enableRemoteModule: true
+            preload: path.join(__dirname, 'preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
         }
     });
 
@@ -124,9 +124,10 @@ function createMainWindow() {
         width: 1200,
         height: 800,
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
-            enableRemoteModule: true
+            nodeIntegration: false,
+            contextIsolation: true,
+            enableRemoteModule: true,
+            preload: path.join(__dirname, 'preload.js')
         }
     });
 
@@ -204,7 +205,7 @@ app.whenReady().then(() => {
     startPythonBackend();
     createMainWindow();
     //createOverlayWindow();
-    createInputWindow();
+    //createInputWindow();
     setupIPC();
 });
 

@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Gamepad2, FolderOpen, Edit } from 'lucide-react';
-const { ipcRenderer } = window.require('electron');
 
 function Sidebar() {
     const location = useLocation();

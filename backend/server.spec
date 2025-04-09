@@ -1,4 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all
+
+datas = [('window/templates', 'templates'), ('window/static', 'static'), ('../lib', 'lib'), ('../frontend', 'frontend'), ('../backend', 'backend'), ('../recordings', 'recordings'), ('../screenshots', 'screenshots'), ('../audio', 'audio'), ('C:\\Users\\ndevasia\\Miniconda3\\lib\\site-packages\\imageio_ffmpeg', 'imageio_ffmpeg')]
+binaries = []
+hiddenimports = ['boto3', 'flask_cors', 'pyautogui', 'cv2', 'numpy', 'moviepy', 'PIL', 'sounddevice', 'soundfile', 'PyQt5', 'imageio_ffmpeg', 'imageio', 'imageio_ffmpeg.binaries']
+tmp_ret = collect_all('moviepy')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('imageio')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('imageio_ffmpeg')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 block_cipher = None
@@ -7,9 +18,9 @@ block_cipher = None
 a = Analysis(
     ['window\\app.py'],
     pathex=[],
-    binaries=[],
-    datas=[('window/templates', 'templates'), ('window/static', 'static')],
-    hiddenimports=['boto3'],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

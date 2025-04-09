@@ -4,7 +4,6 @@ import boto3
 import json
 import sys
 from flask_cors import CORS  # You'll need to install flask-cors
-from lib.global_variables import *
 import pyautogui
 from datetime import datetime
 import cv2
@@ -17,14 +16,15 @@ import soundfile as sf    # Used in AudioRecorderThread
 from PyQt5.QtCore import QDateTime  # For consistent date formatting
 import time
 import threading
-
 # Fix path to import from sibling directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+print("Path being added to sys.path:", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+print("Current sys.path:", sys.path)
 try:
     # Import RecorderThread
-    from recording import RecorderThread
+    from lib.recording import RecorderThread
     print("Successfully imported RecorderThread from recording")
-    
+
     # Try importing from server directory (sibling to window directory)
     from server.aws import S3
     print("Successfully imported S3 from server.aws")
@@ -35,10 +35,10 @@ except ImportError as e:
         def __init__(self):
             self.client = boto3.client('s3', region_name='us-west-2')
             self.bucket_name = "digital-diary"
-        
+
         def get(self):
             return self
-            
+
         def get_presigned_url(self, file_path):
             object_name = f"sophia/{os.path.basename(file_path)}"
             url = self.client.generate_presigned_url(
@@ -47,14 +47,29 @@ except ImportError as e:
                 ExpiresIn=3600
             )
             return url
-
 # Fix issue where sys.stdin, sys.stdout, or sys.stderr is None in PyInstaller
 if sys.stdin is None:
     sys.stdin = open(os.devnull)
 if sys.stdout is None:
-    sys.stdout = open(os.devnull, "w")
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    sys.stdout = open(os.path.join(log_dir, 'app.log'), 'w')
 if sys.stderr is None:
-    sys.stderr = open(os.devnull, "w")
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    sys.stderr = open(os.path.join(log_dir, 'error.log'), 'w')
+
+# Add a function to log to both console and file
+def log_message(message):
+    print(message)
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    with open(os.path.join(log_dir, 'app.log'), 'a') as f:
+        f.write(f"{message}\n")
+
+# Use the log_message function for important debug info
+log_message("Path being added to sys.path: " + str(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+log_message("Current sys.path: " + str(sys.path))
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS to allow React app to communicate with Flask

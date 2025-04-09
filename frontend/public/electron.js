@@ -1,12 +1,14 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const backendPath = path.join(process.resourcesPath, 'backend');
-const isDev = require('electron-is-dev');
 const { spawn } = require('child_process');
+const fs = require('fs');
 
 let overlayWindow;
 let mainWindow;
 let pythonProcess;
+
+// Check if we're in development mode
+const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 function getPythonScriptPath() {
     if (isDev) {
@@ -14,7 +16,18 @@ function getPythonScriptPath() {
         return path.join(__dirname, "../../backend/window/app.py"); // Dev mode
     } else {
         console.log("prod mode")
-        return path.join(backendPath, "/window/app.py"); // Production mode
+        const serverPath = path.join(process.resourcesPath, 'server.exe');
+        console.log("Server path:", serverPath);
+        
+        // Verify the server.exe exists
+        if (!fs.existsSync(serverPath)) {
+            console.error("❌ server.exe not found at:", serverPath);
+            console.log("Available files in resources:", fs.readdirSync(process.resourcesPath));
+        } else {
+            console.log("✅ server.exe found at:", serverPath);
+        }
+        
+        return serverPath;
     }
 }
 
@@ -22,13 +35,42 @@ function startPythonBackend() {
     const scriptPath = getPythonScriptPath();
     console.log("Starting Python backend at:", scriptPath);
 
-    pythonProcess = spawn("python", [scriptPath], {
-        stdio: "inherit"
-    });
+    if (isDev) {
+        pythonProcess = spawn("python", [scriptPath], {
+            stdio: "inherit"
+        });
+    
+        pythonProcess.on("error", (err) => {
+            console.error("❌ Failed to start Python process:", err);
+        });
+    } else {
+        try {
+            console.log("Attempting to start server.exe...");
+            pythonProcess = spawn(scriptPath, [], {
+                stdio: ['pipe', 'pipe', 'pipe'],
+                shell: true,
+                cwd: path.dirname(scriptPath)
+            });
 
-    pythonProcess.on("error", (err) => {
-        console.error("❌ Failed to start Python process:", err);
-    });
+            pythonProcess.stdout.on('data', (data) => {
+                console.log(`Server stdout: ${data}`);
+            });
+
+            pythonProcess.stderr.on('data', (data) => {
+                console.error(`Server stderr: ${data}`);
+            });
+
+            pythonProcess.on("error", (err) => {
+                console.error("❌ Failed to start server:", err);
+            });
+
+            pythonProcess.on("close", (code) => {
+                console.error(`⚠️ Server process exited with code ${code}`);
+            });
+        } catch (error) {
+            console.error("❌ Server startup error:", error);
+        }
+    }
 }
 
 function createOverlayWindow() {
@@ -55,11 +97,15 @@ function createOverlayWindow() {
     });
 
     // Load the overlay UI
-    const startUrl = isDev 
-        ? 'http://localhost:5173/?overlay=true' 
-        : `file://${path.join(__dirname, '../index.html?overlay=true')}`;
-        
-    overlayWindow.loadURL(startUrl);
+    if (isDev) {
+        const startUrl = 'http://localhost:5173/?overlay=true';
+        console.log("Loading overlay URL:", startUrl);
+        overlayWindow.loadURL(startUrl);
+    } else {
+        const filePath = path.join(__dirname, '..', 'dist', 'index.html');
+        console.log("Loading overlay file:", filePath);
+        overlayWindow.loadFile(filePath, { query: { overlay: 'true' } });
+    }
     
     if (isDev) {
         overlayWindow.webContents.openDevTools({ mode: 'detach' });
@@ -86,12 +132,28 @@ function createMainWindow() {
     });
 
     // Load the main React UI
-    const startUrl = isDev 
-        ? 'http://localhost:5173/' 
-        : `file://${path.join(__dirname, '../index.html')}`;
+    if (isDev) {
+        const startUrl = 'http://localhost:5173/';
+        console.log("Loading main URL:", startUrl);
+        mainWindow.loadURL(startUrl);
+    } else {
+        const filePath = path.join(__dirname, '..', 'dist', 'index.html');
+        console.log("Loading main file:", filePath);
+        console.log("File exists:", fs.existsSync(filePath));
+        console.log("Directory contents:", fs.readdirSync(path.dirname(filePath)));
         
-    mainWindow.loadURL(startUrl);
-    console.log("we are using startURL ", startUrl)
+        // Try with a query parameter to see if that helps
+        mainWindow.loadFile(filePath, { query: { main: 'true' } });
+        
+        // Add event listeners to see what's happening
+        mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+            console.error('Failed to load:', errorCode, errorDescription);
+        });
+        
+        mainWindow.webContents.on('did-finish-load', () => {
+            console.log('Main window loaded successfully');
+        });
+    }
     
     if (isDev) {
         mainWindow.webContents.openDevTools();

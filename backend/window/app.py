@@ -101,6 +101,71 @@ audio_recorder = None
 def test_endpoint():
     return jsonify({"message": "API is working!"})
 
+@app.route('/api/media_aws', methods=['GET'])
+def get_media_aws():
+    try:
+        # List objects in the user's directory in S3
+        prefix = f"{USERNAME}/"
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=prefix
+        )
+
+        if 'Contents' not in response:
+            return jsonify([])
+
+        media_list = []
+        for idx, item in enumerate(response['Contents'], 1):
+            # Extract filename and extension
+            filename = os.path.basename(item['Key'])
+            file_extension = os.path.splitext(filename)[1][1:].lower()
+
+            # Extract username and game_id from S3 path
+            # Format: username/game_id/filename
+            parts = item['Key'].split('/')
+            owner_user_id = parts[0]
+            game_id = parts[1] if len(parts) > 2 else None
+
+            # Determine media type
+            media_type = "unknown"
+            if file_extension in ['mp4', 'mov']:
+                media_type = "video"
+            elif file_extension in ['mp3', 'wav']:
+                media_type = "audio"
+            elif file_extension in ['jpg', 'jpeg', 'png']:
+                media_type = "screenshot"
+
+            # Generate presigned URL
+            media_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': item['Key']},
+                ExpiresIn=3600
+            )
+
+            # Transform into media data type format
+            media_item = {
+                "media_id": idx,
+                "type": media_type,
+                "media_url": media_url,
+                "timestamp": item['LastModified'].isoformat(),
+                "owner_user_id": owner_user_id,
+                "game_id": game_id,
+                "game": game_id if game_id else "game1"  # Use game_id if available, else fallback
+            }
+
+            media_list.append(media_item)
+
+        # Apply filters if provided
+        media_type = request.args.get('media_type')
+        if media_type:
+            media_list = [item for item in media_list if item['type'] == media_type]
+
+        return jsonify(media_list)
+
+    except Exception as e:
+        print(f"Error in get_media_aws: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/generate-presigned-url', methods=['POST'])
 def generate_presigned_url():
     try:
@@ -404,67 +469,6 @@ def get_media():
 
         return jsonify(media)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/media_aws', methods=['GET'])
-def get_media_aws():
-    try:
-        # List objects in the user's directory in S3
-        prefix = f"{USERNAME}/"
-        response = s3_client.list_objects_v2(
-            Bucket=BUCKET_NAME,
-            Prefix=prefix
-        )
-
-        if 'Contents' not in response:
-            return jsonify([])
-
-        media_list = []
-        for idx, item in enumerate(response['Contents'], 1):
-            # Extract filename and extension
-            filename = os.path.basename(item['Key'])
-            file_extension = os.path.splitext(filename)[1][1:].lower()
-
-            # Extract username from S3 path as owner_user_id
-            owner_user_id = item['Key'].split('/')[0]  # Gets username from "username/filename"
-
-            # Determine media type
-            media_type = "unknown"
-            if file_extension in ['mp4', 'mov']:
-                media_type = "video"
-            elif file_extension in ['mp3', 'wav']:
-                media_type = "audio"
-            elif file_extension in ['jpg', 'jpeg', 'png']:
-                media_type = "screenshot"
-
-            # Generate presigned URL
-            media_url = s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': BUCKET_NAME, 'Key': item['Key']},
-                ExpiresIn=3600
-            )
-
-            # Transform into your media data type format
-            media_item = {
-                "media_id": idx,
-                "type": media_type,
-                "media_url": media_url,
-                "timestamp": item['LastModified'].isoformat(),
-                "owner_user_id": owner_user_id,  # Using username from S3 path
-                "game": "game1"
-            }
-
-            media_list.append(media_item)
-
-        # Apply filters if provided
-        media_type = request.args.get('media_type')
-        if media_type:
-            media_list = [item for item in media_list if item['type'] == media_type]
-
-        return jsonify(media_list)
-
-    except Exception as e:
-        print(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

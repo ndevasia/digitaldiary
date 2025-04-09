@@ -46,11 +46,18 @@ class S3:
     def get(self):
         return self
     
-    def get_presigned_url(self, file_path):
+    def get_presigned_url(self, file_path, game_id=None):
         localhost_url = localhost + 'generate-presigned-url'
+        data = {
+            'file_name': os.path.basename(file_path),
+            'username': USERNAME
+        }
+        if game_id:
+            data['game_id'] = game_id
+            
         response = requests.post(
             localhost_url,
-            json={'file_name': os.path.basename(file_path), 'username': USERNAME}
+            json=data
         )
         response.raise_for_status()
         return response.json()['url']

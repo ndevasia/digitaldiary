@@ -1,0 +1,12 @@
+{
+    "users": [
+        {
+            "user_id": 1001,
+            "username": "cyberpunk_fan"
+        },
+        {
+            "user_id": 1002,
+            "username": "zelda_player"
+        }
+    ]
+}

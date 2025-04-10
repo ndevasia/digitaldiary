@@ -18,7 +18,7 @@ function getPythonScriptPath() {
         console.log("prod mode")
         const serverPath = path.join(process.resourcesPath, 'server.exe');
         console.log("Server path:", serverPath);
-        
+
         // Verify the server.exe exists
         if (!fs.existsSync(serverPath)) {
             console.error("❌ server.exe not found at:", serverPath);
@@ -26,7 +26,7 @@ function getPythonScriptPath() {
         } else {
             console.log("✅ server.exe found at:", serverPath);
         }
-        
+
         return serverPath;
     }
 }
@@ -39,7 +39,7 @@ function startPythonBackend() {
         pythonProcess = spawn("python", [scriptPath], {
             stdio: "inherit"
         });
-    
+
         pythonProcess.on("error", (err) => {
             console.error("❌ Failed to start Python process:", err);
         });
@@ -106,7 +106,7 @@ function createOverlayWindow() {
         console.log("Loading overlay file:", filePath);
         overlayWindow.loadFile(filePath, { query: { overlay: 'true' } });
     }
-    
+
     if (isDev) {
         overlayWindow.webContents.openDevTools({ mode: 'detach' });
     }
@@ -141,20 +141,20 @@ function createMainWindow() {
         console.log("Loading main file:", filePath);
         console.log("File exists:", fs.existsSync(filePath));
         console.log("Directory contents:", fs.readdirSync(path.dirname(filePath)));
-        
+
         // Try with a query parameter to see if that helps
         mainWindow.loadFile(filePath, { query: { main: 'true' } });
-        
+
         // Add event listeners to see what's happening
         mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
             console.error('Failed to load:', errorCode, errorDescription);
         });
-        
+
         mainWindow.webContents.on('did-finish-load', () => {
             console.log('Main window loaded successfully');
         });
     }
-    
+
     if (isDev) {
         mainWindow.webContents.openDevTools();
     }
@@ -195,7 +195,7 @@ function setupIPC() {
             mainWindow.show();
             mainWindow.focus();
         }
-        
+
         // Notify the overlay window that the main window is open
         if (overlayWindow) {
             overlayWindow.webContents.send('main-window-opened');

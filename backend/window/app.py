@@ -128,7 +128,7 @@ def latest_screenshot():
     try:
         prefix = USERNAME + "/screenshot_"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
-        
+
         if 'Contents' in response:
             files = [file for file in response['Contents'] if file['Key'].startswith(prefix)]
 
@@ -140,7 +140,7 @@ def latest_screenshot():
                     ExpiresIn=3600
                 )
                 return jsonify({"screenshot_url": screenshot_url})
-        
+
         return jsonify({"screenshot_url": None})
     except Exception as e:
         print(f"Error in latest_screenshot: {str(e)}")
@@ -156,11 +156,11 @@ def take_screenshot():
     try:
         now = datetime.now().strftime('%Y%m%d_%H%M%S')
         screenshot_path = os.path.join(SCREENSHOTS_DIR, f'screenshot_{now}.png')
-        
+
         # Take screenshot
         screenshot = pyautogui.screenshot()
         screenshot.save(screenshot_path)
-        
+
         # Generate presigned URL for upload
         object_name = f"{USERNAME}/screenshot_{now}.png"
         url = s3_client.generate_presigned_url(
@@ -168,13 +168,13 @@ def take_screenshot():
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},
             ExpiresIn=3600
         )
-        
+
         # Upload to S3
         with open(screenshot_path, 'rb') as f:
             response = requests.put(url, data=f)
             if response.status_code != 200:
                 raise Exception("Failed to upload screenshot")
-        
+
         return jsonify({
             'status': 'success',
             'path': screenshot_path,
@@ -188,25 +188,25 @@ def take_screenshot():
 def start_screen_recording():
     try:
         global recorder_thread
-        
+
         # Check if recording is already in progress
         if recorder_thread and recorder_thread.recording:
             return jsonify({'error': 'Recording already in progress'}), 400
-        
+
         # Create a new RecorderThread instance
         recorder_thread = RecorderThread()
-        
+
         # Set up signal handler for when recording stops
         def on_recording_stopped():
             print("Recording stopped signal received")
             # Create S3 client
             s3_client_instance = S3()
             client = s3_client_instance.get()
-            
+
             # Generate pre-signed URL for the video file
             video_url = client.get_presigned_url(recorder_thread.video_path)
             print(f"Video URL: {video_url}")
-            
+
             try:
                 with open(recorder_thread.video_path, 'rb') as f:
                     response = requests.put(video_url, data=f)
@@ -216,11 +216,11 @@ def start_screen_recording():
                         print(f"Failed to upload video. Status Code: {response.status_code}, Response: {response.text}")
             except Exception as e:
                 print(f"Error uploading video: {str(e)}")
-            
+
             # Generate pre-signed URL for the thumbnail file
             thumbnail_url = client.get_presigned_url(recorder_thread.thumbnail_path)
             print(f"Thumbnail URL: {thumbnail_url}")
-            
+
             try:
                 with open(recorder_thread.thumbnail_path, 'rb') as f:
                     response = requests.put(thumbnail_url, data=f)
@@ -230,13 +230,13 @@ def start_screen_recording():
                         print(f"Failed to upload thumbnail. Status Code: {response.status_code}, Response: {response.text}")
             except Exception as e:
                 print(f"Error uploading thumbnail: {str(e)}")
-        
+
         # Connect signal
         recorder_thread.stopped.connect(on_recording_stopped)
-        
+
         # Start recording
         recorder_thread.start()
-        
+
         # Return the relative paths
         return jsonify({
             'status': 'started',
@@ -253,21 +253,21 @@ def start_screen_recording():
 def stop_screen_recording():
     try:
         global recorder_thread
-        
+
         # Check if recording is in progress
         if not recorder_thread or not recorder_thread.recording:
             return jsonify({'error': 'No active recording'}), 400
-        
+
         # Get paths before stopping
         video_path = recorder_thread.video_path
         thumbnail_path = recorder_thread.thumbnail_path
-        
+
         # Stop the recording
         recorder_thread.stop()
-        
+
         # Generate thumbnail
         recorder_thread.generate_thumbnail()
-        
+
         # Return paths
         return jsonify({
             'status': 'stopped',
@@ -284,45 +284,45 @@ def stop_screen_recording():
 def start_audio_recording():
     try:
         global audio_recorder
-        
+
         # Initialize audio recorder with the same parameters as AudioRecorderThread
         audio_recorder = {
             'recording': True,
             'frames': [],
             'samplerate': 44100
         }
-        
+
         # Detect the default input device
         default_device = sd.query_devices(kind='input')
-        
+
         # Ensure the device supports at least 1 channel (same logic as AudioRecorderThread)
         channels = min(default_device['max_input_channels'], 2)
         if channels < 1:
             return jsonify({'error': "No valid input channels found on the default recording device."}), 500
-            
+
         audio_recorder['channels'] = channels
-        
+
         def audio_callback(indata, frames, time, status):
             if status:
                 print(status)
             audio_recorder['frames'].append(indata.copy())
-        
+
         # Start recording in a separate thread
         def record_audio():
             try:
-                with sd.InputStream(samplerate=audio_recorder['samplerate'], 
-                                   channels=audio_recorder['channels'], 
+                with sd.InputStream(samplerate=audio_recorder['samplerate'],
+                                   channels=audio_recorder['channels'],
                                    callback=audio_callback):
                     while audio_recorder['recording']:
                         sd.sleep(100)  # Sleep to allow audio recording to happen
             except Exception as e:
                 print(f"Error during audio recording: {e}")
-        
+
         import threading
         recording_thread = threading.Thread(target=record_audio)
         recording_thread.daemon = True  # Make thread daemon so it exits when main thread exits
         recording_thread.start()
-        
+
         return jsonify({'status': 'started'})
     except Exception as e:
         print(f"Audio start error: {str(e)}")
@@ -335,14 +335,14 @@ def stop_audio_recording():
         if audio_recorder and audio_recorder['recording']:
             # Stop recording
             audio_recorder['recording'] = False
-            
+
             # Wait a bit for the recording to finalize
             sd.sleep(200)
-            
+
             # Generate filename using QDateTime for consistency
             now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
             audio_path = os.path.join(AUDIO_DIR, f'audio_recording_{now}.wav')
-            
+
             try:
                 # Save the audio data to a file (same as AudioRecorderThread)
                 sf.write(audio_path, np.concatenate(audio_recorder['frames']), audio_recorder['samplerate'])
@@ -350,7 +350,7 @@ def stop_audio_recording():
             except Exception as e:
                 print(f"Error saving audio file: {e}")
                 return jsonify({'error': f"Failed to save audio: {str(e)}"}), 500
-            
+
             # Upload to S3
             try:
                 object_name = f"{USERNAME}/{os.path.basename(audio_path)}"
@@ -359,7 +359,7 @@ def stop_audio_recording():
                     Params={'Bucket': BUCKET_NAME, 'Key': object_name},
                     ExpiresIn=3600
                 )
-                
+
                 with open(audio_path, 'rb') as f:
                     response = requests.put(url, data=f)
                     if response.status_code != 200:
@@ -368,16 +368,16 @@ def stop_audio_recording():
             except Exception as e:
                 print(f"Error uploading audio: {e}")
                 return jsonify({'error': f"Failed to upload audio: {str(e)}"}), 500
-            
+
             # Clear the recorder
             temp_path = audio_path  # Save path before clearing
             audio_recorder = None
-            
+
             return jsonify({
                 'status': 'stopped',
                 'path': temp_path
             })
-            
+
         return jsonify({'error': 'No active recording'}), 400
     except Exception as e:
         print(f"Audio stop error: {str(e)}")
@@ -395,7 +395,7 @@ def get_media():
             data = json.load(file)
 
         media = data['media']
-        
+
         if media_type:
             media = [item for item in media if item['type'] == media_type]
 
@@ -465,6 +465,20 @@ def get_media_aws():
 
     except Exception as e:
         print(f"Error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/users', methods=['GET'])
+def get_users():
+    try:
+        # Get the path to user.json
+        user_json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
+
+        # Read the JSON file
+        with open(user_json_path, 'r') as f:
+            user_data = json.load(f)
+
+        return jsonify(user_data['users'])
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

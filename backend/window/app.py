@@ -5,7 +5,7 @@ import json
 import sys
 from flask_cors import CORS  # You'll need to install flask-cors
 import pyautogui
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import cv2
 import numpy as np
 from moviepy.editor import VideoFileClip
@@ -16,6 +16,7 @@ import soundfile as sf    # Used in AudioRecorderThread
 from PyQt5.QtCore import QDateTime  # For consistent date formatting
 import time
 import threading
+import random
 # Fix path to import from sibling directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 print("Path being added to sys.path:", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -144,6 +145,51 @@ def latest_screenshot():
         return jsonify({"screenshot_url": None})
     except Exception as e:
         print(f"Error in latest_screenshot: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.route('/api/random-screenshot-by-days/<int:days>', methods=['GET'])
+def get_random_screenshot_by_days(days):
+    """Returns the URL for a randomly selected screenshot taken approximately X days ago or longer"""
+    try:
+        # Calculate the date from approximately X days ago
+        # Make sure to use timezone-aware datetime
+        target_date = datetime.now(timezone.utc) - timedelta(days=days)
+        
+        # For exact date matching (commented out for now)
+        # Extract just the date part (year, month, day) for comparison
+        # target_date_only = target_date.date()
+        
+        prefix = USERNAME + "/screenshot_"
+        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
+        
+        if 'Contents' in response:
+            print(f"Found content in S3 bucket")
+            # Filter files to only include those from X days ago or longer
+            files = [file for file in response['Contents'] 
+                    if file['Key'].startswith(prefix) and 
+                    file['LastModified'] <= target_date]
+            
+            # For exact date matching (commented out for now)
+            # files = [file for file in response['Contents'] 
+            #         if file['Key'].startswith(prefix) and 
+            #         file['LastModified'].date() == target_date_only]
+            
+            print(f"Found {len(files)} screenshots from {days} days ago or older")
+            if files:
+                # Randomly select one file from the filtered list
+                random_file = random.choice(files)['Key']
+                screenshot_url = s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': BUCKET_NAME, 'Key': random_file},
+                    ExpiresIn=3600
+                )
+                return jsonify({"screenshot_url": screenshot_url})
+        
+        return jsonify({"screenshot_url": None})
+    except Exception as e:
+        print(f"Error in get_random_screenshot_by_days: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/screenshots/<filename>')

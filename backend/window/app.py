@@ -16,7 +16,9 @@ import soundfile as sf    # Used in AudioRecorderThread
 from PyQt5.QtCore import QDateTime  # For consistent date formatting
 import time
 import threading
+
 import random
+
 # Fix path to import from sibling directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 print("Path being added to sys.path:", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -101,6 +103,71 @@ audio_recorder = None
 @app.route('/api/test', methods=['GET'])
 def test_endpoint():
     return jsonify({"message": "API is working!"})
+
+@app.route('/api/media_aws', methods=['GET'])
+def get_media_aws():
+    try:
+        # List objects in the user's directory in S3
+        prefix = f"{USERNAME}/"
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=prefix
+        )
+
+        if 'Contents' not in response:
+            return jsonify([])
+
+        media_list = []
+        for idx, item in enumerate(response['Contents'], 1):
+            # Extract filename and extension
+            filename = os.path.basename(item['Key'])
+            file_extension = os.path.splitext(filename)[1][1:].lower()
+
+            # Extract username and game_id from S3 path
+            # Format: username/game_id/filename
+            parts = item['Key'].split('/')
+            owner_user_id = parts[0]
+            game_id = parts[1] if len(parts) > 2 else None
+
+            # Determine media type
+            media_type = "unknown"
+            if file_extension in ['mp4', 'mov']:
+                media_type = "video"
+            elif file_extension in ['mp3', 'wav']:
+                media_type = "audio"
+            elif file_extension in ['jpg', 'jpeg', 'png']:
+                media_type = "screenshot"
+
+            # Generate presigned URL
+            media_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': item['Key']},
+                ExpiresIn=3600
+            )
+
+            # Transform into media data type format
+            media_item = {
+                "media_id": idx,
+                "type": media_type,
+                "media_url": media_url,
+                "timestamp": item['LastModified'].isoformat(),
+                "owner_user_id": owner_user_id,
+                "game_id": game_id,
+                "game": game_id if game_id else "game1"  # Use game_id if available, else fallback
+            }
+
+            media_list.append(media_item)
+
+        # Apply filters if provided
+        media_type = request.args.get('media_type')
+        if media_type:
+            media_list = [item for item in media_list if item['type'] == media_type]
+
+        return jsonify(media_list)
+
+    except Exception as e:
+        print(f"Error in get_media_aws: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/generate-presigned-url', methods=['POST'])
 def generate_presigned_url():
@@ -452,65 +519,50 @@ def get_media():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/media_aws', methods=['GET'])
-def get_media_aws():
+@app.route('/api/session/update', methods=['POST'])
+def update_session():
     try:
-        # List objects in the user's directory in S3
-        prefix = f"{USERNAME}/"
-        response = s3_client.list_objects_v2(
-            Bucket=BUCKET_NAME,
-            Prefix=prefix
-        )
-
-        if 'Contents' not in response:
-            return jsonify([])
-
-        media_list = []
-        for idx, item in enumerate(response['Contents'], 1):
-            # Extract filename and extension
-            filename = os.path.basename(item['Key'])
-            file_extension = os.path.splitext(filename)[1][1:].lower()
-
-            # Extract username from S3 path as owner_user_id
-            owner_user_id = item['Key'].split('/')[0]  # Gets username from "username/filename"
-
-            # Determine media type
-            media_type = "unknown"
-            if file_extension in ['mp4', 'mov']:
-                media_type = "video"
-            elif file_extension in ['mp3', 'wav']:
-                media_type = "audio"
-            elif file_extension in ['jpg', 'jpeg', 'png']:
-                media_type = "screenshot"
-
-            # Generate presigned URL
-            media_url = s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': BUCKET_NAME, 'Key': item['Key']},
-                ExpiresIn=3600
-            )
-
-            # Transform into your media data type format
-            media_item = {
-                "media_id": idx,
-                "type": media_type,
-                "media_url": media_url,
-                "timestamp": item['LastModified'].isoformat(),
-                "owner_user_id": owner_user_id,  # Using username from S3 path
-                "game": "game1"
-            }
-
-            media_list.append(media_item)
-
-        # Apply filters if provided
-        media_type = request.args.get('media_type')
-        if media_type:
-            media_list = [item for item in media_list if item['type'] == media_type]
-
-        return jsonify(media_list)
-
+        data = request.json
+        game_id = data.get('game_id')
+        
+        if not game_id:
+            return jsonify({"error": "game_id is required"}), 400
+        
+        # Import aws.py's S3 class and call update_session
+        from server.aws import S3
+        s3 = S3()
+        success = s3.update_session(game_id)
+        
+        if not success:
+            return jsonify({"error": "Failed to update session in S3"}), 500
+        
+        return jsonify({
+            "status": "success",
+            "game_id": game_id
+        })
+        
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error updating session: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/session/latest', methods=['GET'])
+def get_latest_session():
+    try:
+        # Import aws.py's S3 class and call get_latest_session
+        from server.aws import S3
+        s3 = S3()
+        latest_session = s3.get_latest_session()
+        
+        if not latest_session:
+            return jsonify({
+                "game_id": None,
+                "timestamp": None
+            })
+        
+        return jsonify(latest_session)
+        
+    except Exception as e:
+        print(f"Error getting latest session: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/users', methods=['GET'])

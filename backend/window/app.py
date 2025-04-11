@@ -13,7 +13,7 @@ SCREENSHOTS_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..
 s3_client = boto3.client('s3', region_name='us-west-2')
 BUCKET_NAME = "digital-diary"
 # Change this to your username
-USERNAME = "serena"
+USERNAME = "joeychoi"
 
 
 @app.route('/generate-presigned-url', methods=['POST'])

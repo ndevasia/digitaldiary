@@ -5,6 +5,8 @@ import './index.css';
 import App from './App.jsx';
 import HomePage from './pages/HomePage.jsx';
 import FilesPage from './pages/FilesPage.jsx';
+import GamesPage from './pages/GamesPage';
+
 
 // Create a component to handle different render modes
 function MainApp() {
@@ -20,7 +22,7 @@ function MainApp() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/files" element={<FilesPage />} />
-        <Route path="/games" element={<HomePage />} /> {/* Placeholder */}
+        <Route path="/games" element={<GamesPage />} /> {/* Placeholder */}
         <Route path="/journals" element={<HomePage />} /> {/* Placeholder */}
         <Route path="/settings" element={<HomePage />} /> {/* Placeholder */}
       </Routes>

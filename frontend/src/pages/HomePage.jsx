@@ -6,11 +6,19 @@ import Sidebar from '../components/Sidebar';
 
 function HomePage() {
     const [screenshotUrl, setScreenshotUrl] = useState(null);
+    const [oneWeekAgoScreenshotUrl, setOneWeekAgoScreenshotUrl] = useState(null);
+    const [oneMonthAgoScreenshotUrl, setOneMonthAgoScreenshotUrl] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [loadingOneWeekAgo, setLoadingOneWeekAgo] = useState(true);
+    const [loadingOneMonthAgo, setLoadingOneMonthAgo] = useState(true);
     
     useEffect(() => {
         // Fetch the latest screenshot when component mounts
         fetchLatestScreenshot();
+        // Fetch the one week ago screenshot
+        fetchScreenshotByDays(7, setOneWeekAgoScreenshotUrl, setLoadingOneWeekAgo);
+        // Fetch the one month ago screenshot
+        fetchScreenshotByDays(30, setOneMonthAgoScreenshotUrl, setLoadingOneMonthAgo);
     }, []);
     
     const fetchLatestScreenshot = async () => {
@@ -25,6 +33,29 @@ function HomePage() {
         } finally {
             setLoading(false);
         }
+    };
+    
+    // Modular function to fetch screenshots by days
+    const fetchScreenshotByDays = async (days, setScreenshotUrl, setLoading) => {
+        try {
+            setLoading(true);
+            const response = await fetch(`/api/random-screenshot-by-days/${days}`);
+            const data = await response.json();
+            setScreenshotUrl(data.screenshot_url);
+        } catch (error) {
+            console.error(`Error fetching screenshot from ${days} days ago:`, error);
+        } finally {
+            setLoading(false);
+        }
+    };
+    
+    // Convenience functions that use the modular function
+    const fetchOneWeekAgoScreenshot = () => {
+        fetchScreenshotByDays(7, setOneWeekAgoScreenshotUrl, setLoadingOneWeekAgo);
+    };
+    
+    const fetchOneMonthAgoScreenshot = () => {
+        fetchScreenshotByDays(30, setOneMonthAgoScreenshotUrl, setLoadingOneMonthAgo);
     };
     
     return (
@@ -66,12 +97,36 @@ function HomePage() {
                             </div>
 
                             <div>
-                                <div className="bg-blue-100 w-full h-64 rounded"></div>
+                                {loadingOneWeekAgo ? (
+                                    <div className="animate-pulse bg-blue-100 w-full h-64 rounded"></div>
+                                ) : oneWeekAgoScreenshotUrl ? (
+                                    <img 
+                                        src={oneWeekAgoScreenshotUrl} 
+                                        alt="One Week Ago Screenshot" 
+                                        className="w-full h-64 object-cover rounded"
+                                    />
+                                ) : (
+                                    <div className="bg-blue-100 w-full h-64 rounded flex items-center justify-center">
+                                        <p className="text-gray-500 text-center">No screenshots from a week ago</p>
+                                    </div>
+                                )}
                                 <p className="text-center mt-2">1 week ago</p>
                             </div>
 
                             <div>
-                                <div className="bg-blue-100 w-full h-64 rounded"></div>
+                                {loadingOneMonthAgo ? (
+                                    <div className="animate-pulse bg-blue-100 w-full h-64 rounded"></div>
+                                ) : oneMonthAgoScreenshotUrl ? (
+                                    <img 
+                                        src={oneMonthAgoScreenshotUrl} 
+                                        alt="One Month Ago Screenshot" 
+                                        className="w-full h-64 object-cover rounded"
+                                    />
+                                ) : (
+                                    <div className="bg-blue-100 w-full h-64 rounded flex items-center justify-center">
+                                        <p className="text-gray-500 text-center">No screenshots from a month ago</p>
+                                    </div>
+                                )}
                                 <p className="text-center mt-2">1 month ago</p>
                             </div>
                         </div>

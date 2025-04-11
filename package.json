@@ -7,16 +7,19 @@
         "dev": "cd frontend && npm run build && npm run electron:dev",
         "electron:start": "cd frontend && electron .",
         "start": "concurrently \"python backend/window/app.py\" \"cd frontend && npm run dev\"",
-        "backend": "cd backend && pyinstaller --onefile --add-data \"window/templates;templates\" --add-data \"window/static;static\" --hidden-import boto3 --name server window/app.py",
-        "app": "cd frontend && npm run build && npx electron-packager . MyFlaskApp --platform=win32 --arch=x64 --out=../dist --overwrite"
+        "backend": "cd backend && pyinstaller --onefile --add-data \"window/templates;templates\" --add-data \"window/static;static\" --add-data \"../lib;lib\" --add-data \"../frontend;frontend\" --add-data \"../backend;backend\" --add-data \"../recordings;recordings\" --add-data \"../screenshots;screenshots\" --add-data \"../audio;audio\" --add-data \"C:\\Users\\ndevasia\\Miniconda3\\lib\\site-packages\\imageio_ffmpeg;imageio_ffmpeg\" --hidden-import boto3 --hidden-import flask_cors --hidden-import pyautogui --hidden-import cv2 --hidden-import numpy --hidden-import moviepy --hidden-import PIL --hidden-import sounddevice --hidden-import soundfile --hidden-import PyQt5 --hidden-import imageio_ffmpeg --hidden-import imageio --hidden-import imageio_ffmpeg.binaries --collect-all moviepy --collect-all imageio --collect-all imageio_ffmpeg --name server window/app.py",
+        "move": "xcopy backend\\dist\\server.exe frontend\\dist\\ /Y",
+        "prepare": "npm run build && npm run backend && npm run move",
+        "pack": "cd frontend && npx electron-packager . DigitalDiary --platform=win32 --arch=x64 --out=../dist --overwrite --extra-resource=../backend/dist/server.exe --ignore=node_modules"
     },
     "devDependencies": {
         "concurrently": "^8.2.2",
-        "electron": "^28.3.3"
+        "electron": "^28.3.3",
+        "electron-packager": "^17.1.2",
+        "wait-on": "^8.0.3"
     },
     "dependencies": {
         "axios": "^1.8.1",
-        "electron-is-dev": "^3.0.1",
         "react-router-dom": "^7.2.0"
     }
 }

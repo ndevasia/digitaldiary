@@ -6,6 +6,7 @@
   "scripts": {
     "start": "vite",
     "dev": "concurrently \"vite\" \"electron .\"",
+    "dev-delayed": "vite && (sleep 2 && electron .)",
     "build": "vite build",
     "electron:dev": "vite build && electron .",
     "electron:build": "vite build && electron-builder"

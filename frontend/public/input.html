@@ -57,8 +57,11 @@
         function submitText() {
             const gameName = document.getElementById('userInput').value;
             if (gameName.trim() !== '') {
-                // Just send the signal to close the input window and show the overlay
-                window.electron.ipcRenderer.send('submit-text', gameName);
+                // Send the game ID to the main process to relay to App.jsx for API handling
+                window.electron.ipcRenderer.send('update-game-id', gameName);
+                console.log('Sent game ID to main process:', gameName);
+                
+                // No longer close the window here - App.jsx will notify when to close
             }
         }
     </script>

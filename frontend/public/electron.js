@@ -1,5 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const isDev = require('electron-is-dev');
+
 const { spawn } = require('child_process');
 const fs = require('fs');
 
@@ -92,25 +94,18 @@ function createInputWindow() {
 
     inputWindow.loadFile(path.join(__dirname, 'input.html'));
 
-    // For easier debugging
-    if (isDev) {
-        inputWindow.webContents.openDevTools({ mode: 'detach' });
-    }
-
-    // Keep this for backward compatibility or direct submissions
+    // When user submits the text, show the overlay window and close the input window
     ipcMain.on('submit-text', (event, game) => {
         // Store the game name in the main process
         gameName = game;
-        console.log('Game name received directly:', gameName);
-        
+        console.log('Game name received:', gameName); // Test to see if the name passes through
+
         if (!overlayWindow) {
             createOverlayWindow();  // Create the overlay window only when needed
         }
 
         if (overlayWindow) {
             overlayWindow.show();  // Show the overlay window
-            // Send the game ID to the overlay window if needed
-            overlayWindow.webContents.send('game-id-updated', gameName);
         }
 
         if (inputWindow) {
@@ -271,30 +266,7 @@ function setupIPC() {
 
     ipcMain.on('openInputWindow', () => {
         createInputWindow();
-    });
-    
-    // New handlers for game ID updates
-    ipcMain.on('update-game-id', (event, gameId) => {
-        // Relay the game ID to the overlay window for API handling
-        if (overlayWindow) {
-            overlayWindow.webContents.send('update-game-id', gameId);
-        }
-    });
-    
-    ipcMain.on('game-id-updated-success', (event, gameId) => {
-        // Close the input window when game ID is updated
-        if (inputWindow) {
-            inputWindow.close();
-        }
-        
-        // Update the game ID in the overlay window
-        if (overlayWindow) {
-            overlayWindow.webContents.send('game-id-updated', gameId);
-        }
-        
-        // Store the updated game ID
-        gameName = gameId;
-    });
+    })
 }
 
 app.whenReady().then(() => {

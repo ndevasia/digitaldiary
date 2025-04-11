@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Video, Camera, X, Minus, Maximize, Minimize } from 'lucide-react';
 
-const API_URL = 'http://localhost:5001/api';
+const API_URL = 'http://localhost:5173/api';
 
 const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
   <div className="relative group">
@@ -23,62 +23,18 @@ function App() {
     const [isScreenRecording, setIsScreenRecording] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
-    const [gameId, setGameId] = useState(null);
     const dragStartPos = useRef(null);
 
     const ipc = window.electron?.ipcRenderer;
 
-    // Fetch latest game ID when component mounts
     useEffect(() => {
-        const fetchLatestSession = async () => {
-            try {
-                const response = await fetch(`${API_URL}/session/latest`);
-                const data = await response.json();
-                
-                if (data.error) {
-                    console.error('Session fetch error:', data.error);
-                    return;
-                }
-                
-                if (data && data.game_id) {
-                    setGameId(data.game_id);
-                    console.log('Latest game ID loaded:', data.game_id);
-                } else {
-                    console.log('No previous game ID found.');
-                }
-            } catch (error) {
-                console.error('Session fetch error:', error);
-            }
-        };
+      ipc?.on('some-channel', (data) => {
+        console.log('Received:', data);
+      });
 
-        fetchLatestSession();
-    }, []);
-
-    // Listen for game ID updates
-    useEffect(() => {
-        const handleGameIdUpdated = (newGameId) => {
-            setGameId(newGameId);
-            console.log('Game ID updated to:', newGameId);
-        };
-
-        const handleUpdateGameIdRequest = (newGameId) => {
-            console.log('Received update-game-id request:', newGameId);
-            updateGameId(newGameId)
-                .then(success => {
-                    if (success && ipc) {
-                        // Notify main process that the update was successful
-                        ipc.send('game-id-updated-success', newGameId);
-                    }
-                });
-        };
-
-        ipc?.on('game-id-updated', handleGameIdUpdated);
-        ipc?.on('update-game-id', handleUpdateGameIdRequest);
-
-        return () => {
-            ipc?.removeListener('game-id-updated', handleGameIdUpdated);
-            ipc?.removeListener('update-game-id', handleUpdateGameIdRequest);
-        };
+      return () => {
+        // Clean up
+      };
     }, [ipc]);
 
     // Listen for main window open/close
@@ -212,37 +168,6 @@ function App() {
         ipc?.send('open-main-window');
     };
 
-    // Handle game ID input
-    const handleGameIdInput = () => {
-        ipc?.send('openInputWindow');
-    };
-
-    // Update game ID directly from App.jsx if needed
-    const updateGameId = async (newGameId) => {
-        try {
-            const response = await fetch(`${API_URL}/session/update`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ game_id: newGameId })
-            });
-            const data = await response.json();
-            
-            if (data.error) {
-                console.error('Game ID update error:', data.error);
-                return false;
-            }
-            
-            setGameId(newGameId);
-            console.log('Game ID updated successfully:', newGameId);
-            return true;
-        } catch (error) {
-            console.error('Game ID update error:', error);
-            return false;
-        }
-    };
-
     return (
         <div
             className="border border-red-500 bg-white flex flex-col p-1 rounded-lg"
@@ -283,18 +208,6 @@ function App() {
                         onClick={toggleMainWindow}
                         tooltip={isMaximized ? "Close Main Window" : "Open Main Window"}
                     />
-                    
-                    {/* Game ID display and edit button */}
-                    <div className="mt-2 text-center">
-                        <div className="text-xs text-gray-500 mb-1">Game</div>
-                        <button 
-                            onClick={handleGameIdInput}
-                            className="text-sm px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded truncate max-w-[60px]"
-                            title={gameId || "Set game ID"}
-                        >
-                            {gameId ? gameId.slice(0, 8) + (gameId.length > 8 ? '...' : '') : "None"}
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>

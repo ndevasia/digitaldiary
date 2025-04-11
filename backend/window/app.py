@@ -16,6 +16,7 @@ import soundfile as sf    # Used in AudioRecorderThread
 from PyQt5.QtCore import QDateTime  # For consistent date formatting
 import time
 import threading
+
 # Fix path to import from sibling directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 print("Path being added to sys.path:", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -469,6 +470,52 @@ def get_media():
 
         return jsonify(media)
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/session/update', methods=['POST'])
+def update_session():
+    try:
+        data = request.json
+        game_id = data.get('game_id')
+        
+        if not game_id:
+            return jsonify({"error": "game_id is required"}), 400
+        
+        # Import aws.py's S3 class and call update_session
+        from server.aws import S3
+        s3 = S3()
+        success = s3.update_session(game_id)
+        
+        if not success:
+            return jsonify({"error": "Failed to update session in S3"}), 500
+        
+        return jsonify({
+            "status": "success",
+            "game_id": game_id
+        })
+        
+    except Exception as e:
+        print(f"Error updating session: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/session/latest', methods=['GET'])
+def get_latest_session():
+    try:
+        # Import aws.py's S3 class and call get_latest_session
+        from server.aws import S3
+        s3 = S3()
+        latest_session = s3.get_latest_session()
+        
+        if not latest_session:
+            return jsonify({
+                "game_id": None,
+                "timestamp": None
+            })
+        
+        return jsonify(latest_session)
+        
+    except Exception as e:
+        print(f"Error getting latest session: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

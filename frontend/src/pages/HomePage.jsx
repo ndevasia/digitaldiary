@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, ChevronLeft } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
-
+import HeroImage from '../components/HeroImage';
 
 function HomePage() {
     const [screenshotUrl, setScreenshotUrl] = useState(null);
@@ -11,6 +11,10 @@ function HomePage() {
     const [loading, setLoading] = useState(true);
     const [loadingOneWeekAgo, setLoadingOneWeekAgo] = useState(true);
     const [loadingOneMonthAgo, setLoadingOneMonthAgo] = useState(true);
+    const [selectedTimeframe, setSelectedTimeframe] = useState(null);
+    const [showModal, setShowModal] = useState(false);
+    const [modalImage, setModalImage] = useState('');
+    const navigate = useNavigate();
     
     useEffect(() => {
         // Fetch the latest screenshot when component mounts
@@ -24,7 +28,6 @@ function HomePage() {
     const fetchLatestScreenshot = async () => {
         try {
             setLoading(true);
-            // Use the relative URL
             const response = await fetch('/api/latest-screenshot');
             const data = await response.json();
             setScreenshotUrl(data.screenshot_url);
@@ -35,7 +38,6 @@ function HomePage() {
         }
     };
     
-    // Modular function to fetch screenshots by days
     const fetchScreenshotByDays = async (days, setScreenshotUrl, setLoading) => {
         try {
             setLoading(true);
@@ -49,13 +51,192 @@ function HomePage() {
         }
     };
     
-    // Convenience functions that use the modular function
-    const fetchOneWeekAgoScreenshot = () => {
-        fetchScreenshotByDays(7, setOneWeekAgoScreenshotUrl, setLoadingOneWeekAgo);
+    const handleTimeframeClick = (timeframe) => {
+        setSelectedTimeframe(timeframe);
+    };
+
+    const handleBackClick = () => {
+        setSelectedTimeframe(null);
+    };
+
+    const enlargeImage = (imageUrl) => {
+        setModalImage(imageUrl);
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
     };
     
-    const fetchOneMonthAgoScreenshot = () => {
-        fetchScreenshotByDays(30, setOneMonthAgoScreenshotUrl, setLoadingOneMonthAgo);
+    const handleHeroImageChange = (newImageUrl) => {
+        // This function is called when the hero image changes
+        console.log('Hero image changed:', newImageUrl);
+    };
+
+    // Render the memories list
+    const renderMemoriesList = () => {
+        return (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div 
+                    className="cursor-pointer"
+                    onClick={() => handleTimeframeClick('today')}
+                >
+                    {loading ? (
+                        <div className="animate-pulse bg-blue-100 w-full h-64 rounded"></div>
+                    ) : screenshotUrl ? (
+                        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm transition-all hover:shadow-md hover:-translate-y-1">
+                            <img 
+                                src={screenshotUrl} 
+                                alt="Latest Screenshot" 
+                                className="w-full h-64 object-cover"
+                            />
+                            <div className="p-4">
+                                <p className="text-center font-medium text-gray-700">Today</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-blue-100 w-full h-64 rounded flex items-center justify-center">
+                            <p className="text-gray-500 text-center">No screenshots yet</p>
+                        </div>
+                    )}
+                </div>
+                
+                <div 
+                    className="cursor-pointer"
+                    onClick={() => handleTimeframeClick('oneWeekAgo')}
+                >
+                    {loadingOneWeekAgo ? (
+                        <div className="animate-pulse bg-blue-100 w-full h-64 rounded"></div>
+                    ) : oneWeekAgoScreenshotUrl ? (
+                        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm transition-all hover:shadow-md hover:-translate-y-1">
+                            <img 
+                                src={oneWeekAgoScreenshotUrl} 
+                                alt="One Week Ago Screenshot" 
+                                className="w-full h-64 object-cover"
+                            />
+                            <div className="p-4">
+                                <p className="text-center font-medium text-gray-700">1 week ago</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-blue-100 w-full h-64 rounded flex items-center justify-center">
+                            <p className="text-gray-500 text-center">No screenshots from a week ago</p>
+                        </div>
+                    )}
+                </div>
+                
+                <div 
+                    className="cursor-pointer"
+                    onClick={() => handleTimeframeClick('oneMonthAgo')}
+                >
+                    {loadingOneMonthAgo ? (
+                        <div className="animate-pulse bg-blue-100 w-full h-64 rounded"></div>
+                    ) : oneMonthAgoScreenshotUrl ? (
+                        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm transition-all hover:shadow-md hover:-translate-y-1">
+                            <img 
+                                src={oneMonthAgoScreenshotUrl} 
+                                alt="One Month Ago Screenshot" 
+                                className="w-full h-64 object-cover"
+                            />
+                            <div className="p-4">
+                                <p className="text-center font-medium text-gray-700">1 month ago</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-blue-100 w-full h-64 rounded flex items-center justify-center">
+                            <p className="text-gray-500 text-center">No screenshots from a month ago</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    // Render the timeframe detail view
+    const renderTimeframeDetail = () => {
+        if (!selectedTimeframe) return null;
+
+        const timeframeTitles = {
+            today: "Today's Screenshots",
+            oneWeekAgo: "Screenshots from a Week Ago",
+            oneMonthAgo: "Screenshots from a Month Ago"
+        };
+
+        const currentScreenshotUrl = selectedTimeframe === 'today' ? screenshotUrl :
+                            selectedTimeframe === 'oneWeekAgo' ? oneWeekAgoScreenshotUrl :
+                            oneMonthAgoScreenshotUrl;
+
+        return (
+            <div>
+                <div className="mb-6">
+                    <button 
+                        onClick={handleBackClick}
+                        className="flex items-center text-teal-500 hover:text-teal-600 transition-colors"
+                    >
+                        <ChevronLeft size={20} className="mr-1" />
+                        Back to Memories
+                    </button>
+                </div>
+                
+                <h3 className="text-xl font-semibold text-gray-700 mb-4">{timeframeTitles[selectedTimeframe]}</h3>
+                
+                <div className="bg-white rounded-lg border border-gray-200 p-8">
+                    {currentScreenshotUrl ? (
+                        <div className="bg-blue-100 rounded overflow-hidden shadow-sm">
+                            <div className="p-4">
+                                <img 
+                                    src={currentScreenshotUrl} 
+                                    alt="Screenshot" 
+                                    className="w-full rounded cursor-pointer hover:opacity-90 transition-opacity" 
+                                    onClick={() => enlargeImage(currentScreenshotUrl)}
+                                />
+                                <div className="mt-2">
+                                    <div className="font-medium text-gray-700">{timeframeTitles[selectedTimeframe]}</div>
+                                    <div className="text-xs text-gray-500">
+                                        {selectedTimeframe === 'today' ? 'Today' : 
+                                         selectedTimeframe === 'oneWeekAgo' ? '1 week ago' : 
+                                         '1 month ago'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-12">
+                            <p className="text-gray-500">No screenshots available for this timeframe.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    // Image Modal/Lightbox
+    const renderImageModal = () => {
+        if (!showModal) return null;
+        
+        return (
+            <div 
+                className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50"
+                onClick={closeModal}
+            >
+                <div 
+                    className="relative max-w-4xl max-h-[90vh]"
+                    onClick={e => e.stopPropagation()}
+                >
+                    <button
+                        className="absolute -top-10 -right-10 text-white text-3xl font-bold w-8 h-8 flex items-center justify-center"
+                        onClick={closeModal}
+                    >
+                        &times;
+                    </button>
+                    <img 
+                        src={modalImage} 
+                        alt="Enlarged screenshot" 
+                        className="max-w-full max-h-[90vh] object-contain"
+                    />
+                </div>
+            </div>
+        );
     };
     
     return (
@@ -71,65 +252,24 @@ function HomePage() {
                     </button>
                 </header>
                 
+                {/* Hero Image Section */}
+                <HeroImage 
+                    defaultImage={screenshotUrl} 
+                    onImageChange={handleHeroImageChange}
+                />
+                
                 <section className="mb-8">
-                    <h2 className="text-xl font-medium text-gray-700 mb-4">Memories</h2>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-medium text-gray-700">Memories</h2>
+                    </div>
                     
                     <div className="bg-white rounded-lg border border-gray-200 p-8">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div>
-                                {loading ? (
-                                    <div className="animate-pulse bg-blue-100 w-full h-64 rounded"></div>
-                                ) : screenshotUrl ? (
-                                    <img 
-                                        src={screenshotUrl} 
-                                        alt="Latest Screenshot" 
-                                        className="w-full h-64 object-cover rounded"
-                                    />
-                                ) : (
-                                    <div className="bg-blue-100 w-full h-64 rounded flex items-center justify-center">
-                                        <p className="text-gray-500 text-center">No screenshots yet</p>
-                                    </div>
-                                )}
-                                <p className="text-center mt-2">Today</p>
-                            </div>
-                            
-                            <div>
-                                {loadingOneWeekAgo ? (
-                                    <div className="animate-pulse bg-blue-100 w-full h-64 rounded"></div>
-                                ) : oneWeekAgoScreenshotUrl ? (
-                                    <img 
-                                        src={oneWeekAgoScreenshotUrl} 
-                                        alt="One Week Ago Screenshot" 
-                                        className="w-full h-64 object-cover rounded"
-                                    />
-                                ) : (
-                                    <div className="bg-blue-100 w-full h-64 rounded flex items-center justify-center">
-                                        <p className="text-gray-500 text-center">No screenshots from a week ago</p>
-                                    </div>
-                                )}
-                                <p className="text-center mt-2">1 week ago</p>
-                            </div>
-                            
-                            <div>
-                                {loadingOneMonthAgo ? (
-                                    <div className="animate-pulse bg-blue-100 w-full h-64 rounded"></div>
-                                ) : oneMonthAgoScreenshotUrl ? (
-                                    <img 
-                                        src={oneMonthAgoScreenshotUrl} 
-                                        alt="One Month Ago Screenshot" 
-                                        className="w-full h-64 object-cover rounded"
-                                    />
-                                ) : (
-                                    <div className="bg-blue-100 w-full h-64 rounded flex items-center justify-center">
-                                        <p className="text-gray-500 text-center">No screenshots from a month ago</p>
-                                    </div>
-                                )}
-                                <p className="text-center mt-2">1 month ago</p>
-                            </div>
-                        </div>
+                        {selectedTimeframe ? renderTimeframeDetail() : renderMemoriesList()}
                     </div>
                 </section>
             </div>
+            
+            {renderImageModal()}
         </div>
     );
 }

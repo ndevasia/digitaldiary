@@ -7,7 +7,6 @@ import HomePage from './pages/HomePage.jsx';
 import FilesPage from './pages/FilesPage.jsx';
 import GamesPage from './pages/GamesPage';
 
-
 // Create a component to handle different render modes
 function MainApp() {
   // Check if we should render the overlay tool or the full app
@@ -22,7 +21,7 @@ function MainApp() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/files" element={<FilesPage />} />
-        <Route path="/games" element={<GamesPage />} /> {/* Placeholder */}
+        <Route path="/games" element={<GamesPage />} />
         <Route path="/journals" element={<HomePage />} /> {/* Placeholder */}
         <Route path="/settings" element={<HomePage />} /> {/* Placeholder */}
       </Routes>

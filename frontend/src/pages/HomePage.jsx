@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, ChevronLeft } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
+import HeroImage from '../components/HeroImage';
 
 function HomePage() {
     const [screenshotUrl, setScreenshotUrl] = useState(null);
@@ -65,6 +66,11 @@ function HomePage() {
 
     const closeModal = () => {
         setShowModal(false);
+    };
+    
+    const handleHeroImageChange = (newImageUrl) => {
+        // This function is called when the hero image changes
+        console.log('Hero image changed:', newImageUrl);
     };
 
     // Render the memories list
@@ -245,6 +251,12 @@ function HomePage() {
                         New Session
                     </button>
                 </header>
+                
+                {/* Hero Image Section */}
+                <HeroImage 
+                    defaultImage={screenshotUrl} 
+                    onImageChange={handleHeroImageChange}
+                />
                 
                 <section className="mb-8">
                     <div className="flex justify-between items-center mb-4">

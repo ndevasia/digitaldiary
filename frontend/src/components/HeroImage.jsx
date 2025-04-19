@@ -129,24 +129,24 @@ function HeroImage({ defaultImage, onImageChange }) {
                         
                         {/* Edit options that appear on hover */}
                         {showHeroEditOptions && (
-                            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center gap-4">
+                            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center gap-4">
                                 <button 
                                     onClick={handleSelectFromScreenshots}
-                                    className="bg-white text-gray-800 p-2 rounded-full hover:bg-gray-100 transition-all flex items-center gap-2"
+                                    className="bg-white/90 text-gray-800 px-4 py-2 rounded-lg hover:bg-white transition-all flex items-center gap-2 shadow-sm"
                                 >
                                     <Image size={20} />
                                     <span>Choose from Screenshots</span>
                                 </button>
                                 <button 
                                     onClick={triggerFileInput}
-                                    className="bg-white text-gray-800 p-2 rounded-full hover:bg-gray-100 transition-all flex items-center gap-2"
+                                    className="bg-white/90 text-gray-800 px-4 py-2 rounded-lg hover:bg-white transition-all flex items-center gap-2 shadow-sm"
                                 >
                                     <Upload size={20} />
                                     <span>Upload New</span>
                                 </button>
                                 <button 
                                     onClick={removeHeroImage}
-                                    className="bg-white text-gray-800 p-2 rounded-full hover:bg-gray-100 transition-all flex items-center gap-2"
+                                    className="bg-white/90 text-gray-800 px-4 py-2 rounded-lg hover:bg-white transition-all flex items-center gap-2 shadow-sm"
                                 >
                                     <X size={20} />
                                     <span>Remove</span>

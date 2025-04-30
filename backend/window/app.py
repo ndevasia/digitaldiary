@@ -276,8 +276,17 @@ def take_screenshot():
         game_id = latest_session.get('game_id') if latest_session else None
         print(f"Using game_id from latest session: {game_id}")
         
-        # Then call get_presigned_url with the game_id
-        url = s3.get_presigned_url(screenshot_path, game_id=game_id)
+        # Generate presigned URL for upload
+        if game_id:
+            object_name = f"{USERNAME}/{game_id}/screenshot_{now}.png"
+        else:
+            object_name = f"{USERNAME}/screenshot_{now}.png"
+            
+        url = s3_client.generate_presigned_url(
+            'put_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
 
         # Upload to S3
         with open(screenshot_path, 'rb') as f:
@@ -324,8 +333,17 @@ def start_screen_recording():
             else:
                 print(f"Using game_id from recorder_thread: {game_id}")
 
-            # Generate pre-signed URL for the video file
-            video_url = client.get_presigned_url(recorder_thread.video_path, game_id=game_id)
+            # Generate pre-signed URL for the video file with game_id
+            if game_id:
+                video_object_name = f"{USERNAME}/{game_id}/{os.path.basename(recorder_thread.video_path)}"
+            else:
+                video_object_name = f"{USERNAME}/{os.path.basename(recorder_thread.video_path)}"
+                
+            video_url = s3_client.generate_presigned_url(
+                'put_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': video_object_name},
+                ExpiresIn=3600
+            )
             print(f"Video URL: {video_url}")
 
             try:
@@ -338,10 +356,19 @@ def start_screen_recording():
             except Exception as e:
                 print(f"Error uploading video: {str(e)}")
 
-            # Generate pre-signed URL for the thumbnail file
-            thumbnail_url = client.get_presigned_url(recorder_thread.thumbnail_path, game_id=game_id)
+            # Generate pre-signed URL for the thumbnail file with game_id
+            if game_id:
+                thumbnail_object_name = f"{USERNAME}/{game_id}/{os.path.basename(recorder_thread.thumbnail_path)}"
+            else:
+                thumbnail_object_name = f"{USERNAME}/{os.path.basename(recorder_thread.thumbnail_path)}"
+                
+            thumbnail_url = s3_client.generate_presigned_url(
+                'put_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': thumbnail_object_name},
+                ExpiresIn=3600
+            )
             print(f"Thumbnail URL: {thumbnail_url}")
-
+            
             try:
                 with open(recorder_thread.thumbnail_path, 'rb') as f:
                     response = requests.put(thumbnail_url, data=f)
@@ -481,7 +508,16 @@ def stop_audio_recording():
             print(f"Using game_id from latest session: {game_id}")
             
             # Generate presigned URL with the game_id
-            url = s3.get_presigned_url(audio_path, game_id=game_id)
+            if game_id:
+                object_name = f"{USERNAME}/{game_id}/{os.path.basename(audio_path)}"
+            else:
+                object_name = f"{USERNAME}/{os.path.basename(audio_path)}"
+                
+            url = s3_client.generate_presigned_url(
+                'put_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+                ExpiresIn=3600
+            )
             
             # Upload to S3
             try:

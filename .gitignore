@@ -35,7 +35,7 @@ activate/
 ENV/
 env.bak/
 venv.bak/
-backend/globals.py
+backend/window/globals.py
 
 
 # IDE-specific ignores (add or remove based on your IDE)

@@ -1,6 +1,5 @@
 import boto3
-import io
-from backend.globals import USERNAME
+from globals import USERNAME
 import requests
 import os
 import json
@@ -12,6 +11,7 @@ localhost = 'http://127.0.0.1:5000/'
 
 class S3:
     def __init__(self):
+        print("this is correct")
         sts_client = boto3.client('sts')
         assumed_role = sts_client.assume_role(
             RoleArn=ARN,
@@ -112,7 +112,8 @@ class S3:
                 Key=self.session_file
             )
             session_data = json.loads(response['Body'].read().decode('utf-8'))
-
+            print(response)
+            print(session_data)
             if not session_data:
                 return None
 

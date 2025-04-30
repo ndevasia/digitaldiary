@@ -3,6 +3,7 @@ const path = require('path');
 
 const { spawn } = require('child_process');
 const fs = require('fs');
+const fetch = require("node-fetch");
 
 let overlayWindow;  // Overlay window
 let inputWindow; // Input window
@@ -94,10 +95,27 @@ function createInputWindow() {
     inputWindow.loadFile(path.join(__dirname, 'input.html'));
 
     // When user submits the text, show the overlay window and close the input window
-    ipcMain.on('submit-text', (event, game) => {
+    ipcMain.on('submit-text', async (event, game) => {
         // Store the game name in the main process
         gameName = game;
         console.log('Game name received:', gameName); // Test to see if the name passes through
+
+        // Send to Python backend, not functional with new games yet
+        const fetch = require('node-fetch'); // Ensure this is installed
+        try {
+            const response = await fetch('http://127.0.0.1:5001/api/session/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ game_id: gameName })
+            });
+
+            const data = await response.json();
+            console.log('Game submission response:', data);
+        } catch (err) {
+            console.error('Failed to send game name to backend:', err);
+        }
 
         if (!overlayWindow) {
             createOverlayWindow();  // Create the overlay window only when needed

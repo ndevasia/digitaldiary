@@ -6,21 +6,17 @@ import sys
 from flask_cors import CORS  # You'll need to install flask-cors
 import pyautogui
 from datetime import datetime, timedelta, timezone
-import cv2
 import numpy as np
-from moviepy.editor import VideoFileClip
-from PIL import Image
 import requests
 import sounddevice as sd  # Used in AudioRecorderThread
 import soundfile as sf    # Used in AudioRecorderThread
 from PyQt5.QtCore import QDateTime  # For consistent date formatting
-import time
-import threading
 
 import random
 
 # Fix path to import from sibling directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 print("Path being added to sys.path:", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 print("Current sys.path:", sys.path)
 try:
@@ -29,7 +25,7 @@ try:
     print("Successfully imported RecorderThread from recording")
 
     # Try importing from server directory (sibling to window directory)
-    from server.aws import S3
+    from aws import S3
     print("Successfully imported S3 from server.aws")
 except ImportError as e:
     print(f"Error importing modules: {e}")
@@ -520,7 +516,7 @@ def get_media():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/session/update', methods=['POST'])
-def update_session():
+def session_update():
     try:
         data = request.json
         game_id = data.get('game_id')
@@ -529,16 +525,15 @@ def update_session():
             return jsonify({"error": "game_id is required"}), 400
         
         # Import aws.py's S3 class and call update_session
-        from server.aws import S3
         s3 = S3()
         success = s3.update_session(game_id)
         
         if not success:
             return jsonify({"error": "Failed to update session in S3"}), 500
         
-        return jsonify({
-            "status": "success",
-            "game_id": game_id
+        return jsonify({ # Edit this to get timestamp
+            "game_id": game_id,
+            "timestamp": datetime.now().isoformat()
         })
         
     except Exception as e:
@@ -549,7 +544,6 @@ def update_session():
 def get_latest_session():
     try:
         # Import aws.py's S3 class and call get_latest_session
-        from server.aws import S3
         s3 = S3()
         latest_session = s3.get_latest_session()
         
@@ -558,7 +552,7 @@ def get_latest_session():
                 "game_id": None,
                 "timestamp": None
             })
-        
+
         return jsonify(latest_session)
         
     except Exception as e:

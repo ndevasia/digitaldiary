@@ -269,14 +269,15 @@ def take_screenshot():
         # Take screenshot
         screenshot = pyautogui.screenshot()
         screenshot.save(screenshot_path)
-
-        # Generate presigned URL for upload
-        object_name = f"{USERNAME}/screenshot_{now}.png"
-        url = s3_client.generate_presigned_url(
-            'put_object',
-            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
-            ExpiresIn=3600
-        )
+        
+        # First get the latest game ID independently
+        s3 = S3()
+        latest_session = s3.get_latest_session()
+        game_id = latest_session.get('game_id') if latest_session else None
+        print(f"Using game_id from latest session: {game_id}")
+        
+        # Then call get_presigned_url with the game_id
+        url = s3.get_presigned_url(screenshot_path, game_id=game_id)
 
         # Upload to S3
         with open(screenshot_path, 'rb') as f:
@@ -287,7 +288,8 @@ def take_screenshot():
         return jsonify({
             'status': 'success',
             'path': screenshot_path,
-            'url': url
+            'url': url,
+            'game_id': game_id
         })
     except Exception as e:
         print(f"Screenshot error: {str(e)}")
@@ -311,9 +313,19 @@ def start_screen_recording():
             # Create S3 client
             s3_client_instance = S3()
             client = s3_client_instance.get()
+            
+            # Get the game_id from the recorder_thread or latest session as fallback
+            game_id = getattr(recorder_thread, 'game_id', None)
+            if not game_id:
+                # Get latest game ID as fallback
+                latest_session = client.get_latest_session()
+                game_id = latest_session.get('game_id') if latest_session else None
+                print(f"Using game_id from latest session as fallback: {game_id}")
+            else:
+                print(f"Using game_id from recorder_thread: {game_id}")
 
             # Generate pre-signed URL for the video file
-            video_url = client.get_presigned_url(recorder_thread.video_path)
+            video_url = client.get_presigned_url(recorder_thread.video_path, game_id=game_id)
             print(f"Video URL: {video_url}")
 
             try:
@@ -327,7 +339,7 @@ def start_screen_recording():
                 print(f"Error uploading video: {str(e)}")
 
             # Generate pre-signed URL for the thumbnail file
-            thumbnail_url = client.get_presigned_url(recorder_thread.thumbnail_path)
+            thumbnail_url = client.get_presigned_url(recorder_thread.thumbnail_path, game_id=game_id)
             print(f"Thumbnail URL: {thumbnail_url}")
 
             try:
@@ -367,9 +379,10 @@ def stop_screen_recording():
         if not recorder_thread or not recorder_thread.recording:
             return jsonify({'error': 'No active recording'}), 400
 
-        # Get paths before stopping
+        # Get paths and game ID before stopping
         video_path = recorder_thread.video_path
         thumbnail_path = recorder_thread.thumbnail_path
+        game_id = getattr(recorder_thread, 'game_id', None)
 
         # Stop the recording
         recorder_thread.stop()
@@ -381,7 +394,8 @@ def stop_screen_recording():
         return jsonify({
             'status': 'stopped',
             'video_path': video_path,
-            'thumbnail_path': thumbnail_path
+            'thumbnail_path': thumbnail_path,
+            'game_id': game_id
         })
     except Exception as e:
         print(f"Recording stop error: {str(e)}")
@@ -460,15 +474,17 @@ def stop_audio_recording():
                 print(f"Error saving audio file: {e}")
                 return jsonify({'error': f"Failed to save audio: {str(e)}"}), 500
 
+            # Get latest game ID as a separate step
+            s3 = S3()
+            latest_session = s3.get_latest_session()
+            game_id = latest_session.get('game_id') if latest_session else None
+            print(f"Using game_id from latest session: {game_id}")
+            
+            # Generate presigned URL with the game_id
+            url = s3.get_presigned_url(audio_path, game_id=game_id)
+            
             # Upload to S3
             try:
-                object_name = f"{USERNAME}/{os.path.basename(audio_path)}"
-                url = s3_client.generate_presigned_url(
-                    'put_object',
-                    Params={'Bucket': BUCKET_NAME, 'Key': object_name},
-                    ExpiresIn=3600
-                )
-
                 with open(audio_path, 'rb') as f:
                     response = requests.put(url, data=f)
                     if response.status_code != 200:
@@ -484,7 +500,8 @@ def stop_audio_recording():
 
             return jsonify({
                 'status': 'stopped',
-                'path': temp_path
+                'path': temp_path,
+                'game_id': game_id
             })
 
         return jsonify({'error': 'No active recording'}), 400

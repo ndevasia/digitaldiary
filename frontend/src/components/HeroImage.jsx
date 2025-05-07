@@ -1,27 +1,53 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, X, Image } from 'lucide-react';
+import { Upload, X, Image, Camera } from 'lucide-react';
 
-function HeroImage({ defaultImage, onImageChange }) {
+function HeroImage({ onImageChange }) {
     const [heroImage, setHeroImage] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [showHeroEditOptions, setShowHeroEditOptions] = useState(false);
     const [allScreenshots, setAllScreenshots] = useState([]);
     const [loadingAllScreenshots, setLoadingAllScreenshots] = useState(false);
     const [showScreenshotSelector, setShowScreenshotSelector] = useState(false);
+    const [noScreenshotsAvailable, setNoScreenshotsAvailable] = useState(false);
     const fileInputRef = useRef(null);
     
     useEffect(() => {
-        // Load hero image from localStorage if it exists, otherwise use default image
-        const savedHeroImage = localStorage.getItem('heroImage');
-        if (savedHeroImage) {
-            setHeroImage(savedHeroImage);
-        } else if (defaultImage) {
-            setHeroImage(defaultImage);
+        // Fetch the hero image from the backend
+        fetchHeroImage();
+    }, []);
+    
+    const fetchHeroImage = async () => {
+        try {
+            console.log('Fetching hero image from backend...');
+            const response = await fetch('/api/hero-image');
+            if (!response.ok) {
+                throw new Error('Failed to fetch hero image');
+            }
+            const data = await response.json();
+            console.log('Hero image API response:', data);
+            
+            if (data.hero_image_url) {
+                console.log('Setting hero image from backend:', data.hero_image_url);
+                setHeroImage(data.hero_image_url);
+                setNoScreenshotsAvailable(false);
+                
+                // Notify parent component about the change
+                if (onImageChange) {
+                    onImageChange(data.hero_image_url);
+                }
+            } else {
+                console.log('No hero image returned from backend');
+                setNoScreenshotsAvailable(true);
+            }
+        } catch (error) {
+            console.error('Error fetching hero image:', error);
+            setNoScreenshotsAvailable(true);
         }
-    }, [defaultImage]);
+    };
     
     const fetchAllScreenshots = async () => {
         try {
+            setLoadingAllScreenshots(true);
             console.log('Fetching all screenshots...');
             const response = await fetch('/api/media_aws');
             if (!response.ok) {
@@ -32,16 +58,23 @@ function HeroImage({ defaultImage, onImageChange }) {
 
             if (!Array.isArray(data)) {
                 console.error('API response is not an array:', data);
+                setNoScreenshotsAvailable(true);
                 return;
             }
 
-            // Filter for screenshots only
-            const screenshots = data.filter(item => item.type === 'screenshot');
+            // Filter for screenshots only and sort by timestamp (newest first)
+            const screenshots = data
+                .filter(item => item.type === 'screenshot')
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
             console.log('Filtered screenshots:', screenshots);
-
             setAllScreenshots(screenshots);
+            setNoScreenshotsAvailable(screenshots.length === 0);
         } catch (error) {
             console.error('Error fetching screenshots:', error);
+            setNoScreenshotsAvailable(true);
+        } finally {
+            setLoadingAllScreenshots(false);
         }
     };
     
@@ -56,9 +89,9 @@ function HeroImage({ defaultImage, onImageChange }) {
             reader.onload = (e) => {
                 const imageDataUrl = e.target.result;
                 setHeroImage(imageDataUrl);
-                localStorage.setItem('heroImage', imageDataUrl);
                 setIsUploading(false);
                 setShowHeroEditOptions(false);
+                setNoScreenshotsAvailable(false);
                 
                 // Notify parent component about the change
                 if (onImageChange) {
@@ -75,17 +108,6 @@ function HeroImage({ defaultImage, onImageChange }) {
         }
     };
     
-    const removeHeroImage = () => {
-        setHeroImage(null);
-        localStorage.removeItem('heroImage');
-        setShowHeroEditOptions(false);
-        
-        // Notify parent component about the change
-        if (onImageChange) {
-            onImageChange(null);
-        }
-    };
-    
     const triggerFileInput = () => {
         fileInputRef.current.click();
     };
@@ -99,22 +121,22 @@ function HeroImage({ defaultImage, onImageChange }) {
         setShowScreenshotSelector(true);
     };
     
-    const handleScreenshotSelect = (screenshotUrl) => {
-        setHeroImage(screenshotUrl);
-        localStorage.setItem('heroImage', screenshotUrl);
+    const handleScreenshotSelect = (screenshot) => {
+        setHeroImage(screenshot.media_url);
         setShowScreenshotSelector(false);
         setShowHeroEditOptions(false);
+        setNoScreenshotsAvailable(false);
         
         // Notify parent component about the change
         if (onImageChange) {
-            onImageChange(screenshotUrl);
+            onImageChange(screenshot.media_url);
         }
     };
     
     return (
         <div className="mb-8">
             <div 
-                className="relative h-64 md:h-80 w-full rounded-lg overflow-hidden cursor-pointer"
+                className="relative h-96 md:h-[32rem] w-full rounded-lg overflow-hidden cursor-pointer"
                 onMouseEnter={() => setShowHeroEditOptions(true)}
                 onMouseLeave={() => setShowHeroEditOptions(false)}
             >
@@ -123,7 +145,7 @@ function HeroImage({ defaultImage, onImageChange }) {
                         <img 
                             src={heroImage} 
                             alt="Hero" 
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain bg-gray-100"
                             onClick={handleHeroImageClick}
                         />
                         
@@ -143,13 +165,6 @@ function HeroImage({ defaultImage, onImageChange }) {
                                 >
                                     <Upload size={20} />
                                     <span>Upload New</span>
-                                </button>
-                                <button 
-                                    onClick={removeHeroImage}
-                                    className="bg-white/90 text-gray-800 px-4 py-2 rounded-lg hover:bg-white transition-all flex items-center gap-2 shadow-sm"
-                                >
-                                    <X size={20} />
-                                    <span>Remove</span>
                                 </button>
                             </div>
                         )}
@@ -193,13 +208,44 @@ function HeroImage({ defaultImage, onImageChange }) {
                                     <div key={index} className="animate-pulse bg-blue-100 h-48 rounded"></div>
                                 ))}
                             </div>
+                        ) : noScreenshotsAvailable ? (
+                            <div className="text-center py-12 px-4">
+                                <div className="bg-blue-50 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
+                                    <Camera size={40} className="text-blue-500" />
+                                </div>
+                                <h3 className="text-xl font-semibold text-gray-800 mb-2">No Screenshots Available</h3>
+                                <p className="text-gray-600 mb-6">You haven't taken any screenshots yet. Take a screenshot or upload an image from your computer to get started.</p>
+                                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                                    <button 
+                                        onClick={() => {
+                                            setShowScreenshotSelector(false);
+                                            // You could add a function here to trigger screenshot capture
+                                            // For example: window.electronAPI.takeScreenshot();
+                                        }}
+                                        className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Camera size={20} />
+                                        <span>Take Screenshot</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            setShowScreenshotSelector(false);
+                                            triggerFileInput();
+                                        }}
+                                        className="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-300 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Upload size={20} />
+                                        <span>Upload Image</span>
+                                    </button>
+                                </div>
+                            </div>
                         ) : allScreenshots.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {allScreenshots.map((screenshot, index) => (
                                     <div 
                                         key={index} 
                                         className="bg-gray-50 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-all"
-                                        onClick={() => handleScreenshotSelect(screenshot.media_url)}
+                                        onClick={() => handleScreenshotSelect(screenshot)}
                                     >
                                         <img 
                                             src={screenshot.media_url} 
@@ -226,4 +272,4 @@ function HeroImage({ defaultImage, onImageChange }) {
     );
 }
 
-export default HeroImage; 
+export default HeroImage;

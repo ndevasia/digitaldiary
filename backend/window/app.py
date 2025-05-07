@@ -147,7 +147,32 @@ def latest_screenshot():
         print(f"Error in latest_screenshot: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-
+# Get the latest screenshot from S3
+@app.route('/api/hero-image', methods=['GET'])
+def get_hero_image():
+    try:
+        # Get the latest screenshot from S3
+        prefix = USERNAME + "/screenshot_"
+        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
+        
+        if 'Contents' in response:
+            files = [file for file in response['Contents'] if file['Key'].startswith(prefix)]
+            
+            if files:
+                # Sort by LastModified (newest first)
+                latest_file = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+                screenshot_url = s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': BUCKET_NAME, 'Key': latest_file},
+                    ExpiresIn=3600
+                )
+                return jsonify({"hero_image_url": screenshot_url})
+        
+        # If no screenshots found, return a default image URL or null
+        return jsonify({"hero_image_url": None})
+    except Exception as e:
+        print(f"Error in get_hero_image: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/random-screenshot-by-days/<int:days>', methods=['GET'])
 def get_random_screenshot_by_days(days):

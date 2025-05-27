@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Video, Camera, X, Minus, Maximize, Minimize } from 'lucide-react';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './auth/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './pages/Login';
+import './auth/aws-config';
 const { ipcRenderer } = window.require('electron');
 
 const API_URL = 'http://localhost:5173/api';
@@ -166,54 +171,66 @@ function App() {
     };
     
     return (
-        <div 
-        className="border border-red-500 bg-white flex flex-col p-1 rounded-lg" 
-            onMouseDown={handleMouseDown}
-        >
-            <div className="flex flex-col w-full h-full p-1 gap-2 items-center justify-between">
-                {/* Title bar */}
-                    <div className="flex flex-row  w-full justify-center gap-1">
-                        <button
-                            className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-amber-950 bg-amber-400 hover:bg-amber-500"
-                            onClick={() => ipcRenderer.send('minimize-window')}
-                        >
-                            <Minus size={14}  />
-                        </button>
-                        <button
-                            className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-red-950 bg-red-400 hover:bg-red-500"
-                            onClick={() => ipcRenderer.send('close-window')}
-                        >
+        <AuthProvider>
+            <Router>
+                <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route
+                        path="/"
+                        element={
+                            <ProtectedRoute>
+                                <div 
+                                    className="border border-red-500 bg-white flex flex-col p-1 rounded-lg" 
+                                    onMouseDown={handleMouseDown}
+                                >
+                                    <div className="flex flex-col w-full h-full p-1 gap-2 items-center justify-between">
+                                        {/* Title bar */}
+                                        <div className="flex flex-row w-full justify-center gap-1">
+                                            <button
+                                                className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-amber-950 bg-amber-400 hover:bg-amber-500"
+                                                onClick={() => ipcRenderer.send('minimize-window')}
+                                            >
+                                                <Minus size={14} />
+                                            </button>
+                                            <button
+                                                className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-red-950 bg-red-400 hover:bg-red-500"
+                                                onClick={() => ipcRenderer.send('close-window')}
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
 
-                          
-                            <X size={14}  />
-                        </button>
-                    </div>
-
-                {/* Main toolbar */}
-                <div className="flex flex-col items-center gap-1">
-                    <IconButton 
-                        icon={Camera} 
-                        onClick={handleScreenshot}
+                                        {/* Main toolbar */}
+                                        <div className="flex flex-col items-center gap-1">
+                                            <IconButton 
+                                                icon={Camera} 
+                                                onClick={handleScreenshot}
+                                            />
+                                            <IconButton 
+                                                icon={Video} 
+                                                onClick={handleScreenRecording}
+                                                isActive={isScreenRecording}
+                                            />
+                                            <IconButton 
+                                                icon={Mic} 
+                                                onClick={handleAudioRecording}
+                                                isActive={isAudioRecording}
+                                            />
+                                            <IconButton 
+                                                icon={isMaximized ? Minimize : Maximize}
+                                                onClick={toggleMainWindow}
+                                                tooltip={isMaximized ? "Close Main Window" : "Open Main Window"}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </ProtectedRoute>
+                        }
                     />
-                    <IconButton 
-                        icon={Video} 
-                        onClick={handleScreenRecording}
-                        isActive={isScreenRecording}
-                        //isActive={true}
-                    />
-                    <IconButton 
-                        icon={Mic} 
-                        onClick={handleAudioRecording}
-                        isActive={isAudioRecording}
-                    />
-                    <IconButton 
-                        icon={isMaximized ? Minimize : Maximize}
-                        onClick={toggleMainWindow}
-                        tooltip={isMaximized ? "Close Main Window" : "Open Main Window"}
-                    />
-                </div>
-            </div>
-        </div>
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+            </Router>
+        </AuthProvider>
     );
 }
 

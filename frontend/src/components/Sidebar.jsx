@@ -1,13 +1,27 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Gamepad2, FolderOpen, Edit } from 'lucide-react';
+import { useAuth } from '../auth/AuthContext';
 const { ipcRenderer } = window.require('electron');
 
 function Sidebar() {
     const location = useLocation();
+    const navigate = useNavigate();
+    const { signOut } = useAuth();
     
     const isActive = (path) => {
         return location.pathname === path;
+    };
+
+    const handleLogout = async () => {
+        try {
+            const result = await signOut();
+            if (result.success) {
+                navigate('/login');
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
     };
     
     return (
@@ -65,6 +79,12 @@ function Sidebar() {
                 >
                     Settings
                 </Link>
+                <button 
+                    onClick={handleLogout}
+                    className="block text-gray-600 mb-4 hover:text-red-500 transition-colors"
+                >
+                    Logout
+                </button>
                 <button 
                     onClick={() => ipcRenderer.send('app-quit')} 
                     className="block text-gray-600"

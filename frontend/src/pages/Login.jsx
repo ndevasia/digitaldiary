@@ -1,19 +1,38 @@
 import React, { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const { signIn } = useAuth();
+    const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setIsLoading(true);
         
-        const result = await signIn(email, password);
-        if (!result.success) {
-            setError(result.error);
+        console.log('Attempting login with:', { email, password });
+        
+        try {
+            const result = await signIn(email, password);
+            console.log('Login result:', result);
+            
+            if (result.success) {
+                console.log('Login successful, navigating to home');
+                navigate('/');
+            } else {
+                console.error('Login failed:', result.error);
+                setError(result.error || 'Login failed. Please try again.');
+            }
+        } catch (err) {
+            console.error('Login error:', err);
+            setError('An unexpected error occurred. Please try again.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -73,9 +92,14 @@ const Login = () => {
                     <div>
                         <button
                             type="submit"
-                            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            disabled={isLoading}
+                            className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white ${
+                                isLoading 
+                                    ? 'bg-blue-400 cursor-not-allowed' 
+                                    : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                            }`}
                         >
-                            Sign in
+                            {isLoading ? 'Signing in...' : 'Sign in'}
                         </button>
                     </div>
                 </form>

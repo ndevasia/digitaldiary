@@ -1,40 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Video, Camera, X, Minus, Maximize, Minimize } from 'lucide-react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './auth/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import Login from './pages/Login';
-import './auth/aws-config';
 const { ipcRenderer } = window.require('electron');
 
 const API_URL = 'http://localhost:5173/api';
 
 const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
-  <div className="relative group">
-    <button
-      onClick={onClick}
-      className={`aspect-square p-4 rounded-lg flex items-center justify-center transition-all duration-200 ${
-        isActive 
-          ? 'bg-blue-500 text-zinc-50 ' 
-          : 'bg-zinc-100 hover:bg-zinc-200 border border-zinc-200/50'
-      }`}
-    >
-      <Icon 
-        size={20} 
-      />
-    </button>
-  </div>
+    <div className="relative group">
+        <button
+            onClick={onClick}
+            className={`aspect-square p-4 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                isActive 
+                    ? 'bg-blue-500 text-zinc-50 ' 
+                    : 'bg-zinc-100 hover:bg-zinc-200 border border-zinc-200/50'
+            }`}
+        >
+            <Icon size={20} />
+        </button>
+    </div>
 );
 
-function MainApp() {
+function App() {
     const [isAudioRecording, setIsAudioRecording] = useState(false);
     const [isScreenRecording, setIsScreenRecording] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
     const dragStartPos = useRef(null);
-    const { signOut } = useAuth();
 
-    // Add effect to listen for main window open/close events
     useEffect(() => {
         const handleMainWindowOpen = () => setIsMaximized(true);
         const handleMainWindowClose = () => setIsMaximized(false);
@@ -155,7 +146,6 @@ function MainApp() {
         }
     };
 
-    // Toggle main window function
     const toggleMainWindow = () => {
         if (isMaximized) {
             ipcRenderer.send('close-main-window');
@@ -166,11 +156,6 @@ function MainApp() {
         }
     };
 
-    // Open main window function
-    const openMainWindow = () => {
-        ipcRenderer.send('open-main-window');
-    };
-    
     return (
         <div 
             className="border border-red-500 bg-white flex flex-col p-1 rounded-lg" 
@@ -217,27 +202,6 @@ function MainApp() {
                 </div>
             </div>
         </div>
-    );
-}
-
-function App() {
-    return (
-        <AuthProvider>
-            <Router>
-                <Routes>
-                    <Route path="/login" element={<Login />} />
-                    <Route
-                        path="/"
-                        element={
-                            <ProtectedRoute>
-                                <MainApp />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-            </Router>
-        </AuthProvider>
     );
 }
 

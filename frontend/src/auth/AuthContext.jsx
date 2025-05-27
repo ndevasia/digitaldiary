@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Amplify } from 'aws-amplify';
-import { signIn as amplifySignIn, signOut as amplifySignOut, getCurrentUser } from 'aws-amplify/auth';
 
 const AuthContext = createContext(null);
 
@@ -22,6 +21,7 @@ export const AuthProvider = ({ children }) => {
             // Check localStorage first
             const storedUser = localStorage.getItem('mockUser');
             if (storedUser) {
+                console.log('Found stored user:', storedUser);
                 setUser(JSON.parse(storedUser));
                 setLoading(false);
                 return;
@@ -29,18 +29,22 @@ export const AuthProvider = ({ children }) => {
 
             // If no stored user, try AWS Cognito
             try {
-                const currentUser = await getCurrentUser();
+                const currentUser = await Amplify.Auth.currentAuthenticatedUser();
                 setUser(currentUser);
             } catch (error) {
+                console.log('No authenticated user found');
                 setUser(null);
             }
         } catch (error) {
+            console.error('Error checking user:', error);
             setUser(null);
         }
         setLoading(false);
     }
 
     const signIn = async (email, password) => {
+        console.log('Sign in attempt with:', { email, password });
+        
         try {
             // Check mock users first
             const mockUser = MOCK_USERS.find(
@@ -48,6 +52,7 @@ export const AuthProvider = ({ children }) => {
             );
 
             if (mockUser) {
+                console.log('Mock user found, creating session');
                 const userData = {
                     email: mockUser.email,
                     username: mockUser.email,
@@ -60,13 +65,15 @@ export const AuthProvider = ({ children }) => {
 
             // If no mock user found, try AWS Cognito
             try {
-                const user = await amplifySignIn({ username: email, password });
+                const user = await Amplify.Auth.signIn(email, password);
                 setUser(user);
                 return { success: true };
             } catch (error) {
+                console.error('AWS Cognito sign in error:', error);
                 return { success: false, error: error.message };
             }
         } catch (error) {
+            console.error('Sign in error:', error);
             return { success: false, error: 'Invalid credentials' };
         }
     };
@@ -79,13 +86,14 @@ export const AuthProvider = ({ children }) => {
 
             // Try AWS Cognito sign out
             try {
-                await amplifySignOut();
+                await Amplify.Auth.signOut();
             } catch (error) {
                 console.error('AWS Cognito sign out error:', error);
             }
 
             return { success: true };
         } catch (error) {
+            console.error('Sign out error:', error);
             return { success: false, error: error.message };
         }
     };

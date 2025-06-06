@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, ChevronLeft } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import HeroImage from '../components/HeroImage';
+import Timeline from '../components/Timeline';
 
 function HomePage() {
     const [screenshotUrl, setScreenshotUrl] = useState(null);
@@ -14,8 +15,10 @@ function HomePage() {
     const [selectedTimeframe, setSelectedTimeframe] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [modalImage, setModalImage] = useState('');
+    const [gameEvents, setGameEvents] = useState([]);
+    const [loadingTimeline, setLoadingTimeline] = useState(true);
     const navigate = useNavigate();
-    
+
     useEffect(() => {
         // Fetch the latest screenshot when component mounts
         fetchLatestScreenshot();
@@ -23,8 +26,10 @@ function HomePage() {
         fetchScreenshotByDays(7, setOneWeekAgoScreenshotUrl, setLoadingOneWeekAgo);
         // Fetch the one month ago screenshot
         fetchScreenshotByDays(30, setOneMonthAgoScreenshotUrl, setLoadingOneMonthAgo);
+        // Fetch game sessions
+        fetchGameSessions();
     }, []);
-    
+
     const fetchLatestScreenshot = async () => {
         try {
             setLoading(true);
@@ -37,7 +42,7 @@ function HomePage() {
             setLoading(false);
         }
     };
-    
+
     const fetchScreenshotByDays = async (days, setScreenshotUrl, setLoading) => {
         try {
             setLoading(true);
@@ -50,7 +55,43 @@ function HomePage() {
             setLoading(false);
         }
     };
-    
+
+    const fetchGameSessions = async () => {
+        try {
+            setLoadingTimeline(true);
+            const response = await fetch('/api/media_aws');
+            const mediaData = await response.json();
+
+            // Group media by game_id and get the latest timestamp for each game
+            const gameSessions = mediaData.reduce((acc, item) => {
+                if (!item.game_id) return acc;
+
+                const gameId = item.game_id;
+                const timestamp = new Date(item.timestamp);
+
+                if (!acc[gameId] || timestamp > acc[gameId].timestamp) {
+                    acc[gameId] = {
+                        title: `Game ${gameId}`,
+                        date: timestamp.toLocaleDateString(),
+                        timestamp: timestamp
+                    };
+                }
+
+                return acc;
+            }, {});
+
+            // Convert to array and sort by timestamp
+            const timeline = Object.values(gameSessions)
+                .sort((a, b) => b.timestamp - a.timestamp);
+
+            setGameEvents(timeline);
+        } catch (error) {
+            console.error('Error fetching game sessions:', error);
+        } finally {
+            setLoadingTimeline(false);
+        }
+    };
+
     const handleTimeframeClick = (timeframe) => {
         setSelectedTimeframe(timeframe);
     };
@@ -67,7 +108,7 @@ function HomePage() {
     const closeModal = () => {
         setShowModal(false);
     };
-    
+
     const handleHeroImageChange = (newImageUrl) => {
         // This function is called when the hero image changes
         console.log('Hero image changed:', newImageUrl);
@@ -77,7 +118,7 @@ function HomePage() {
     const renderMemoriesList = () => {
         return (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div 
+                <div
                     className="cursor-pointer"
                     onClick={() => handleTimeframeClick('today')}
                 >
@@ -85,9 +126,9 @@ function HomePage() {
                         <div className="animate-pulse bg-blue-100 w-full h-64 rounded"></div>
                     ) : screenshotUrl ? (
                         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm transition-all hover:shadow-md hover:-translate-y-1">
-                            <img 
-                                src={screenshotUrl} 
-                                alt="Latest Screenshot" 
+                            <img
+                                src={screenshotUrl}
+                                alt="Latest Screenshot"
                                 className="w-full h-64 object-cover"
                             />
                             <div className="p-4">
@@ -100,8 +141,8 @@ function HomePage() {
                         </div>
                     )}
                 </div>
-                
-                <div 
+
+                <div
                     className="cursor-pointer"
                     onClick={() => handleTimeframeClick('oneWeekAgo')}
                 >
@@ -109,9 +150,9 @@ function HomePage() {
                         <div className="animate-pulse bg-blue-100 w-full h-64 rounded"></div>
                     ) : oneWeekAgoScreenshotUrl ? (
                         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm transition-all hover:shadow-md hover:-translate-y-1">
-                            <img 
-                                src={oneWeekAgoScreenshotUrl} 
-                                alt="One Week Ago Screenshot" 
+                            <img
+                                src={oneWeekAgoScreenshotUrl}
+                                alt="One Week Ago Screenshot"
                                 className="w-full h-64 object-cover"
                             />
                             <div className="p-4">
@@ -124,8 +165,8 @@ function HomePage() {
                         </div>
                     )}
                 </div>
-                
-                <div 
+
+                <div
                     className="cursor-pointer"
                     onClick={() => handleTimeframeClick('oneMonthAgo')}
                 >
@@ -133,9 +174,9 @@ function HomePage() {
                         <div className="animate-pulse bg-blue-100 w-full h-64 rounded"></div>
                     ) : oneMonthAgoScreenshotUrl ? (
                         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm transition-all hover:shadow-md hover:-translate-y-1">
-                            <img 
-                                src={oneMonthAgoScreenshotUrl} 
-                                alt="One Month Ago Screenshot" 
+                            <img
+                                src={oneMonthAgoScreenshotUrl}
+                                alt="One Month Ago Screenshot"
                                 className="w-full h-64 object-cover"
                             />
                             <div className="p-4">
@@ -169,7 +210,7 @@ function HomePage() {
         return (
             <div>
                 <div className="mb-6">
-                    <button 
+                    <button
                         onClick={handleBackClick}
                         className="flex items-center text-teal-500 hover:text-teal-600 transition-colors"
                     >
@@ -177,24 +218,24 @@ function HomePage() {
                         Back to Memories
                     </button>
                 </div>
-                
+
                 <h3 className="text-xl font-semibold text-gray-700 mb-4">{timeframeTitles[selectedTimeframe]}</h3>
-                
+
                 <div className="bg-white rounded-lg border border-gray-200 p-8">
                     {currentScreenshotUrl ? (
                         <div className="bg-blue-100 rounded overflow-hidden shadow-sm">
                             <div className="p-4">
-                                <img 
-                                    src={currentScreenshotUrl} 
-                                    alt="Screenshot" 
-                                    className="w-full rounded cursor-pointer hover:opacity-90 transition-opacity" 
+                                <img
+                                    src={currentScreenshotUrl}
+                                    alt="Screenshot"
+                                    className="w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
                                     onClick={() => enlargeImage(currentScreenshotUrl)}
                                 />
                                 <div className="mt-2">
                                     <div className="font-medium text-gray-700">{timeframeTitles[selectedTimeframe]}</div>
                                     <div className="text-xs text-gray-500">
-                                        {selectedTimeframe === 'today' ? 'Today' : 
-                                         selectedTimeframe === 'oneWeekAgo' ? '1 week ago' : 
+                                        {selectedTimeframe === 'today' ? 'Today' :
+                                         selectedTimeframe === 'oneWeekAgo' ? '1 week ago' :
                                          '1 month ago'}
                                     </div>
                                 </div>
@@ -213,13 +254,13 @@ function HomePage() {
     // Image Modal/Lightbox
     const renderImageModal = () => {
         if (!showModal) return null;
-        
+
         return (
-            <div 
+            <div
                 className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50"
                 onClick={closeModal}
             >
-                <div 
+                <div
                     className="relative max-w-4xl max-h-[90vh]"
                     onClick={e => e.stopPropagation()}
                 >
@@ -229,47 +270,58 @@ function HomePage() {
                     >
                         &times;
                     </button>
-                    <img 
-                        src={modalImage} 
-                        alt="Enlarged screenshot" 
+                    <img
+                        src={modalImage}
+                        alt="Enlarged screenshot"
                         className="max-w-full max-h-[90vh] object-contain"
                     />
                 </div>
             </div>
         );
     };
-    
+
     return (
         <div className="flex h-screen bg-blue-50">
             <Sidebar />
-            
+
             <div className="flex-1 p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-semibold text-gray-700">Hello, User 1 & User 2</h1>
                     <button className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-3 rounded-full flex items-center transition-colors">
                         <Plus size={20} className="mr-2" />
-                        New Session
+                        New Memory
                     </button>
                 </header>
-                
-                {/* Hero Image Section */}
-                <HeroImage 
-                    defaultImage={screenshotUrl} 
-                    onImageChange={handleHeroImageChange}
-                />
-                
-                <section className="mb-8">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-medium text-gray-700">Memories</h2>
-                    </div>
-                    
-                    <div className="bg-white rounded-lg border border-gray-200 p-8">
-                        {selectedTimeframe ? renderTimeframeDetail() : renderMemoriesList()}
-                    </div>
-                </section>
+
+                {/* Hero Image */}
+                <div className="mb-8">
+                    <HeroImage onImageChange={handleHeroImageChange} />
+                </div>
+
+                {/* Main Content */}
+                <main>
+                    {selectedTimeframe ? renderTimeframeDetail() : renderMemoriesList()}
+                </main>
+
+                {/* Image Modal */}
+                {renderImageModal()}
+
+                {/* Timeline Section */}
+                <div className="max-w-7xl mx-auto px-4 py-8">
+                    <h2 className="text-2xl font-bold text-teal-700 mb-6">Recent Activity</h2>
+                    {loadingTimeline ? (
+                        <div className="animate-pulse bg-white rounded-lg border border-gray-200 p-6">
+                            <div className="space-y-4">
+                                {[1, 2, 3].map((i) => (
+                                    <div key={i} className="h-16 bg-gray-200 rounded"></div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <Timeline events={gameEvents} />
+                    )}
+                </div>
             </div>
-            
-            {renderImageModal()}
         </div>
     );
 }

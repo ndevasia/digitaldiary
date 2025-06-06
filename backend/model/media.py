@@ -5,11 +5,13 @@ from datetime import datetime
 @dataclass
 class Media:
     media_id: int
-    type: str  # e.g., 'video', 'screenshot', 'audio'
+    type: str  # e.g., 'video', 'screenshot', 'audio'. 'hero_image' is a special type that is not stored in the database.
+    #is_hero_image: bool
     media_url: str
     timestamp: datetime
     owner_user_id: int
-    game: str
+    game: str # game is optional for hero images
+    
 
 @dataclass
 class Game:

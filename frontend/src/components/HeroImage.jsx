@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Upload, X, Image, Camera, Trash2, Settings2, ChevronDown } from 'lucide-react';
 
-function HeroImage({ onImageChange }) {
-    const [heroImage, setHeroImage] = useState(null);
+function HeroImage({ defaultImage, onImageChange }) {
+    const [heroImage, setHeroImage] = useState(defaultImage);
     const [isUploading, setIsUploading] = useState(false);
     const [showHeroEditOptions, setShowHeroEditOptions] = useState(false);
     const [allScreenshots, setAllScreenshots] = useState([]);
@@ -15,14 +15,19 @@ function HeroImage({ onImageChange }) {
     const optionsRef = useRef(null);
     
     useEffect(() => {
-        // Fetch both hero image and screenshots when component mounts
-        const initializeComponent = async () => {
-            await fetchHeroImage();
-            await fetchAllScreenshots();
-        };
-        
-        initializeComponent();
-    }, []);
+        // Update hero image when defaultImage prop changes
+        if (defaultImage) {
+            setHeroImage(defaultImage);
+            if (onImageChange) {
+                onImageChange(defaultImage);
+            }
+        } else {
+            // If no default image, fetch from backend
+            fetchHeroImage();
+        }
+        // Fetch screenshots when component mounts
+        fetchAllScreenshots();
+    }, [defaultImage]);
     
     useEffect(() => {
         // Close dropdown when clicking outside

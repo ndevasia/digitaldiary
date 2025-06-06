@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Video, Camera, X, Minus, Maximize, Minimize } from 'lucide-react';
+import { Mic, Video, Camera, X, Minus, Maximize, Minimize, BarChart2 } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 const { ipcRenderer } = window.require('electron');
 
 const API_URL = 'http://localhost:5173/api';
@@ -9,15 +10,20 @@ const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
     <button
       onClick={onClick}
       className={`aspect-square p-4 rounded-lg flex items-center justify-center transition-all duration-200 ${
-        isActive 
-          ? 'bg-blue-500 text-zinc-50 ' 
+        isActive
+          ? 'bg-blue-500 text-zinc-50 '
           : 'bg-zinc-100 hover:bg-zinc-200 border border-zinc-200/50'
       }`}
     >
-      <Icon 
-        size={20} 
+      <Icon
+        size={20}
       />
     </button>
+    {tooltip && (
+      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity">
+        {tooltip}
+      </div>
+    )}
   </div>
 );
 
@@ -164,56 +170,74 @@ function App() {
     const openMainWindow = () => {
         ipcRenderer.send('open-main-window');
     };
-    
+
     return (
-        <div 
-        className="border border-red-500 bg-white flex flex-col p-1 rounded-lg" 
-            onMouseDown={handleMouseDown}
-        >
-            <div className="flex flex-col w-full h-full p-1 gap-2 items-center justify-between">
-                {/* Title bar */}
-                    <div className="flex flex-row  w-full justify-center gap-1">
-                        <button
-                            className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-amber-950 bg-amber-400 hover:bg-amber-500"
-                            onClick={() => ipcRenderer.send('minimize-window')}
-                        >
-                            <Minus size={14}  />
-                        </button>
-                        <button
-                            className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-red-950 bg-red-400 hover:bg-red-500"
-                            onClick={() => ipcRenderer.send('close-window')}
-                        >
+        <Router>
+            <div className="flex h-screen">
+                {/* Sidebar */}
+                <div
+                    className="border border-red-500 bg-white flex flex-col p-1 rounded-lg"
+                    onMouseDown={handleMouseDown}
+                >
+                    <div className="flex flex-col w-full h-full p-1 gap-2 items-center justify-between">
+                        {/* Title bar */}
+                        <div className="flex flex-row w-full justify-center gap-1">
+                            <button
+                                className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-amber-950 bg-amber-400 hover:bg-amber-500"
+                                onClick={() => ipcRenderer.send('minimize-window')}
+                            >
+                                <Minus size={14} />
+                            </button>
+                            <button
+                                className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-red-950 bg-red-400 hover:bg-red-500"
+                                onClick={() => ipcRenderer.send('close-window')}
+                            >
+                                <X size={14} />
+                            </button>
+                        </div>
 
-                          
-                            <X size={14}  />
-                        </button>
+                        {/* Main toolbar */}
+                        <div className="flex flex-col items-center gap-1">
+                            <IconButton
+                                icon={Camera}
+                                onClick={handleScreenshot}
+                                tooltip="Take Screenshot"
+                            />
+                            <IconButton
+                                icon={Video}
+                                onClick={handleScreenRecording}
+                                isActive={isScreenRecording}
+                                tooltip="Record Screen"
+                            />
+                            <IconButton
+                                icon={Mic}
+                                onClick={handleAudioRecording}
+                                isActive={isAudioRecording}
+                                tooltip="Record Audio"
+                            />
+                            <Link to="/">
+                                <IconButton
+                                    icon={BarChart2}
+                                    tooltip="View Statistics"
+                                />
+                            </Link>
+                            <IconButton
+                                icon={isMaximized ? Minimize : Maximize}
+                                onClick={toggleMainWindow}
+                                tooltip={isMaximized ? "Close Main Window" : "Open Main Window"}
+                            />
+                        </div>
                     </div>
+                </div>
 
-                {/* Main toolbar */}
-                <div className="flex flex-col items-center gap-1">
-                    <IconButton 
-                        icon={Camera} 
-                        onClick={handleScreenshot}
-                    />
-                    <IconButton 
-                        icon={Video} 
-                        onClick={handleScreenRecording}
-                        isActive={isScreenRecording}
-                        //isActive={true}
-                    />
-                    <IconButton 
-                        icon={Mic} 
-                        onClick={handleAudioRecording}
-                        isActive={isAudioRecording}
-                    />
-                    <IconButton 
-                        icon={isMaximized ? Minimize : Maximize}
-                        onClick={toggleMainWindow}
-                        tooltip={isMaximized ? "Close Main Window" : "Open Main Window"}
-                    />
+                {/* Main content */}
+                <div className="flex-1 overflow-auto">
+                    <Routes>
+                        <Route path="/" element={<div />} />
+                    </Routes>
                 </div>
             </div>
-        </div>
+        </Router>
     );
 }
 

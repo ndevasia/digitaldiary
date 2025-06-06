@@ -98,6 +98,20 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 recorder_thread = None
 audio_recorder = None
 
+# Path to store user data
+USER_DATA_FILE = os.path.abspath("../data/user_data.json")
+os.makedirs(os.path.dirname(USER_DATA_FILE), exist_ok=True)
+
+def load_user_data():
+    if os.path.exists(USER_DATA_FILE):
+        with open(USER_DATA_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_user_data(data):
+    with open(USER_DATA_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
 @app.route('/api/test', methods=['GET'])
 def test_endpoint():
     return jsonify({"message": "API is working!"})
@@ -145,33 +159,6 @@ def latest_screenshot():
         return jsonify({"screenshot_url": None})
     except Exception as e:
         print(f"Error in latest_screenshot: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-# Get the latest screenshot from S3
-@app.route('/api/hero-image', methods=['GET'])
-def get_hero_image():
-    try:
-        # Get the latest screenshot from S3
-        prefix = USERNAME + "/screenshot_"
-        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
-        
-        if 'Contents' in response:
-            files = [file for file in response['Contents'] if file['Key'].startswith(prefix)]
-            
-            if files:
-                # Sort by LastModified (newest first)
-                latest_file = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
-                screenshot_url = s3_client.generate_presigned_url(
-                    'get_object',
-                    Params={'Bucket': BUCKET_NAME, 'Key': latest_file},
-                    ExpiresIn=3600
-                )
-                return jsonify({"hero_image_url": screenshot_url})
-        
-        # If no screenshots found, return a default image URL or null
-        return jsonify({"hero_image_url": None})
-    except Exception as e:
-        print(f"Error in get_hero_image: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/random-screenshot-by-days/<int:days>', methods=['GET'])
@@ -537,6 +524,114 @@ def get_media_aws():
     except Exception as e:
         print(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/user/hero-image', methods=['PUT'])
+def update_hero_image():
+    try:
+        data = request.get_json()
+        image_url = data.get('image_url')
+        
+        if not image_url:
+            return jsonify({'error': 'Image URL is required'}), 400
+            
+        # Load current user data
+        user_data = load_user_data()
+        
+        # Update the default hero image URL for the current user
+        if USERNAME not in user_data:
+            user_data[USERNAME] = {}
+        user_data[USERNAME]['default_hero_image_url'] = image_url
+        
+        # Save updated user data
+        save_user_data(user_data)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Default hero image updated successfully',
+            'hero_image_url': image_url
+        })
+        
+    except Exception as e:
+        print(f"Error updating hero image: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/hero-image', methods=['GET'])
+def get_hero_image():
+    try:
+        # Load user data
+        user_data = load_user_data()
+        
+        # Get the default hero image URL for the current user
+        hero_image_url = user_data.get(USERNAME, {}).get('default_hero_image_url')
+        
+        if hero_image_url:
+            return jsonify({
+                'status': 'success',
+                'hero_image_url': hero_image_url
+            })
+        
+        # If no default hero image is set, return the latest screenshot
+        return get_latest_hero_image()
+        
+    except Exception as e:
+        print(f"Error getting hero image: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+def get_latest_hero_image():
+    try:
+        # Get the latest screenshot from S3
+        prefix = USERNAME + "/screenshot_"
+        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
+        
+        if 'Contents' in response:
+            files = [file for file in response['Contents'] if file['Key'].startswith(prefix)]
+            
+            if files:
+                # Sort by LastModified (newest first)
+                latest_file = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+                screenshot_url = s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': BUCKET_NAME, 'Key': latest_file},
+                    ExpiresIn=3600
+                )
+                return jsonify({
+                    'status': 'success',
+                    'hero_image_url': screenshot_url
+                })
+        
+        # If no screenshots found, return null
+        return jsonify({
+            'status': 'success',
+            'hero_image_url': None
+        })
+        
+    except Exception as e:
+        print(f"Error in get_latest_hero_image: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Add DELETE endpoint for hero image
+@app.route('/api/user/hero-image', methods=['DELETE'])
+def remove_hero_image():
+    try:
+        # Load current user data
+        user_data = load_user_data()
+        
+        # Remove the hero image URL for the current user
+        if USERNAME in user_data:
+            if 'default_hero_image_url' in user_data[USERNAME]:
+                del user_data[USERNAME]['default_hero_image_url']
+        
+        # Save updated user data
+        save_user_data(user_data)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Hero image removed successfully'
+        })
+        
+    except Exception as e:
+        print(f"Error removing hero image: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001, host='0.0.0.0')

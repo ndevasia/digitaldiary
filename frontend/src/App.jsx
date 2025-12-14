@@ -201,30 +201,30 @@ function App() {
                             <IconButton
                                 icon={Camera}
                                 onClick={handleScreenshot}
-                                tooltip="Take Screenshot"
+                                // tooltip="Take Screenshot"
                             />
                             <IconButton
                                 icon={Video}
                                 onClick={handleScreenRecording}
                                 isActive={isScreenRecording}
-                                tooltip="Record Screen"
+                                // tooltip="Record Screen"
                             />
                             <IconButton
                                 icon={Mic}
                                 onClick={handleAudioRecording}
                                 isActive={isAudioRecording}
-                                tooltip="Record Audio"
+                                // tooltip="Record Audio"
                             />
                             <Link to="/">
                                 <IconButton
                                     icon={BarChart2}
-                                    tooltip="View Statistics"
+                                    // tooltip="View Statistics"
                                 />
                             </Link>
                             <IconButton
                                 icon={isMaximized ? Minimize : Maximize}
                                 onClick={toggleMainWindow}
-                                tooltip={isMaximized ? "Close Main Window" : "Open Main Window"}
+                                // tooltip={isMaximized ? "Close Main Window" : "Open Main Window"}
                             />
                         </div>
                     </div>

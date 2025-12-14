@@ -6,20 +6,17 @@ import sys
 from flask_cors import CORS  # You'll need to install flask-cors
 import pyautogui
 from datetime import datetime, timedelta, timezone
-import cv2
 import numpy as np
-from moviepy.editor import VideoFileClip
-from PIL import Image
 import requests
 import sounddevice as sd  # Used in AudioRecorderThread
 import soundfile as sf    # Used in AudioRecorderThread
 from PyQt5.QtCore import QDateTime  # For consistent date formatting
-import time
-import threading
-
 import random
+from dotenv import load_dotenv
 
+load_dotenv(override=True)
 # Fix path to import from sibling directory
+print("USERNAME from env:", os.getenv("USERNAME"))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 print("Path being added to sys.path:", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 print("Current sys.path:", sys.path)
@@ -78,9 +75,10 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS to allow React app to communicate with Flask
 
 # S3 Setup
-s3_client = boto3.client('s3', region_name='us-west-2')
-BUCKET_NAME = "digital-diary"
-USERNAME = "sophia"
+AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
+BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+USERNAME = os.getenv("USERNAME")
+s3_client = boto3.client('s3', region_name=AWS_REGION)
 
 # Get the base directory (similar to how overlay.py gets to "recordings")
 # This ensures we save to the project's root recordings directory

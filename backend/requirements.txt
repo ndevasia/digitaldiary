@@ -1,0 +1,13 @@
+flask
+flask-cors
+boto3
+numpy
+requests
+pyautogui
+sounddevice
+soundfile
+PyQt5
+pillow
+imageio
+imageio-ffmpeg
+python-dotenv

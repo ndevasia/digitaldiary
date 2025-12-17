@@ -3,8 +3,9 @@ import os
 import boto3
 import json
 import sys
+import mss
 from flask_cors import CORS  # You'll need to install flask-cors
-import pyautogui
+from PIL import Image
 from datetime import datetime, timedelta, timezone
 import numpy as np
 import requests
@@ -13,6 +14,7 @@ import soundfile as sf    # Used in AudioRecorderThread
 from PyQt5.QtCore import QDateTime  # For consistent date formatting
 import random
 from dotenv import load_dotenv
+
 
 load_dotenv(override=True)
 # Fix path to import from sibling directory
@@ -291,11 +293,19 @@ def get_screenshot(filename):
 def take_screenshot():
     try:
         now = datetime.now().strftime('%Y%m%d_%H%M%S')
-        screenshot_path = os.path.join(SCREENSHOTS_DIR, f'screenshot_{now}.png')
+        filename = f"screenshot_{now}.png"
+        screenshot_path = os.path.join(SCREENSHOTS_DIR, filename)
 
-        # Take screenshot
-        screenshot = pyautogui.screenshot()
-        screenshot.save(screenshot_path)
+        with mss.mss() as sct:
+            monitor = sct.monitors[1]  # primary monitor
+            sct_img = sct.grab(monitor)
+
+            img = Image.frombytes(
+                "RGB",
+                sct_img.size,
+                sct_img.rgb,
+            )
+            img.save(screenshot_path, format="PNG")
 
         # Generate presigned URL for upload
         object_name = f"{USERNAME}/screenshot_{now}.png"

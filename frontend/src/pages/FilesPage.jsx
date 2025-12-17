@@ -40,10 +40,7 @@ function FilesPage() {
         setFilteredMedia(filtered);
     }, [filter, userFilter, mediaList]);
 
-    useEffect(() => {
-        fetchUsers();
-        fetchMedia();
-    }, []);
+
 
     const fetchUsers = async () => {
         try {
@@ -64,11 +61,44 @@ function FilesPage() {
     const fetchMedia = async () => {
         try {
             setLoading(true);
-            const response = await fetch('/api/media_aws');
-            if (!response.ok) {
-                throw new Error('Failed to fetch media');
+            setError(null);
+
+            // If "All Users" is selected, fetch per-user and concatenate results
+            if (userFilter === 'all') {
+                const userList = users
+                    .filter(u => String(u.user_id) !== 'all')
+                    .map(u => u.username || u.user_id);
+
+                if (userList.length === 0) {
+                    // Fallback to server default when there are no explicit users yet
+                    const resp = await fetch('/api/media_aws');
+                    if (!resp.ok) throw new Error('Failed to fetch media');
+                    const data = await resp.json();
+                    setMediaList(data);
+                    setFilteredMedia(data);
+                    return;
+                }
+
+                const promises = userList.map(async (u) => {
+                    const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(u)}`);
+                    if (!resp.ok) return [];
+                    return resp.json();
+                });
+
+                const arrays = await Promise.all(promises);
+                const merged = arrays.flat();
+                setMediaList(merged);
+                setFilteredMedia(merged);
+                return;
             }
-            const data = await response.json();
+
+            // Single user selected; `userFilter` holds the username
+            const username = userFilter;
+            const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(username)}`);
+            if (!resp.ok) {
+                throw new Error('Failed to fetch media for user');
+            }
+            const data = await resp.json();
             setMediaList(data);
             setFilteredMedia(data);
         } catch (error) {
@@ -78,6 +108,11 @@ function FilesPage() {
             setLoading(false);
         }
     };
+
+    // Re-fetch media when selected user or users list changes
+    useEffect(() => {
+        fetchMedia();
+    }, [userFilter, users]);
 
     const handleFilterChange = (filterType) => {
         setFilter(filterType);

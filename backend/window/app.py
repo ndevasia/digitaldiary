@@ -144,12 +144,12 @@ def test_endpoint():
 @app.route('/api/media_aws', methods=['GET'])
 def get_media_aws():
     try:
-        # List objects in the user's directory in S3
-        prefix = f"{USERNAME}/"
-        response = s3_client.list_objects_v2(
-            Bucket=BUCKET_NAME,
-            Prefix=prefix
-        )
+        # Support optional single 'username' query param so callers can request another user's media
+        req_username = request.args.get('username')
+        prefix_username = req_username if req_username else USERNAME
+        # List objects in the specified user's directory in S3
+        prefix = f"{prefix_username}/"
+        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
 
         if 'Contents' not in response:
             return jsonify([])

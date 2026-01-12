@@ -53,6 +53,9 @@
         "from": "../backend",
         "to": "backend"
       }
+    ],
+    "extraFiles": [
+      "bin/${os}/${arch}/*"
     ]
   }
 }

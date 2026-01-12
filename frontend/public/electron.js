@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -95,6 +95,14 @@ function createOverlayWindow() {
             enableRemoteModule: true
         }
     });
+
+    // Give overlay access to screen capture
+    const ses = overlayWindow.webContents.session;
+    ses.setDisplayMediaRequestHandler((request, callback) => {
+        desktopCapturer.getSources({ types: ['screen', 'window'] }).then(sources => {
+            callback({ video: sources[0], audio: 'loopback' });
+        });
+    }, { useSystemPicker: true });
 
     // Load the overlay UI
     if (isDev) {
@@ -210,6 +218,10 @@ function setupIPC() {
                 overlayWindow.webContents.send('main-window-closed');
             }
         }
+    });
+
+    ipcMain.on('get-root-path', (event) => {
+        event.returnValue = app.getAppPath();
     });
 }
 

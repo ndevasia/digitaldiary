@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Video, Camera, X, Minus, Maximize, Minimize, BarChart2 } from 'lucide-react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { FFMpeg } from './FFMpeg';
 const { ipcRenderer } = window.require('electron');
 
 const API_URL = 'http://localhost:5173/api';
@@ -33,6 +34,7 @@ function App() {
     const [isDragging, setIsDragging] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
     const dragStartPos = useRef(null);
+    const ffmpeg = useRef(new FFMpeg());
 
     // Add effect to listen for main window open/close events
     useEffect(() => {
@@ -97,28 +99,20 @@ function App() {
     const handleScreenRecording = async () => {
         try {
             if (!isScreenRecording) {
-                const response = await fetch(`${API_URL}/recording/start`, {
-                    method: 'POST'
+                ffmpeg.current.startVideoRecording().then(() => {
+                    console.log('Screen recording started');
+                    setIsScreenRecording(true);
+                }).catch((err) => {
+                    console.error('Screen recording error:', err);
                 });
-                const data = await response.json();
-                if (data.error) {
-                    console.error('Recording error:', data.error);
-                    return;
-                }
-                setIsScreenRecording(true);
-                console.log('Recording started:', data.path);
             } else {
-                const response = await fetch(`${API_URL}/recording/stop`, {
-                    method: 'POST'
+                ffmpeg.current.stopVideoRecording().then(() => {
+                    console.log('Screen recording stopped');
+                    setIsScreenRecording(false);
+                }).catch((err) => {
+                    console.error('Screen recording error:', err);
+                    setIsScreenRecording(false);
                 });
-                const data = await response.json();
-                if (data.error) {
-                    console.error('Recording error:', data.error);
-                    return;
-                }
-                setIsScreenRecording(false);
-                console.log('Recording stopped:', data.video_path);
-                console.log('Thumbnail created:', data.thumbnail_path);
             }
         } catch (error) {
             console.error('Recording error:', error);

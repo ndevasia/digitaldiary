@@ -122,27 +122,20 @@ function App() {
     const handleAudioRecording = async () => {
         try {
             if (!isAudioRecording) {
-                const response = await fetch(`${API_URL}/audio/start`, {
-                    method: 'POST'
+                ffmpeg.current.startAudioRecording().then(() => {
+                    console.log('Audio recording started');
+                    setIsAudioRecording(true);
+                }).catch((err) => {
+                    console.error('Audio recording error:', err);
                 });
-                const data = await response.json();
-                if (data.error) {
-                    console.error('Audio recording error:', data.error);
-                    return;
-                }
-                setIsAudioRecording(true);
-                console.log('Audio recording started:', data.path);
             } else {
-                const response = await fetch(`${API_URL}/audio/stop`, {
-                    method: 'POST'
+                ffmpeg.current.stopAudioRecording().then(() => {
+                    console.log('Audio recording stopped');
+                    setIsAudioRecording(false);
+                }).catch((err) => {
+                    console.error('Audio recording error:', err);
+                    setIsAudioRecording(false);
                 });
-                const data = await response.json();
-                if (data.error) {
-                    console.error('Audio recording error:', data.error);
-                    return;
-                }
-                setIsAudioRecording(false);
-                console.log('Audio recording stopped:', data.path);
             }
         } catch (error) {
             console.error('Audio recording error:', error);

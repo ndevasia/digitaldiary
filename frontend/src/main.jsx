@@ -26,7 +26,7 @@ function MainApp() {
         <Route path="/games" element={<GamesPage />} />
         <Route path="/stats" element={<StatsPage />} />
         <Route path="/journals" element={<HomePage />} /> {/* Placeholder */}
-        <Route path="/settings" element={<SettingsPage />} /> {/* Placeholder */}
+        <Route path="/settings" element={<SettingsPage />} />
       </Routes>
     </Router>
   );

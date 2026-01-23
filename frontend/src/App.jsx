@@ -50,6 +50,21 @@ function App() {
     }, []);
 
     useEffect(() => {
+        // Effect to make sure an audio device is selected
+        const audioDeviceName = localStorage.getItem('audioDeviceName');
+        if (!audioDeviceName) {
+            FFMpeg.getDevices().then(devices => {
+                const audioDevices = devices.filter(d => d.type === 'audio');
+                if (audioDevices.length > 0) {
+                    localStorage.setItem('audioDeviceName', audioDevices[0].name);
+                } else {
+                    console.error('No audio devices found');
+                }
+            });
+        }
+    }, []);
+
+    useEffect(() => {
         const handleMouseMove = (e) => {
             if (!isDragging || !dragStartPos.current) return;
             const deltaX = e.screenX - dragStartPos.current.x;
@@ -123,7 +138,9 @@ function App() {
     const handleAudioRecording = async () => {
         try {
             if (!isAudioRecording) {
-                FFMpeg.startAudioRecording().then(() => {
+                const audioDeviceName = localStorage.getItem('audioDeviceName');
+                console.log('Using audio device:', audioDeviceName);
+                FFMpeg.startAudioRecording(audioDeviceName).then(() => {
                     console.log('Audio recording started');
                     setIsAudioRecording(true);
                 }).catch((err) => {

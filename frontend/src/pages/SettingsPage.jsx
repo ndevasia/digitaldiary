@@ -4,19 +4,50 @@ import Sidebar from "../components/Sidebar";
 
 function SettingsPage() {
 
-    let [audioDevices, setAudioDevices] = useState([]);
+    let [audioDevices, setAudioDevices] = useState(null);
+    let [selectedAudioDevice, setSelectedAudioDevice] = useState("none");
+    let [loadingAudioDevices, setLoadingAudioDevices] = useState(true);
 
     useEffect(() => {
-        fetchDevices();
-    }, [])
+        fetchDevices().then(fetchSelectedDevice).finally(() => {
+            setLoadingAudioDevices(false);
+        });
+    }, []);
+
+    const fetchSelectedDevice = async () => {
+        const storedDevice = localStorage.getItem('audioDeviceName') || "none";
+        setSelectedAudioDevice(storedDevice);
+    }
 
     const fetchDevices = async () => {
         const devices = await FFMpeg.getDevices();
         setAudioDevices(devices.filter(d => d.type === 'audio'));
     }
 
-    const updateDevice = (deviceId) => {
-        // TODO
+    const updateDevice = (deviceName) => {
+        // We use LocalStorage because it's convenient to use and
+        // this setting is only needed in the frontend rendering process.
+        localStorage.setItem('audioDeviceName', deviceName);
+        setSelectedAudioDevice(deviceName);
+    }
+
+    function AudioSelector() {
+        if (loadingAudioDevices) {
+            return <select disabled value="loading">
+                <option key="loading">Loading...</option>
+            </select>
+        }
+        return (
+            <select defaultValue={selectedAudioDevice} onChange={e => updateDevice(e.target.value)}>        
+                {audioDevices.map(device => (
+                    <option 
+                        key={device.name} 
+                        value={device.name}
+                    >{device.name}</option>
+                ))}
+                <option key="none" value="none">None</option>
+            </select>
+        );
     }
 
     return (<div className="flex h-screen bg-blue-50">
@@ -30,11 +61,7 @@ function SettingsPage() {
             <section className="mb-8">
                 <h2 className="text-xl font-medium text-gray-700 mb-4">Audio Device</h2>
                 <div>
-                    <select onChange={e => updateDevice(e.target.value)}>
-                        {audioDevices.map(device => (
-                            <option key={device.id} value={device.id}>{device.name}</option>
-                        ))}
-                    </select>
+                    <AudioSelector />
                 </div>
             </section>
         </div>

@@ -4,6 +4,11 @@ const fs = window.require('fs');
 const { spawn, spawnSync } = window.require('child_process');
 const { ipcRenderer } = window.require('electron');
 
+/**
+ * Everything below here up to the class is related to platform detection and
+ * setting up paths for FFMpeg binaries
+ */
+
 let raw_platform = os.platform();
 if (raw_platform === 'darwin') {
     raw_platform = 'mac';
@@ -39,10 +44,20 @@ const defaultFFMpegPath = path.join(
 
 const VERBOSE = true;
 
+/**
+ * FFMpeg class to handle screenshot, video recording, and audio recording
+ * This class is a singleton and should be imported directly
+ */
 class FFMpeg {
-    constructor(ffmpegPath = defaultFFMpegPath, audioRecordingPath = null, videoRecordingPath = null, thumbnailPath = null) {
+    constructor(
+        ffmpegPath = defaultFFMpegPath, 
+        screenshotPath = null, 
+        audioRecordingPath = null, 
+        videoRecordingPath = null, 
+        thumbnailPath = null
+    ) {
         this.path = ffmpegPath;
-        this.screenshotPath = path.join(
+        this.screenshotPath = screenshotPath || path.join(
             rootPath,
             '../screenshots'
         );
@@ -181,8 +196,12 @@ class FFMpeg {
         });
     }
 
-    startAudioRecording() {
+    startAudioRecording(device = null) {
         return new Promise((resolve, reject) => {
+            if (device === "none") {
+                reject(new Error('Audio recording device is set to none'));
+                return;
+            }
             if (this.process) {
                 reject(new Error('FFMpeg is already running a process'));
                 return;
@@ -191,7 +210,7 @@ class FFMpeg {
             this.currentRecordingName = `audio_recording_${Date.now()}`;
             this.process = spawn(
                 this.path, 
-                [...this.getAudioRecordingArgs(), path.join(this.audioRecordingPath, this.currentRecordingName + '.mp3')], 
+                [...this.getAudioRecordingArgs(device), path.join(this.audioRecordingPath, this.currentRecordingName + '.mp3')], 
                 {stdio: ['pipe', 'pipe', 'pipe']}
             );
 
@@ -285,24 +304,26 @@ class FFMpeg {
         return args;
     }
 
-    getAudioRecordingArgs() {
+    getAudioRecordingArgs(audioDeviceName = null) {
         const args = ['-hide_banner'];
         switch (platform) {
             case 'win':
-                // First we need to list audio devices to find the correct one
-                const ffmpegResult = spawnSync(
-                    this.path, 
-                    ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'], 
-                    { stdio: ['ignore', 'pipe', 'pipe'] }
-                );
-                const stderrLines = ffmpegResult.stderr.toString().split('\n');
-                const audioDeviceLine = stderrLines.find(line => line.includes('(audio)'));
-                // returns something like 
-                // [dshow @ 000001794310f560] "Microphone Array (Qualcomm(R) Aqstic(TM) ACX Static Endpoints Audio Device)" (audio)
-                const audioDeviceName = audioDeviceLine ? audioDeviceLine.split('"')[1] : null;
-                // just get Microphone Array (Qualcomm(R) Aqstic(TM) ACX Static Endpoints Audio Device)
                 if (!audioDeviceName) {
-                    throw new Error('No audio recording device found');
+                    // First we need to list audio devices to find the correct one
+                    const ffmpegResult = spawnSync(
+                        this.path, 
+                        ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'], 
+                        { stdio: ['ignore', 'pipe', 'pipe'] }
+                    );
+                    const stderrLines = ffmpegResult.stderr.toString().split('\n');
+                    const audioDeviceLine = stderrLines.find(line => line.includes('(audio)'));
+                    // returns something like 
+                    // [dshow @ 000001794310f560] "Microphone Array (Qualcomm(R) Aqstic(TM) ACX Static Endpoints Audio Device)" (audio)
+                    audioDeviceName = audioDeviceLine ? audioDeviceLine.split('"')[1] : null;
+                    // just get Microphone Array (Qualcomm(R) Aqstic(TM) ACX Static Endpoints Audio Device)
+                    if (!audioDeviceName) {
+                        throw new Error('No audio recording device found');
+                    }
                 }
                 args.push('-f', 'dshow', '-i', `audio=${audioDeviceName}`);
                 break;

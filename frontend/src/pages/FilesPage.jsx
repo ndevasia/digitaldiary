@@ -1,6 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
+import { AudioVisualizer } from 'react-audio-visualize';
+
+function AudioPlayerWithWaveform({ src }) {
+    const [audioFile, setAudioFile] = useState(null);
+
+    useEffect(() => {
+        fetch(src)
+            .then(res => res.blob())
+            .then(blob => {
+                setAudioFile(blob);
+            })
+            .catch(err => console.error('Audio load error:', err));
+    }, [src]);
+
+    return (
+        <div className="w-full">
+            {audioFile && (
+                <AudioVisualizer
+                    blob={audioFile}
+                    width={300}
+                    height={80}
+                    barWidth={2}
+                    gap={1}
+                    barColor="#000000"
+                />
+            )}
+            <audio controls className="w-full mt-2">
+                <source src={src} type="audio/mpeg" />
+            </audio>
+        </div>
+    );
+}
 
 function FilesPage() {
     const [mediaList, setMediaList] = useState([]);
@@ -135,10 +167,7 @@ function FilesPage() {
                 return (
                     <div className="h-full flex flex-col">
                         <div className={`${mediaClass} rounded overflow-hidden shadow-sm p-4 flex-grow flex justify-center items-center`}>
-                            <audio controls className="w-full">
-                                <source src={item.media_url} type="audio/mpeg" />
-                                Your browser does not support the audio tag.
-                            </audio>
+                            <AudioPlayerWithWaveform src={item.media_url} />
                         </div>
                         <div className="mt-2">
                             <div className="font-medium text-gray-700">{item.game}</div>

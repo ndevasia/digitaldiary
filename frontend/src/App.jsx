@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Video, Camera, X, Minus, Maximize, Minimize, BarChart2 } from 'lucide-react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { FFMpeg } from './FFMpeg';
+import FFMpeg from './FFMpeg';
 const { ipcRenderer } = window.require('electron');
 
 const API_URL = 'http://localhost:5173/api';
@@ -34,7 +34,6 @@ function App() {
     const [isDragging, setIsDragging] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
     const dragStartPos = useRef(null);
-    const ffmpeg = useRef(new FFMpeg());
 
     // Add effect to listen for main window open/close events
     useEffect(() => {
@@ -82,15 +81,17 @@ function App() {
 
     const handleScreenshot = async () => {
         try {
-            const response = await fetch(`${API_URL}/screenshot`, {
-                method: 'POST'
-            });
-            const data = await response.json();
-            if (data.error) {
-                console.error('Screenshot error:', data.error);
-                return;
-            }
-            console.log('Screenshot saved:', data.path);
+            // const response = await fetch(`${API_URL}/screenshot`, {
+            //     method: 'POST'
+            // });
+            // const data = await response.json();
+            // if (data.error) {
+            //     console.error('Screenshot error:', data.error);
+            //     return;
+            // }
+            // console.log('Screenshot saved:', data.path);
+            await FFMpeg.takeScreenshot();
+            console.log('Screenshot taken successfully');
         } catch (error) {
             console.error('Screenshot error:', error);
         }
@@ -99,14 +100,14 @@ function App() {
     const handleScreenRecording = async () => {
         try {
             if (!isScreenRecording) {
-                ffmpeg.current.startVideoRecording().then(() => {
+                FFMpeg.startVideoRecording().then(() => {
                     console.log('Screen recording started');
                     setIsScreenRecording(true);
                 }).catch((err) => {
                     console.error('Screen recording error:', err);
                 });
             } else {
-                ffmpeg.current.stopVideoRecording().then(() => {
+                FFMpeg.stopVideoRecording().then(() => {
                     console.log('Screen recording stopped');
                     setIsScreenRecording(false);
                 }).catch((err) => {
@@ -122,14 +123,14 @@ function App() {
     const handleAudioRecording = async () => {
         try {
             if (!isAudioRecording) {
-                ffmpeg.current.startAudioRecording().then(() => {
+                FFMpeg.startAudioRecording().then(() => {
                     console.log('Audio recording started');
                     setIsAudioRecording(true);
                 }).catch((err) => {
                     console.error('Audio recording error:', err);
                 });
             } else {
-                ffmpeg.current.stopAudioRecording().then(() => {
+                FFMpeg.stopAudioRecording().then(() => {
                     console.log('Audio recording stopped');
                     setIsAudioRecording(false);
                 }).catch((err) => {

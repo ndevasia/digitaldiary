@@ -37,9 +37,15 @@ const defaultFFMpegPath = path.join(
     platform === 'win' ? 'ffmpeg.exe' : 'ffmpeg'
 );
 
-export class FFMpeg {
+const VERBOSE = true;
+
+class FFMpeg {
     constructor(ffmpegPath = defaultFFMpegPath, audioRecordingPath = null, videoRecordingPath = null, thumbnailPath = null) {
         this.path = ffmpegPath;
+        this.screenshotPath = path.join(
+            rootPath,
+            '../screenshots'
+        );
         this.audioRecordingPath = audioRecordingPath || path.join(
             rootPath,
             '../audio'
@@ -57,8 +63,36 @@ export class FFMpeg {
         this.currentRecordingName = null;
     }
 
+    async takeScreenshot() {
+        return new Promise((resolve, reject) => {
+            const screenshotName = `screenshot_${Date.now()}.png`;
+            const screenshotPath = path.join(
+                this.screenshotPath,
+                screenshotName
+            );
+            const process = spawn(
+                this.path,
+                [...this.getScreenshotArgs(), screenshotPath],
+                { stdio: ['ignore', 'ignore', 'pipe'] }
+            );
+            process.on('exit', (code) => {
+                if (code === 0) {
+                    resolve(screenshotPath);
+                } else {
+                    reject(new Error(`FFMpeg screenshot process exited with code ${code}`));
+                }
+            });
+
+            process.stderr.on('data', (data) => {
+                if (VERBOSE)
+                    console.log(`FFMpeg stderr: ${data}`);
+            });
+        });
+    }
+
     async startVideoRecording() {
-        console.log('Starting FFMpeg at path:', this.path);
+        if (VERBOSE)
+            console.log('Starting FFMpeg at path:', this.path);
 
         return new Promise((resolve, reject) => {
             if (this.process) {
@@ -84,7 +118,8 @@ export class FFMpeg {
             });
 
             this.process.stderr.on('data', (data) => {
-                console.log(`FFMpeg stderr: ${data}`);
+                if (VERBOSE)
+                    console.log(`FFMpeg stderr: ${data}`);
             });
         });
     }
@@ -96,7 +131,8 @@ export class FFMpeg {
                 const timeout = setTimeout(() => {
                     if (this.process) {
                         // Force killing will corrupt the video, but ensures process termination
-                        console.log('Force killing FFMpeg process');
+                        if (VERBOSE)
+                            console.log('Force killing FFMpeg process');
                         this.process.kill('SIGKILL');
                         this.process = null;
                         reject(new Error('FFMpeg process force killed due to timeout'));
@@ -106,7 +142,8 @@ export class FFMpeg {
                 // Only resolve when process exits
                 // We also need to generate the thumbnail after recording stops
                 this.process.on('exit', (code) => {
-                    console.log(`FFMpeg process exited with code ${code}`);
+                    if (VERBOSE)
+                        console.log(`FFMpeg process exited with code ${code}`);
                     this.process = null;
                     clearTimeout(timeout);
 
@@ -128,7 +165,8 @@ export class FFMpeg {
                     ], { stdio: ['ignore', 'ignore', 'ignore'] });
 
                     this.process.on('exit', (code) => {
-                        console.log(`Thumbnail generation exited with code ${code}`);
+                        if (VERBOSE)
+                            console.log(`Thumbnail generation exited with code ${code}`);
                         this.process = null;
                     });
 
@@ -158,7 +196,8 @@ export class FFMpeg {
             );
 
             this.process.on('spawn', () => {
-                console.log('FFMpeg audio recording process started');
+                if (VERBOSE)
+                    console.log('FFMpeg audio recording process started');
                 resolve();
             });
 
@@ -168,7 +207,8 @@ export class FFMpeg {
             });
 
             this.process.stderr.on('data', (data) => {
-                console.log(`FFMpeg stderr: ${data}`);
+                if (VERBOSE)
+                    console.log(`FFMpeg stderr: ${data}`);
             });
 
         });
@@ -181,7 +221,8 @@ export class FFMpeg {
                 const timeout = setTimeout(() => {
                     if (this.process) {
                         // Force killing will corrupt the video, but ensures process termination
-                        console.log('Force killing FFMpeg process');
+                        if (VERBOSE)
+                            console.log('Force killing FFMpeg process');
                         this.process.kill('SIGKILL');
                         this.process = null;
                         reject(new Error('FFMpeg process force killed due to timeout'));
@@ -190,7 +231,8 @@ export class FFMpeg {
                 
                 // Only resolve when process exits
                 this.process.on('exit', (code) => {
-                    console.log(`FFMpeg audio recording process exited with code ${code}`);
+                    if (VERBOSE)
+                        console.log(`FFMpeg audio recording process exited with code ${code}`);
                     this.process = null;
                     clearTimeout(timeout);
                     resolve();
@@ -204,8 +246,21 @@ export class FFMpeg {
         });
     }
 
+    getScreenshotArgs() {
+        const args = ['-hide_banner', '-y', '-vframes', '1'];
+        switch (platform) {
+            case 'win':
+                // Put new args at the front of exisiting args to avoid vframes conflict
+                args.unshift('-f', 'gdigrab', '-i', 'desktop');
+                break;
+            default:
+                console.error('Screenshot not implemented for this platform:', platform);
+        }
+        return args;
+    }
+
     getVideoRecordingArgs() {
-        const args = ['-framerate', '25'];
+        const args = ['-hide_banner', '-framerate', '25'];
         switch (platform) {
             case 'win':
                 // Use GDI grab for screen capture
@@ -215,8 +270,10 @@ export class FFMpeg {
                 // DEBUG INFO: Print out Apple devices
                 const process = spawn(this.path, ['-f', 'avfoundation', '-list_devices', 'true', '-i', '""'], { stdio: ['ignore', 'pipe', 'pipe'] });
                 process.stderr.on('data', (data) => {
-                    console.log(`FFMpeg device list: ${data}`);
+                    if (VERBOSE)
+                        console.log(`FFMpeg device list: ${data}`);
                 });
+                console.error("Mac device listing not fully implemented");
                 args.push('-f', 'avfoundation', '-i', '1:none');
                 break;
             case 'linux':
@@ -229,14 +286,21 @@ export class FFMpeg {
     }
 
     getAudioRecordingArgs() {
-        const args = [];
+        const args = ['-hide_banner'];
         switch (platform) {
             case 'win':
                 // First we need to list audio devices to find the correct one
-                const stdout = spawnSync(this.path, ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'], { stdio: ['ignore', 'pipe', 'pipe'] });
-                const stderrLines = stdout.stderr.toString().split('\n');
+                const ffmpegResult = spawnSync(
+                    this.path, 
+                    ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'], 
+                    { stdio: ['ignore', 'pipe', 'pipe'] }
+                );
+                const stderrLines = ffmpegResult.stderr.toString().split('\n');
                 const audioDeviceLine = stderrLines.find(line => line.includes('(audio)'));
+                // returns something like 
+                // [dshow @ 000001794310f560] "Microphone Array (Qualcomm(R) Aqstic(TM) ACX Static Endpoints Audio Device)" (audio)
                 const audioDeviceName = audioDeviceLine ? audioDeviceLine.split('"')[1] : null;
+                // just get Microphone Array (Qualcomm(R) Aqstic(TM) ACX Static Endpoints Audio Device)
                 if (!audioDeviceName) {
                     throw new Error('No audio recording device found');
                 }
@@ -251,4 +315,44 @@ export class FFMpeg {
         }
         return args;
     }
+
+    getDevices() {
+        return new Promise((resolve, reject) => {
+            switch (platform) {
+                case 'win':
+                    const ffmpegWin = spawnSync(
+                        this.path, 
+                        ['-hide_banner', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'], 
+                        { stdio: ['ignore', 'pipe', 'pipe'] }
+                    );
+                    const stderrLines = ffmpegWin.stderr.toString().split('\n');
+                    const deviceLines = stderrLines.filter(line => line.includes('(audio)') || line.includes('(video)'));
+                    const devices = [];
+                    const deviceList = deviceLines.forEach(element => {
+                        const name = element.split('"')[1];
+                        const type = element.includes('(audio)') ? 'audio' : 'video';
+                        devices.push({ name, type });
+                    });
+                    resolve(devices);
+                    break;
+                case 'mac':
+                    const ffmpegResult = spawnSync(
+                        this.path,
+                        ['-hide_banner', '-f', 'avfoundation', '-list_devices', 'true', '-i', 'dummy'],
+                        { stdio: ['ignore', 'pipe', 'pipe'] }
+                    );
+                    // I don't have access to a Mac to see what this looks like
+                    console.error('Device listing for Mac is not implemented yet');
+                    if (VERBOSE) 
+                        console.log(`FFMpeg device list: ${ffmpegResult.stderr.toString()}`);
+                    break;
+                case 'linux':
+                    // Linux is complicated and I'm also not sure how to list devices for it
+                    console.error('Device listing for Linux is not implemented yet');
+                    break;
+            }
+        });
+    }
 }
+
+export default new FFMpeg();

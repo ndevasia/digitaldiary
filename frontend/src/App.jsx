@@ -96,15 +96,6 @@ function App() {
 
     const handleScreenshot = async () => {
         try {
-            // const response = await fetch(`${API_URL}/screenshot`, {
-            //     method: 'POST'
-            // });
-            // const data = await response.json();
-            // if (data.error) {
-            //     console.error('Screenshot error:', data.error);
-            //     return;
-            // }
-            // console.log('Screenshot saved:', data.path);
             await FFMpeg.takeScreenshot();
             console.log('Screenshot taken successfully');
         } catch (error) {

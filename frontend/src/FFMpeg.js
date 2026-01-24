@@ -45,8 +45,8 @@ const defaultFFMpegPath = path.join(
 const VERBOSE = true;
 
 /**
- * FFMpeg class to handle screenshot, video recording, and audio recording
- * This class is a singleton and should be imported directly
+ * FFMpeg class to handle screenshot, video recording, and audio recording.
+ * This class is a singleton and should be imported directly.
  */
 class FFMpeg {
     constructor(
@@ -78,6 +78,10 @@ class FFMpeg {
         this.currentRecordingName = null;
     }
 
+    /**
+     * Takes a screenshot and saves it to the specified path.
+     * @returns {Promise<string>} The path of the saved screenshot.
+     */
     async takeScreenshot() {
         return new Promise((resolve, reject) => {
             const screenshotName = `screenshot_${Date.now()}.png`;
@@ -97,7 +101,6 @@ class FFMpeg {
                     reject(new Error(`FFMpeg screenshot process exited with code ${code}`));
                 }
             });
-
             process.stderr.on('data', (data) => {
                 if (VERBOSE)
                     console.log(`FFMpeg stderr: ${data}`);
@@ -105,6 +108,12 @@ class FFMpeg {
         });
     }
 
+    /**
+     * Starts video recording with optional audio.
+     * @param {boolean} withAudio - Whether to record audio.
+     * @param {string|null} audioDevice - The audio device to use.
+     * @returns {Promise<void>} Resolves when recording starts.
+     */
     async startVideoRecording(withAudio = false, audioDevice = null) {
         if (VERBOSE)
             console.log('Starting FFMpeg at path:', this.path);
@@ -157,6 +166,10 @@ class FFMpeg {
         });
     }
 
+    /**
+     * Stops the current video recording.
+     * @returns {Promise<void>} Resolves when recording stops.
+     */
     async stopVideoRecording() {
         return new Promise((resolve, reject) => {
             if (this.process) {
@@ -214,6 +227,11 @@ class FFMpeg {
         });
     }
 
+    /**
+     * Starts audio recording with the specified device.
+     * @param {string|null} device - The audio device to use.
+     * @returns {Promise<void>} Resolves when audio recording starts.
+     */
     startAudioRecording(device = null) {
         return new Promise((resolve, reject) => {
             if (device === "none") {
@@ -247,10 +265,13 @@ class FFMpeg {
                 if (VERBOSE)
                     console.log(`FFMpeg stderr: ${data}`);
             });
-
         });
     }
 
+    /**
+     * Stops the current audio recording.
+     * @returns {Promise<void>} Resolves when audio recording stops.
+     */
     stopAudioRecording() {
         return new Promise((resolve, reject) => {
             if (this.process) {
@@ -265,7 +286,7 @@ class FFMpeg {
                         reject(new Error('FFMpeg process force killed due to timeout'));
                     }
                 }, 5000);
-                
+
                 // Only resolve when process exits
                 this.process.on('exit', (code) => {
                     if (VERBOSE)
@@ -276,18 +297,22 @@ class FFMpeg {
                 });
 
                 // Send 'q' to gracefully stop recording
-                this.process.stdin.write('q\n');                
+                this.process.stdin.write('q\n');
             } else {
                 reject(new Error('FFMpeg audio recording process is not available'));
             }
         });
     }
 
+    /**
+     * Gets the arguments for taking a screenshot based on the platform.
+     * @returns {string[]} The arguments for the screenshot command.
+     */
     getScreenshotArgs() {
         const args = ['-hide_banner', '-y', '-vframes', '1'];
         switch (platform) {
             case 'win':
-                // Put new args at the front of exisiting args to avoid vframes conflict
+                // Put new args at the front of existing args to avoid vframes conflict
                 args.unshift('-f', 'gdigrab', '-i', 'desktop');
                 break;
             default:
@@ -296,6 +321,10 @@ class FFMpeg {
         return args;
     }
 
+    /**
+     * Gets the arguments for video recording based on the platform.
+     * @returns {string[]} The arguments for the video recording command.
+     */
     getVideoRecordingArgs() {
         const args = ['-hide_banner'];
         switch (platform) {
@@ -322,6 +351,11 @@ class FFMpeg {
         return args;
     }
 
+    /**
+     * Gets the arguments for audio recording based on the specified device.
+     * @param {string|null} audioDeviceName - The name of the audio device.
+     * @returns {string[]} The arguments for the audio recording command.
+     */
     getAudioRecordingArgs(audioDeviceName = null) {
         const args = ['-hide_banner'];
         switch (platform) {
@@ -355,6 +389,10 @@ class FFMpeg {
         return args;
     }
 
+    /**
+     * Gets the list of available audio and video devices.
+     * @returns {Promise<Array<{name: string, type: string}>>} A promise that resolves to the list of devices.
+     */
     getDevices() {
         return new Promise((resolve, reject) => {
             switch (platform) {

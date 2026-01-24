@@ -115,7 +115,8 @@ function App() {
     const handleScreenRecording = async () => {
         try {
             if (!isScreenRecording) {
-                FFMpeg.startVideoRecording().then(() => {
+                const withAudio = localStorage.getItem('recordAudioWithScreen') === "true";
+                FFMpeg.startVideoRecording(withAudio).then(() => {
                     console.log('Screen recording started');
                     setIsScreenRecording(true);
                 }).catch((err) => {

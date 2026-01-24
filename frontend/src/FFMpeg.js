@@ -105,7 +105,7 @@ class FFMpeg {
         });
     }
 
-    async startVideoRecording() {
+    async startVideoRecording(withAudio = false, audioDevice = null) {
         if (VERBOSE)
             console.log('Starting FFMpeg at path:', this.path);
 
@@ -116,15 +116,28 @@ class FFMpeg {
             }
             // Spawn FFMpeg process to record the screen
             this.currentRecordingName = `recording_${Date.now()}`;
+            const args = [...this.getVideoRecordingArgs()];
+            if (withAudio) {
+                args.push(...this.getAudioRecordingArgs(audioDevice), '-acodec', 'aac', '-strict' , 'experimental');
+            }
+            // args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
             this.process = spawn(
                 this.path, 
-                [...this.getVideoRecordingArgs(), path.join(this.videoRecordingPath, this.currentRecordingName + '.mp4')], 
+                [...args, path.join(this.videoRecordingPath, this.currentRecordingName + '.mp4')], 
                 {stdio: ['pipe', 'pipe', 'pipe']}
             );
 
+            let opened = false;
+
             this.process.on('spawn', () => {
                 console.log('FFMpeg process started');
-                resolve();
+                setTimeout(() => {
+                    if (!opened) {
+                        this.process.kill('SIGKILL');
+                        this.process = null;
+                        reject(new Error('FFMpeg failed to start recording in time'));
+                    }
+                }, 5000);
             });
 
             this.process.on('error', (err) => {
@@ -135,6 +148,11 @@ class FFMpeg {
             this.process.stderr.on('data', (data) => {
                 if (VERBOSE)
                     console.log(`FFMpeg stderr: ${data}`);
+                // Resolve when we see the first frame being recorded
+                if (data.toString().includes('frame=')) {
+                    opened = true;
+                    resolve();
+                }
             });
         });
     }
@@ -279,7 +297,7 @@ class FFMpeg {
     }
 
     getVideoRecordingArgs() {
-        const args = ['-hide_banner', '-framerate', '25'];
+        const args = ['-hide_banner'];
         switch (platform) {
             case 'win':
                 // Use GDI grab for screen capture

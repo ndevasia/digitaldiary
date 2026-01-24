@@ -7,12 +7,19 @@ function SettingsPage() {
     let [audioDevices, setAudioDevices] = useState(null);
     let [selectedAudioDevice, setSelectedAudioDevice] = useState("none");
     let [loadingAudioDevices, setLoadingAudioDevices] = useState(true);
+    let [recordAudioWithScreen, setRecordAudioWithScreen] = useState(localStorage.getItem('recordAudioWithScreen') === "true");
 
+    // Fetch audio devices on mount
     useEffect(() => {
         fetchDevices().then(fetchSelectedDevice).finally(() => {
             setLoadingAudioDevices(false);
         });
     }, []);
+
+    // Persist recordAudioWithScreen setting
+    useEffect(() => {
+        localStorage.setItem('recordAudioWithScreen', recordAudioWithScreen ? "true" : "false");
+    }, [recordAudioWithScreen]);
 
     const fetchSelectedDevice = async () => {
         const storedDevice = localStorage.getItem('audioDeviceName') || "none";
@@ -58,10 +65,23 @@ function SettingsPage() {
                 <h1 className="text-2xl font-semibold text-gray-700">Settings</h1>
             </header>
 
-            <section className="mb-8">
-                <h2 className="text-xl font-medium text-gray-700 mb-4">Audio Device</h2>
+            <section className="mb-8 flex flex-col gap-6">
                 <div>
-                    <AudioSelector />
+                    <h2 className="text-xl font-medium text-gray-700 mb-4">Audio Device</h2>
+                    <div>
+                        <AudioSelector />
+                    </div>
+                </div>
+                <div>
+                    <h2 className="text-xl font-medium text-gray-700 mb-4">Screen Recording</h2>
+                    <div className="flex gap-4">
+                        <span>Record audio when screen recording </span>
+                        <input 
+                            type="checkbox" 
+                            checked={recordAudioWithScreen} 
+                            onChange={e => setRecordAudioWithScreen(e.target.checked)} 
+                        />
+                    </div>
                 </div>
             </section>
         </div>

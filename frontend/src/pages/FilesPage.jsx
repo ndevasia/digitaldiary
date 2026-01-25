@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { AudioVisualizer } from 'react-audio-visualize';
+const nodeFetch = require('node-fetch');
 
 function AudioPlayerWithWaveform({ src }) {
     const [audioFile, setAudioFile] = useState(null);
 
     useEffect(() => {
-        fetch(src)
+        nodeFetch(src)
             .then(res => res.blob())
             .then(blob => {
                 setAudioFile(blob);

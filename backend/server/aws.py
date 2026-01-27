@@ -3,7 +3,7 @@ import requests
 import os
 import json
 from datetime import datetime
-from backend.globals import USERNAME
+from globals import USERNAME
 
 # ----------------------------
 # Environment configuration

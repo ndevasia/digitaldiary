@@ -6,21 +6,21 @@ const { ipcRenderer } = window.require('electron');
 const API_URL = 'http://localhost:5173/api';
 
 const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
-  <div className="relative group">
+  <div className="relative group w-full">
     <button
       onClick={onClick}
-      className={`aspect-square p-4 rounded-lg flex items-center justify-center transition-all duration-200 ${
+      className={`w-full aspect-square p-2 sm:p-3 md:p-4 rounded-lg flex items-center justify-center transition-all duration-200 ${
         isActive
           ? 'bg-blue-500 text-zinc-50 '
           : 'bg-zinc-100 hover:bg-zinc-200 border border-zinc-200/50'
       }`}
     >
       <Icon
-        size={20}
+        className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6"
       />
     </button>
     {tooltip && (
-      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
         {tooltip}
       </div>
     )}
@@ -31,8 +31,10 @@ function App() {
     const [isAudioRecording, setIsAudioRecording] = useState(false);
     const [isScreenRecording, setIsScreenRecording] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
+    const [isResizing, setIsResizing] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
     const dragStartPos = useRef(null);
+    const resizeStartPos = useRef(null);
 
     // Add effect to listen for main window open/close events
     useEffect(() => {
@@ -50,19 +52,28 @@ function App() {
 
     useEffect(() => {
         const handleMouseMove = (e) => {
-            if (!isDragging || !dragStartPos.current) return;
-            const deltaX = e.screenX - dragStartPos.current.x;
-            const deltaY = e.screenY - dragStartPos.current.y;
-            ipcRenderer.send('dragging', { x: deltaX, y: deltaY });
-            dragStartPos.current = { x: e.screenX, y: e.screenY };
+            if (isDragging && dragStartPos.current) {
+                const deltaX = e.screenX - dragStartPos.current.x;
+                const deltaY = e.screenY - dragStartPos.current.y;
+                ipcRenderer.send('dragging', { x: deltaX, y: deltaY });
+                dragStartPos.current = { x: e.screenX, y: e.screenY };
+            }
+            if (isResizing && resizeStartPos.current) {
+                const deltaWidth = e.screenX - resizeStartPos.current.x;
+                const deltaHeight = e.screenY - resizeStartPos.current.y;
+                ipcRenderer.send('resizing', { deltaWidth, deltaHeight });
+                resizeStartPos.current = { x: e.screenX, y: e.screenY };
+            }
         };
 
         const handleMouseUp = () => {
             setIsDragging(false);
+            setIsResizing(false);
             dragStartPos.current = null;
+            resizeStartPos.current = null;
         };
 
-        if (isDragging) {
+        if (isDragging || isResizing) {
             document.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
         }
@@ -71,11 +82,21 @@ function App() {
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isDragging]);
+    }, [isDragging, isResizing]);
 
     const handleMouseDown = (e) => {
+        // Only start dragging if clicking on the drag handle area, not on buttons
+        if (e.target.dataset.draggable !== 'true') return;
+        e.preventDefault();
         setIsDragging(true);
         dragStartPos.current = { x: e.screenX, y: e.screenY };
+    };
+
+    const handleResizeMouseDown = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsResizing(true);
+        resizeStartPos.current = { x: e.screenX, y: e.screenY };
     };
 
     const handleScreenshot = async () => {
@@ -173,31 +194,40 @@ function App() {
 
     return (
         <Router>
-            <div className="flex h-screen">
+            <div className="flex h-screen relative">
                 {/* Sidebar */}
                 <div
-                    className="border border-red-500 bg-white flex flex-col p-1 rounded-lg"
-                    onMouseDown={handleMouseDown}
+                    className="border border-red-500 bg-white flex flex-col p-1 rounded-lg w-full h-full"
                 >
-                    <div className="flex flex-col w-full h-full p-1 gap-2 items-center justify-between">
-                        {/* Title bar */}
-                        <div className="flex flex-row w-full justify-center gap-1">
+                    <div className="flex flex-col w-full h-full p-1 gap-1 sm:gap-2 items-center justify-between">
+                        {/* Title bar - Draggable area */}
+                        <div 
+                            className="flex flex-row w-full justify-center gap-1 py-1 cursor-move"
+                            data-draggable="true"
+                            onMouseDown={handleMouseDown}
+                        >
                             <button
-                                className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-amber-950 bg-amber-400 hover:bg-amber-500"
-                                onClick={() => ipcRenderer.send('minimize-window')}
+                                className="cursor-pointer aspect-square transition-all duration-200 p-0.5 sm:p-1 rounded-full text-amber-950 bg-amber-400 hover:bg-amber-500"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    ipcRenderer.send('minimize-window');
+                                }}
                             >
-                                <Minus size={14} />
+                                <Minus className="w-3 h-3 sm:w-4 sm:h-4" />
                             </button>
                             <button
-                                className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-red-950 bg-red-400 hover:bg-red-500"
-                                onClick={() => ipcRenderer.send('close-window')}
+                                className="cursor-pointer aspect-square transition-all duration-200 p-0.5 sm:p-1 rounded-full text-red-950 bg-red-400 hover:bg-red-500"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    ipcRenderer.send('close-window');
+                                }}
                             >
-                                <X size={14} />
+                                <X className="w-3 h-3 sm:w-4 sm:h-4" />
                             </button>
                         </div>
 
                         {/* Main toolbar */}
-                        <div className="flex flex-col items-center gap-1">
+                        <div className="flex flex-col items-center gap-1 w-full px-1">
                             <IconButton
                                 icon={Camera}
                                 onClick={handleScreenshot}
@@ -215,7 +245,7 @@ function App() {
                                 isActive={isAudioRecording}
                                 // tooltip="Record Audio"
                             />
-                            <Link to="/">
+                            <Link to="/" className="w-full">
                                 <IconButton
                                     icon={BarChart2}
                                     // tooltip="View Statistics"
@@ -228,6 +258,15 @@ function App() {
                             />
                         </div>
                     </div>
+
+                    {/* Resize handle */}
+                    <div
+                        className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize z-50"
+                        onMouseDown={handleResizeMouseDown}
+                        style={{
+                            background: 'linear-gradient(135deg, transparent 50%, rgba(59, 130, 246, 0.5) 50%)'
+                        }}
+                    />
                 </div>
 
                 {/* Main content */}

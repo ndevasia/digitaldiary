@@ -30,12 +30,14 @@ __pycache__/
 *.pyd
 .Python
 env/
+.env
 .venv/
 activate/
 ENV/
 env.bak/
 venv.bak/
 backend/globals.py
+venv/
 
 
 # IDE-specific ignores (add or remove based on your IDE)

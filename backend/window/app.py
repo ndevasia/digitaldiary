@@ -87,12 +87,14 @@ RECORDINGS_DIR = os.path.join(base_dir, "recordings")
 SCREENSHOTS_DIR = os.path.join(base_dir, "screenshots")
 AUDIO_DIR = os.path.join(base_dir, "audio")
 THUMBNAILS_DIR = os.path.join(RECORDINGS_DIR, "thumbnails")
+PROFILE_PICS_DIR = os.path.join(base_dir, "profile_pics") # Profile picture directory
 
 # Create directories (same as in overlay.py)
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 os.makedirs(AUDIO_DIR, exist_ok=True)
+os.makedirs(PROFILE_PICS_DIR, exist_ok=True)
 
 # Global variables for recording state
 recorder_thread = None
@@ -599,6 +601,62 @@ def get_users():
             user_data = json.load(f)
 
         return jsonify(user_data['users'])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Upload profile picture to directory    
+@app.route('/api/upload-profile-pic', methods=['POST'])
+def upload_profile_pic():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        
+        # Simple extension check
+        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            return jsonify({"error": "File type not supported"}), 400
+        
+        object_name = f"{USERNAME}/profile.png"
+
+        s3_client.upload_fileobj(
+            file,
+            BUCKET_NAME,
+            object_name,
+            ExtraArgs={'ContentType': file.content_type}
+        )
+
+        new_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
+        
+        return jsonify({"message": "Success", "url": new_url}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+# Retrieve profile picture from directory
+@app.route('/api/profile-pic', methods=['GET'])
+def get_profile_pic():
+    try:
+        object_name = f"{USERNAME}/profile.png"
+
+        try:
+            s3_client.head_object(Bucket=BUCKET_NAME, Key=object_name)
+        except:
+            # If head_object fails, the file doesn't exist. Return None.
+            return jsonify({"url": None})
+        
+        profile_pic_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
+
+        return jsonify({"url": profile_pic_url}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

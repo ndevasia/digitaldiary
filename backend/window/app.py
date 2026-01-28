@@ -619,14 +619,41 @@ def upload_profile_pic():
         if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
             return jsonify({"error": "File type not supported"}), 400
         
-        object_name = f"{USERNAME}/profile.png"
+        _, ext = os.path.splitext(file.filename) 
+        ext = ext.lower()
+        object_name = f"{USERNAME}/profile{ext}"
 
+        content_types = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif'
+        }
+
+        # Ensure pointer is at the start
+        file.seek(0)
+
+        # Uploads new profile picture first
         s3_client.upload_fileobj(
             file,
             BUCKET_NAME,
             object_name,
-            ExtraArgs={'ContentType': file.content_type}
+            # octet-stream used for fallback if unknown extension
+            ExtraArgs={'ContentType': content_types.get(ext, 'application/octet-stream')}
         )
+
+        # Clean up old/different extensions
+        existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{USERNAME}/profile")
+
+        if 'Contents' in existing_files:
+        # Filter out the file we JUST uploaded so we don't delete it
+            delete_keys = [
+                {'Key': obj['Key']} 
+                for obj in existing_files['Contents'] 
+                if obj['Key'] != object_name
+            ]
+            if delete_keys:
+                s3_client.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': delete_keys})
 
         new_url = s3_client.generate_presigned_url(
             'get_object',
@@ -642,14 +669,21 @@ def upload_profile_pic():
 @app.route('/api/profile-pic', methods=['GET'])
 def get_profile_pic():
     try:
-        object_name = f"{USERNAME}/profile.png"
+        # List objects with the prefix for profile pictures
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME, 
+            Prefix=f"{USERNAME}/profile"
+        )
 
-        try:
-            s3_client.head_object(Bucket=BUCKET_NAME, Key=object_name)
-        except:
-            # If head_object fails, the file doesn't exist. Return None.
-            return jsonify({"url": None})
-        
+        # Check if any files were actually found
+        if 'Contents' not in response or len(response['Contents']) == 0:
+            # If no files found, return None for placeholder in frontend
+            return jsonify({"url": None}), 200
+
+        # Get the Key of the first (most relevant) match
+        object_name = response['Contents'][0]['Key']
+
+        # 4. Generate the presigned URL for the found file
         profile_pic_url = s3_client.generate_presigned_url(
             'get_object',
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -657,7 +691,9 @@ def get_profile_pic():
         )
 
         return jsonify({"url": profile_pic_url}), 200
+
     except Exception as e:
+        # Standard error response if S3 connection fails
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

@@ -167,7 +167,7 @@ class FFMpeg {
             // args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
             this.process = spawn(
                 this.path, 
-                [...args, path.join(this.videoRecordingPath, this.currentRecordingName + '.mp4')], 
+                [...args, path.join(this.videoRecordingPath, this.currentRecordingName + '.mkv')], 
                 {stdio: ['pipe', 'pipe', 'pipe']}
             );
 

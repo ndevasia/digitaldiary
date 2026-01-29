@@ -96,14 +96,6 @@ function createOverlayWindow() {
         }
     });
 
-    // Give overlay access to screen capture
-    const ses = overlayWindow.webContents.session;
-    ses.setDisplayMediaRequestHandler((request, callback) => {
-        desktopCapturer.getSources({ types: ['screen', 'window'] }).then(sources => {
-            callback({ video: sources[0], audio: 'loopback' });
-        });
-    }, { useSystemPicker: true });
-
     // Load the overlay UI
     if (isDev) {
         const startUrl = 'http://localhost:5173/?overlay=true';

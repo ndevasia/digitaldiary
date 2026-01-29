@@ -288,17 +288,16 @@ def get_screenshot(filename):
     return send_from_directory(SCREENSHOTS_DIR, filename)
 
 @app.route('/api/screenshot', methods=['POST'])
-def take_screenshot():
+def upload_screenshot():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part in the request'}), 400
+    file = request.files['file']
+    if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() not in ['png', 'jpg', 'jpeg']:
+        return jsonify({'error': 'Invalid file type'}), 400
+    
     try:
-        now = datetime.now().strftime('%Y%m%d_%H%M%S')
-        screenshot_path = os.path.join(SCREENSHOTS_DIR, f'screenshot_{now}.png')
-
-        # Take screenshot
-        screenshot = pyautogui.screenshot()
-        screenshot.save(screenshot_path)
-
         # Generate presigned URL for upload
-        object_name = f"{USERNAME}/screenshot_{now}.png"
+        object_name = f"{USERNAME}/{file.filename}"
         url = s3_client.generate_presigned_url(
             'put_object',
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -306,18 +305,16 @@ def take_screenshot():
         )
 
         # Upload to S3
-        with open(screenshot_path, 'rb') as f:
-            response = requests.put(url, data=f)
-            if response.status_code != 200:
-                raise Exception("Failed to upload screenshot")
-
-        return jsonify({
-            'status': 'success',
-            'path': screenshot_path,
-            'url': url
-        })
+        response = requests.put(url, data=file)
+        if response.status_code != 200:
+            raise Exception("Failed to upload screenshot")
+        else:
+            return jsonify({
+                'status': 'success',
+                'url': url
+            })
     except Exception as e:
-        print(f"Screenshot error: {str(e)}")
+        print(f'Screenshot error: {str(e)}')
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/recording/start', methods=['POST'])

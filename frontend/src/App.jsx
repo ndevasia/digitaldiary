@@ -96,8 +96,21 @@ function App() {
 
     const handleScreenshot = async () => {
         try {
-            await FFMpeg.takeScreenshot();
-            console.log('Screenshot taken successfully');
+            const screenshot = await FFMpeg.takeScreenshot();
+            const formData = new FormData();
+            formData.append('enctype', 'multipart/form-data');
+            formData.append('file', screenshot);
+
+            await fetch('/api/screenshot', {
+                method: 'POST',
+                body: formData,
+            }).then((response) => {
+                if (response.ok) {
+                    console.log('Screenshot uploaded successfully');
+                }
+            }).catch((err) => {
+                console.error('Screenshot upload error:', err);
+            });
         } catch (error) {
             console.error('Screenshot error:', error);
         }

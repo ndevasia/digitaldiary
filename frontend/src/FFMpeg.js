@@ -110,7 +110,7 @@ class FFMpeg {
 
     /**
      * Takes a screenshot and saves it to the specified path.
-     * @returns {Promise<string>} The path of the saved screenshot.
+     * @returns {Promise<File>} The screenshot file.
      */
     async takeScreenshot() {
         return new Promise((resolve, reject) => {
@@ -126,7 +126,12 @@ class FFMpeg {
             );
             process.on('exit', (code) => {
                 if (code === 0) {
-                    resolve(screenshotPath);
+                    // Return File object of the screenshot
+                    const screenshot = new File(
+                        [fs.readFileSync(screenshotPath)],
+                        screenshotName,
+                    );
+                    resolve(screenshot);
                 } else {
                     reject(new Error(`FFMpeg screenshot process exited with code ${code}`));
                 }

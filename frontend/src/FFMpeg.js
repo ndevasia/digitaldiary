@@ -4,6 +4,8 @@ const fs = window.require('fs');
 const { spawn, spawnSync } = window.require('child_process');
 const { ipcRenderer } = window.require('electron');
 
+const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
 /**
  * Everything below here up to the class is related to platform detection and
  * setting up paths for FFMpeg binaries
@@ -41,6 +43,34 @@ const defaultFFMpegPath = path.join(
     ffmpegDir,
     platform === 'win' ? 'ffmpeg.exe' : 'ffmpeg'
 );
+
+// Download FFMpeg binary if it is not there (only in dev mode)
+// Just do this for the overlay tool to avoid complications with the main app
+if (isDev && window.location.href.includes('overlay')) {
+    if ((platform === 'win' || platform === 'mac') && arch === 'x64') {
+        const ffmpegExists = fs.existsSync(defaultFFMpegPath);
+        if (!ffmpegExists) {
+            console.log('FFMpeg binary not found, downloading...');
+            console.log('This may take a few minutes depending on your internet speed.');
+            let output;
+            if (platform === 'win') {
+                output = spawnSync(
+                    'powershell', 
+                    ['-File', path.join(rootPath, 'bin', 'install_win64.ps1')], 
+                    { stdio: ['ignore', 'pipe', 'pipe'] }
+                );
+            } else if (platform === 'mac') {
+                output = spawnSync(
+                    'bash', 
+                    [path.join(rootPath, 'bin', 'install_mac64.sh')],
+                    { stdio: ['ignore', 'pipe', 'pipe'] }
+                );
+            }
+            console.log(output.stdout.toString());
+            console.log('FFMpeg download script exited with code:', output.status);
+        }
+    }
+}
 
 const VERBOSE = true;
 

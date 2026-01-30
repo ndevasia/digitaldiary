@@ -18,6 +18,7 @@ function HomePage() {
     const [gameEvents, setGameEvents] = useState([]);
     const [loadingTimeline, setLoadingTimeline] = useState(true);
     const navigate = useNavigate();
+    const [currentUsername, setCurrentUsername] = useState('User');
 
     useEffect(() => {
         // Fetch the latest screenshot when component mounts
@@ -28,6 +29,20 @@ function HomePage() {
         fetchScreenshotByDays(30, setOneMonthAgoScreenshotUrl, setLoadingOneMonthAgo);
         // Fetch game sessions
         fetchGameSessions();
+    }, []);
+
+    useEffect(() => {
+        const fetchCurrentUser = async () => {
+            try {
+                const res = await fetch('/api/current_user');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.username) setCurrentUsername(data.username);
+            } catch (err) {
+                console.error('Error fetching current user:', err);
+            }
+        };
+        fetchCurrentUser();
     }, []);
 
     const fetchLatestScreenshot = async () => {
@@ -286,7 +301,7 @@ function HomePage() {
 
             <div className="flex-1 p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-semibold text-gray-700">Hello, User 1 & User 2</h1>
+                    <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
                     <button className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-3 rounded-full flex items-center transition-colors">
                         <Plus size={20} className="mr-2" />
                         New Memory

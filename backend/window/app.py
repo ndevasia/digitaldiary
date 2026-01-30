@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, render_template
 import os
 import boto3
 import json
@@ -601,6 +601,52 @@ def get_users():
         return jsonify(user_data['users'])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/current_user', methods=['GET'])
+def get_current_user():
+    try:
+        username = USERNAME
+        if not username:
+            user_json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
+            with open(user_json_path, 'r') as f:
+                data = json.load(f)
+            if data.get('users'):
+                username = data['users'][0].get('username')
+        return jsonify({'username': username})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/')
+def index_page():
+    try:
+        screenshot_url = None
+        username = USERNAME
+        if not username:
+            user_json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
+            with open(user_json_path, 'r') as f:
+                data = json.load(f)
+            if data.get('users'):
+                username = data['users'][0].get('username')
+        return render_template('layout.html', username=username, screenshot_url=screenshot_url)
+    except Exception as e:
+        print(e)
+        return "Error", 500
+
+@app.route('/files')
+def files_page():
+    try:
+        username = USERNAME
+        if not username:
+            user_json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
+            with open(user_json_path, 'r') as f:
+                data = json.load(f)
+            if data.get('users'):
+                username = data['users'][0].get('username')
+        files = []
+        return render_template('files.html', username=username, files=files)
+    except Exception as e:
+        print(e)
+        return "Error", 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001, host='0.0.0.0')

@@ -34,6 +34,7 @@ const rootPath = ipcRenderer.sendSync('get-root-path');
 
 const ffmpegDir = path.join(
     rootPath,
+    '..',
     'bin',
     platform,
     arch
@@ -56,13 +57,13 @@ if (isDev && window.location.href.includes('overlay')) {
             if (platform === 'win') {
                 output = spawnSync(
                     'powershell', 
-                    ['-File', path.join(rootPath, 'bin', 'install_win64.ps1')], 
+                    ['-File', path.join(rootPath, '../bin', 'install_win64.ps1')], 
                     { stdio: ['ignore', 'pipe', 'pipe'] }
                 );
             } else if (platform === 'mac') {
                 output = spawnSync(
                     'bash', 
-                    [path.join(rootPath, 'bin', 'install_mac64.sh')],
+                    [path.join(rootPath, '../bin', 'install_mac64.sh')],
                     { stdio: ['ignore', 'pipe', 'pipe'] }
                 );
             }

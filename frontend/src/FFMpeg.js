@@ -146,6 +146,8 @@ class FFMpeg {
 
     /**
      * Starts video recording with optional audio.
+     * Streams to the specified destination. MUST BE ALIVE TO RECEIVE THE STREAM.
+     * @param {string} streamDestination - The destination URL or file path for the video stream.
      * @param {boolean} withAudio - Whether to record audio.
      * @param {string|null} audioDevice - The audio device to use.
      * @returns {Promise<void>} Resolves when recording starts.
@@ -219,6 +221,8 @@ class FFMpeg {
 
     /**
      * Stops the current video recording.
+     * This can corrupt the video on the server side if not done properly.
+     * Stop the server receiving the stream first!
      * @returns {Promise<void>} Resolves when recording stops.
      */
     async stopVideoStream() {

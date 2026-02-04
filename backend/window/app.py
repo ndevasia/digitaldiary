@@ -4,7 +4,9 @@ import boto3
 import json
 import sys
 from flask_cors import CORS  # You'll need to install flask-cors
-import pyautogui
+# import pyautogui
+import subprocess
+import platform
 from datetime import datetime, timedelta, timezone
 import numpy as np
 import requests
@@ -21,10 +23,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 print("Path being added to sys.path:", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 print("Current sys.path:", sys.path)
 try:
-    # Import RecorderThread
-    from lib.recording import RecorderThread
-    print("Successfully imported RecorderThread from recording")
-
     # Try importing from server directory (sibling to window directory)
     from server.aws import S3
     print("Successfully imported S3 from server.aws")
@@ -88,6 +86,28 @@ SCREENSHOTS_DIR = os.path.join(base_dir, "screenshots")
 AUDIO_DIR = os.path.join(base_dir, "audio")
 THUMBNAILS_DIR = os.path.join(RECORDINGS_DIR, "thumbnails")
 
+# Figure out OS and architecture for ffmpeg binary path
+BIN_DIR = os.path.join(base_dir, "bin")
+platform_machine = platform.machine().lower()
+if platform_machine in ['x86_64', 'amd64']:
+    platform_arch = 'x64'
+elif platform_machine in ['aarch64', 'arm64']:
+    platform_arch = 'arm64'
+else:
+    platform_arch = 'unknown'
+platform_os = platform.system().lower()
+if platform_os == 'darwin':
+    platform_os = 'mac'
+elif platform_os == 'windows':
+    platform_os = 'win'
+FFMPEG_PATH = os.path.join(
+    BIN_DIR,
+    platform_os,
+    platform_arch,
+    'ffmpeg' + ('.exe' if platform_os == 'win' else '')
+)
+
+
 # Create directories (same as in overlay.py)
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
@@ -97,6 +117,9 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 # Global variables for recording state
 recorder_thread = None
 audio_recorder = None
+
+ffmpeg = None
+ffmpeg_output = None
 
 @app.route('/api/test', methods=['GET'])
 def test_endpoint():
@@ -320,92 +343,120 @@ def upload_screenshot():
 @app.route('/api/recording/start', methods=['POST'])
 def start_screen_recording():
     try:
-        global recorder_thread
+        global ffmpeg
+        global ffmpeg_output
 
-        # Check if recording is already in progress
-        if recorder_thread and recorder_thread.recording:
-            return jsonify({'error': 'Recording already in progress'}), 400
+        url = 'srt://127.0.0.1:40052'  # Use 127.0.0.1 to listen on localhost
 
-        # Create a new RecorderThread instance
-        recorder_thread = RecorderThread()
+        if (ffmpeg):
+            if ffmpeg.poll() is None:
+                return jsonify({'status': 'ffmpeg available', 'url': url}), 200
+            else:
+                ffmpeg = None  # Reset if process has ended
 
-        # Set up signal handler for when recording stops
-        def on_recording_stopped():
-            print("Recording stopped signal received")
-            # Create S3 client
-            s3_client_instance = S3()
-            client = s3_client_instance.get()
+        timestamp = datetime.now().strftime('recording_%Y%m%d_%H%M%S.mkv')
+        ffmpeg_output = os.path.normpath(os.path.join(RECORDINGS_DIR, timestamp))
+        
+        log_message(f"Output file path: {ffmpeg_output}")
+        log_message(f"FFmpeg path: {FFMPEG_PATH}")
+        log_message(f"FFmpeg exists: {os.path.exists(FFMPEG_PATH)}")
+        
+        # Start FFmpeg process - COPY BOTH video AND audio
+        ffmpeg = subprocess.Popen(
+            [FFMPEG_PATH, 
+             '-probesize', '10M',
+             '-flags', 'low_delay',
+             '-i', url + '?mode=listener',
+             '-map', '0:v',   # Map video first
+             '-map', '0:a?',   # Map audio second
+             '-c:v', 'copy',  # Then specify video codec
+             '-c:a', 'copy',  # Then specify audio codec
+             ffmpeg_output],
+            stdin=subprocess.PIPE
+        )
 
-            # Generate pre-signed URL for the video file
-            video_url = client.get_presigned_url(recorder_thread.video_path)
-            print(f"Video URL: {video_url}")
+        log_message(f"Started ffmpeg with PID {ffmpeg.pid} for screen recording.")
+        
+        # Check if process started successfully
+        try:
+            ffmpeg.wait(timeout=0.5)
+            # Process ended immediately - something went wrong
+            ffmpeg = None
+            return jsonify({'error': f'FFmpeg failed to start'}), 500
+        except subprocess.TimeoutExpired:
+            # Process is still running - good!
+            log_message("FFmpeg process is running")
 
-            try:
-                with open(recorder_thread.video_path, 'rb') as f:
-                    response = requests.put(video_url, data=f)
-                    if response.status_code == 200:
-                        print("Video uploaded successfully.")
-                    else:
-                        print(f"Failed to upload video. Status Code: {response.status_code}, Response: {response.text}")
-            except Exception as e:
-                print(f"Error uploading video: {str(e)}")
-
-            # Generate pre-signed URL for the thumbnail file
-            thumbnail_url = client.get_presigned_url(recorder_thread.thumbnail_path)
-            print(f"Thumbnail URL: {thumbnail_url}")
-
-            try:
-                with open(recorder_thread.thumbnail_path, 'rb') as f:
-                    response = requests.put(thumbnail_url, data=f)
-                    if response.status_code == 200:
-                        print("Thumbnail uploaded successfully.")
-                    else:
-                        print(f"Failed to upload thumbnail. Status Code: {response.status_code}, Response: {response.text}")
-            except Exception as e:
-                print(f"Error uploading thumbnail: {str(e)}")
-
-        # Connect signal
-        recorder_thread.stopped.connect(on_recording_stopped)
-
-        # Start recording
-        recorder_thread.start()
-
-        # Return the relative paths
-        return jsonify({
-            'status': 'started',
-            'path': recorder_thread.video_path,
-            'thumbnail_path': recorder_thread.thumbnail_path
-        })
+        return jsonify({'status': 'ffmpeg available', 'url': url + '?mode=caller'}), 200
+        
     except Exception as e:
-        print(f"Recording start error: {str(e)}")
+        log_message(f"Recording start error: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/recording/status', methods=['GET'])
+def recording_status():
+    try:
+        global ffmpeg
+        if ffmpeg and ffmpeg.poll() is None:
+            return jsonify({'recording': True}), 200
+        else:
+            return jsonify({'recording': False}), 200
+    except Exception as e:
+        print(f"Recording status error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/recording/stop', methods=['POST'])
 def stop_screen_recording():
     try:
-        global recorder_thread
+        global ffmpeg
+        global ffmpeg_output
 
         # Check if recording is in progress
-        if not recorder_thread or not recorder_thread.recording:
+        if not ffmpeg:
             return jsonify({'error': 'No active recording'}), 400
 
-        # Get paths before stopping
-        video_path = recorder_thread.video_path
-        thumbnail_path = recorder_thread.thumbnail_path
+        # Send 'q' to FFmpeg stdin to gracefully stop (recommended method)
+        try:
+            ffmpeg.communicate(input=b'q', timeout=5)
+            log_message("Sent 'q' to ffmpeg stdin to stop recording.")
+        except:
+            log_message("Failed to send 'q' to ffmpeg stdin, attempting to terminate.")
+            ffmpeg.terminate()
+        
+        ffmpeg = None
+        log_message("Stopped ffmpeg for screen recording.")
 
-        # Stop the recording
-        recorder_thread.stop()
+        video_url = None
 
-        # Generate thumbnail
-        recorder_thread.generate_thumbnail()
+        # Upload the recording to S3
+        try:
+            object_name = f"{USERNAME}/recordings/{os.path.basename(ffmpeg_output)}"
+            url = s3_client.generate_presigned_url(
+                'put_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+                ExpiresIn=3600
+            )
+            with open(ffmpeg_output, 'rb') as f:
+                response = requests.put(url, data=f)
+                if response.status_code != 200:
+                    raise Exception("Failed to upload recording")
+            video_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+                ExpiresIn=3600
+            )
+            log_message("Recording uploaded successfully.")
+        except Exception as e:
+            log_message(f"Error uploading recording: {e}")
+            return jsonify({'error': f"Failed to upload recording: {str(e)}"}), 500
 
         # Return paths
         return jsonify({
             'status': 'stopped',
-            'video_path': video_path,
-            'thumbnail_path': thumbnail_path
+            'video_url': video_url,
+            'thumbnail_path': "not implemented"
         })
     except Exception as e:
         print(f"Recording stop error: {str(e)}")

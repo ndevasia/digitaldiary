@@ -150,7 +150,7 @@ class FFMpeg {
      * @param {string|null} audioDevice - The audio device to use.
      * @returns {Promise<void>} Resolves when recording starts.
      */
-    async startVideoRecording(withAudio = false, audioDevice = null) {
+    async startVideoStream(streamDestination, withAudio = false, audioDevice = null) {
         if (VERBOSE)
             console.log('Starting FFMpeg at path:', this.path);
 
@@ -159,16 +159,31 @@ class FFMpeg {
                 reject(new Error('FFMpeg is already running a process'));
                 return;
             }
-            // Spawn FFMpeg process to record the screen
+            
             this.currentRecordingName = `recording_${Date.now()}`;
             const args = [...this.getVideoRecordingArgs()];
+            
             if (withAudio) {
-                args.push(...this.getAudioRecordingArgs(audioDevice), '-acodec', 'aac', '-strict' , 'experimental');
+                args.push(...this.getAudioRecordingArgs(audioDevice));
+                // Map both video and audio streams
+                args.push('-map', '0:v', '-map', '1:a');
+                // Video encoding
+                args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
+                // Audio encoding
+                args.push('-ar', '44100', '-ac', '2', '-c:a', 'aac', '-b:a', '128k');
+            } else {
+                // Video only
+                args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
             }
-            // args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
+            
+            // Output format and destination
+            args.push('-f', 'mpegts', streamDestination);
+            
+            console.log('FFMpeg args:', args);
+            
             this.process = spawn(
                 this.path, 
-                [...args, path.join(this.videoRecordingPath, this.currentRecordingName + '.mkv')], 
+                args, 
                 {stdio: ['pipe', 'pipe', 'pipe']}
             );
 
@@ -182,7 +197,7 @@ class FFMpeg {
                         this.process = null;
                         reject(new Error('FFMpeg failed to start recording in time'));
                     }
-                }, 5000);
+                }, 10000);
             });
 
             this.process.on('error', (err) => {
@@ -206,7 +221,7 @@ class FFMpeg {
      * Stops the current video recording.
      * @returns {Promise<void>} Resolves when recording stops.
      */
-    async stopVideoRecording() {
+    async stopVideoStream() {
         return new Promise((resolve, reject) => {
             if (this.process) {
                 // Set a timeout to force kill if not exiting in time
@@ -228,30 +243,6 @@ class FFMpeg {
                         console.log(`FFMpeg process exited with code ${code}`);
                     this.process = null;
                     clearTimeout(timeout);
-
-                    // Also generate the video thumbnail
-                    const thumbnailPath = path.join(
-                        this.thumbnailPath,
-                        this.currentRecordingName + '.png'
-                    );
-                    // Spawn FFMpeg process to generate thumbnail
-                    // -i : input file (last recorded video)
-                    // -ss : seek to 1 second
-                    // -vframes 1 : capture 1 frame
-                    // thumbnailPath : output file
-                    this.process = spawn(this.path, [
-                        '-i', path.join(this.videoRecordingPath, this.currentRecordingName + '.mp4'),
-                        '-ss', '00:00:01.000',
-                        '-vframes', '1',
-                        thumbnailPath
-                    ], { stdio: ['ignore', 'ignore', 'ignore'] });
-
-                    this.process.on('exit', (code) => {
-                        if (VERBOSE)
-                            console.log(`Thumbnail generation exited with code ${code}`);
-                        this.process = null;
-                    });
-
                     resolve();
                 });
 

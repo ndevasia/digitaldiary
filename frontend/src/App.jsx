@@ -119,18 +119,33 @@ function App() {
     const handleScreenRecording = async () => {
         try {
             if (!isScreenRecording) {
-                const withAudio = localStorage.getItem('recordAudioWithScreen') === "true";
-                FFMpeg.startVideoRecording(withAudio).then(() => {
-                    console.log('Screen recording started');
-                    setIsScreenRecording(true);
+                fetch('/api/recording/start', { method: 'POST' }).then(async (response) => {
+                    if (!response.ok) {
+                        throw new Error('Failed to start recording on backend');
+                    }
+                    const withAudio = localStorage.getItem('recordAudioWithScreen') === "true";
+                    const streamDestination = (await response.json()).url;
+                    FFMpeg.startVideoStream(streamDestination, withAudio).then(() => {
+                        console.log('Screen recording started');
+                        setIsScreenRecording(true);
+                    }).catch((err) => {
+                        console.error('Screen recording error:', err);
+                    });
                 }).catch((err) => {
-                    console.error('Screen recording error:', err);
+                    console.error('Recording start error:', err);
                 });
             } else {
-                FFMpeg.stopVideoRecording().then(() => {
-                    console.log('Screen recording stopped');
-                    setIsScreenRecording(false);
+                fetch('/api/recording/stop', { method: 'POST' }).then(() => {
+                    console.log('Notified backend of recording stop');
+                    FFMpeg.stopVideoStream().then(() => {
+                        console.log('Screen recording stopped');
+                        setIsScreenRecording(false);
+                    }).catch((err) => {
+                        console.error('Screen recording error:', err);
+                        setIsScreenRecording(false);
+                    });
                 }).catch((err) => {
+                    fetch('/api/recording/stop', { method: 'POST' });
                     console.error('Screen recording error:', err);
                     setIsScreenRecording(false);
                 });

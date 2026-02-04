@@ -37,7 +37,8 @@ function startPythonBackend() {
 
     if (isDev) {
         pythonProcess = spawn("python", [scriptPath], {
-            stdio: "inherit"
+            stdio: "inherit",
+            windowsHide: true,
         });
 
         pythonProcess.on("error", (err) => {
@@ -219,7 +220,7 @@ function setupIPC() {
 
 
 app.whenReady().then(() => {
-    startPythonBackend();
+    // startPythonBackend();
     createOverlayWindow();
     createMainWindow();
     setupIPC();

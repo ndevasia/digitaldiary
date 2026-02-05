@@ -3,12 +3,11 @@
 /audio/*
 /recordings/*
 /logs/*
-/dist/*
 /backend/build/*
 /backend/dist/*
 /frontend/dist/*
 /tests/*
-.env
+*dist
 
 # If you want to ensure that the directories themselves are kept (but empty), you can add a .gitkeep file in each.
 # Uncomment the lines below if you are using .gitkeep files to keep empty directories in your repository
@@ -63,4 +62,3 @@ venv/
 # Ignore package-lock.json
 *package-lock.json
 *node_modules
-*dist

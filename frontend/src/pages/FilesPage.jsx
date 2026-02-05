@@ -11,6 +11,8 @@ function FilesPage() {
     const [userFilter, setUserFilter] = useState('all');
     const [showDropdown, setShowDropdown] = useState(false);
     const [users, setUsers] = useState([]);
+    const [gameFilter, setGameFilter] = useState('all');
+    const [games, setGames] = useState([]);
 
     useEffect(() => {
         fetchUsers();
@@ -20,18 +22,26 @@ function FilesPage() {
     useEffect(() => {
         let filtered = mediaList;
 
-        // Apply media type filter
+        // Media type filter
         if (filter !== 'all') {
             filtered = filtered.filter(item => item.type === filter);
         }
 
-        // Apply user filter
+        // User filter
         if (userFilter !== 'all') {
-            filtered = filtered.filter(item => item.owner_user_id === parseInt(userFilter));
+            filtered = filtered.filter(
+                item => item.owner_user_id === parseInt(userFilter)
+            );
+        }
+
+        // 🔹 Game filter
+        if (gameFilter !== 'all') {
+            filtered = filtered.filter(item => item.game === gameFilter);
         }
 
         setFilteredMedia(filtered);
-    }, [filter, userFilter, mediaList]);
+    }, [filter, userFilter, gameFilter, mediaList]);
+
 
     const fetchUsers = async () => {
         try {
@@ -57,8 +67,16 @@ function FilesPage() {
                 throw new Error('Failed to fetch media');
             }
             const data = await response.json();
+
             setMediaList(data);
             setFilteredMedia(data);
+
+            // 🔹 Extract unique games
+            const uniqueGames = Array.from(
+                new Set(data.map(item => item.game).filter(Boolean))
+            );
+
+            setGames(['all', ...uniqueGames]);
         } catch (error) {
             console.error('Error fetching media:', error);
             setError(error.message);
@@ -193,7 +211,23 @@ function FilesPage() {
                                 </button>
                             ))}
                         </div>
+                        {/* Game Filter Tabs */}
+                        <div className="flex flex-wrap gap-2 mt-4">
+                            {games.map((game) => (
+                                <button
+                                    key={game}
+                                    onClick={() => setGameFilter(game)}
+                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
+                                        gameFilter === game
+                                            ? 'bg-indigo-500 text-white'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    {game === 'all' ? 'All Apps' : game}
+                                </button>
+                            ))}
 
+                        </div>
                         {/* Media Filter Dropdown */}
                         <div className="relative">
                             <button

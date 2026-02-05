@@ -60,3 +60,5 @@ backend/globals.py
 *package-lock.json
 *node_modules
 *dist
+.env
+.gitignore

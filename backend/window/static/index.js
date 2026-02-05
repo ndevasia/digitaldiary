@@ -67,7 +67,7 @@
 
   async function fetchAllMedia() {
     try {
-      let response = await fetch('/api/media');
+      let response = await fetch('/api/media_aws');
       await statusCheck(response);
       allMedia = await response.json();
       displayMedia('all');

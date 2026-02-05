@@ -74,6 +74,45 @@ log_message("Current sys.path: " + str(sys.path))
 app = Flask(__name__)
 CORS(app)  # Enable CORS to allow React app to communicate with Flask
 
+
+# Helper functions for user.json
+def get_user_json_path():
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
+
+
+def ensure_user_json_exists():
+    """Create user.json from configured USERNAME if it doesn't exist, and ensure default is present."""
+    try:
+        if not USERNAME:
+            # No configured username; nothing to ensure
+            return
+
+        path = get_user_json_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        if not os.path.exists(path):
+            default_user = {"user_id": USERNAME, "username": USERNAME}
+            tmp_path = path + '.tmp'
+            with open(tmp_path, 'w') as f:
+                json.dump({"users": [default_user]}, f, indent=4)
+            os.replace(tmp_path, path)
+            return
+
+        # If file exists, ensure default user is present
+        with open(path, 'r') as f:
+            data = json.load(f)
+
+        users = data.get('users', [])
+        if not any(str(u.get('username')) == str(USERNAME) or str(u.get('user_id')) == str(USERNAME) for u in users):
+            users.append({"user_id": USERNAME, "username": USERNAME})
+            data['users'] = users
+            tmp_path = path + '.tmp'
+            with open(tmp_path, 'w') as f:
+                json.dump(data, f, indent=4)
+            os.replace(tmp_path, path)
+    except Exception as e:
+        print(f"Error ensuring user.json exists: {str(e)}")
+
 # S3 Setup
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
@@ -105,12 +144,12 @@ def test_endpoint():
 @app.route('/api/media_aws', methods=['GET'])
 def get_media_aws():
     try:
-        # List objects in the user's directory in S3
-        prefix = f"{USERNAME}/"
-        response = s3_client.list_objects_v2(
-            Bucket=BUCKET_NAME,
-            Prefix=prefix
-        )
+        # Support optional single 'username' query param so callers can request another user's media
+        req_username = request.args.get('username')
+        prefix_username = req_username if req_username else USERNAME
+        # List objects in the specified user's directory in S3
+        prefix = f"{prefix_username}/"
+        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
 
         if 'Contents' not in response:
             return jsonify([])
@@ -591,16 +630,83 @@ def get_latest_session():
 @app.route('/api/users', methods=['GET'])
 def get_users():
     try:
-        # Get the path to user.json
-        user_json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
+        # Ensure user.json exists and has the default configured USERNAME
+        ensure_user_json_exists()
 
         # Read the JSON file
+        user_json_path = get_user_json_path()
         with open(user_json_path, 'r') as f:
             user_data = json.load(f)
 
-        return jsonify(user_data['users'])
+        return jsonify(user_data.get('users', []))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/users', methods=['POST'])
+def add_user():
+    try:
+        data = request.json or {}
+        username = data.get('username')
+        if not username:
+            return jsonify({"error": "username is required"}), 400
+
+        ensure_user_json_exists()
+        user_json_path = get_user_json_path()
+
+        with open(user_json_path, 'r') as f:
+            user_data = json.load(f)
+
+        users = user_data.get('users', [])
+        # Prevent duplicates based on username only; return the existing user object for convenience
+        existing = next((u for u in users if str(u.get('username')) == str(username)), None)
+        if existing:
+            return jsonify(existing), 200
+
+        # Use username string as the user_id to match owner_user_id in media
+        new_user = {"user_id": username, "username": username}
+        users.append(new_user)
+        user_data['users'] = users
+
+        tmp_path = user_json_path + '.tmp'
+        with open(tmp_path, 'w') as f:
+            json.dump(user_data, f, indent=4)
+        os.replace(tmp_path, user_json_path)
+
+        return jsonify(new_user), 201
+    except Exception as e:
+        print(f"Error in add_user: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/users_aws/check', methods=['GET'])
+def check_user_exists_aws():
+    """Check whether a given username exists as a top-level prefix (folder) in the S3 bucket.
+
+    Query params:
+      - username: the username to check
+
+    Returns: { "exists": true } or { "exists": false }
+    """
+    try:
+        username = request.args.get('username')
+        if not username:
+            return jsonify({"error": "username is required"}), 400
+
+        prefix = f"{username}/"
+
+        # Use Delimiter and Prefix to efficiently check for any objects under that prefix
+        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix, MaxKeys=1)
+
+        exists = False
+        if 'Contents' in response and len(response['Contents']) > 0:
+            exists = True
+
+        return jsonify({"exists": exists})
+    except Exception as e:
+        print(f"Error in check_user_exists_aws: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
+    # Ensure user.json is present for the configured USERNAME when the app starts
+    ensure_user_json_exists()
     app.run(debug=True, port=5001, host='0.0.0.0')

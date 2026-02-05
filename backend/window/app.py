@@ -126,12 +126,14 @@ RECORDINGS_DIR = os.path.join(base_dir, "recordings")
 SCREENSHOTS_DIR = os.path.join(base_dir, "screenshots")
 AUDIO_DIR = os.path.join(base_dir, "audio")
 THUMBNAILS_DIR = os.path.join(RECORDINGS_DIR, "thumbnails")
+PROFILE_PICS_DIR = os.path.join(base_dir, "profile_pics") # Profile picture directory
 
 # Create directories (same as in overlay.py)
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 os.makedirs(AUDIO_DIR, exist_ok=True)
+os.makedirs(PROFILE_PICS_DIR, exist_ok=True)
 
 # Global variables for recording state
 recorder_thread = None
@@ -640,6 +642,98 @@ def get_users():
 
         return jsonify(user_data.get('users', []))
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Upload profile picture to directory    
+@app.route('/api/upload-profile-pic', methods=['POST'])
+def upload_profile_pic():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        
+        # Simple extension check
+        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            return jsonify({"error": "File type not supported"}), 400
+        
+        _, ext = os.path.splitext(file.filename) 
+        ext = ext.lower()
+        object_name = f"{USERNAME}/profile{ext}"
+
+        content_types = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif'
+        }
+
+        # Ensure pointer is at the start
+        file.seek(0)
+
+        # Uploads new profile picture first
+        s3_client.upload_fileobj(
+            file,
+            BUCKET_NAME,
+            object_name,
+            # octet-stream used for fallback if unknown extension
+            ExtraArgs={'ContentType': content_types.get(ext, 'application/octet-stream')}
+        )
+
+        # Clean up old/different extensions
+        existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{USERNAME}/profile")
+
+        if 'Contents' in existing_files:
+        # Filter out the file we JUST uploaded so we don't delete it
+            delete_keys = [
+                {'Key': obj['Key']} 
+                for obj in existing_files['Contents'] 
+                if obj['Key'] != object_name
+            ]
+            if delete_keys:
+                s3_client.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': delete_keys})
+
+        new_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
+        
+        return jsonify({"message": "Success", "url": new_url}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+# Retrieve profile picture from directory
+@app.route('/api/profile-pic', methods=['GET'])
+def get_profile_pic():
+    try:
+        # List objects with the prefix for profile pictures
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME, 
+            Prefix=f"{USERNAME}/profile"
+        )
+
+        # Check if any files were actually found
+        if 'Contents' not in response or len(response['Contents']) == 0:
+            # If no files found, return None for placeholder in frontend
+            return jsonify({"url": None}), 200
+
+        # Get the Key of the first (most relevant) match
+        object_name = response['Contents'][0]['Key']
+
+        # 4. Generate the presigned URL for the found file
+        profile_pic_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
+
+        return jsonify({"url": profile_pic_url}), 200
+
+    except Exception as e:
+        # Standard error response if S3 connection fails
         return jsonify({"error": str(e)}), 500
 
 

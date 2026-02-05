@@ -7,12 +7,15 @@ function FilesPage() {
     const [filteredMedia, setFilteredMedia] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [filter, setFilter] = useState('all');
-    const [userFilter, setUserFilter] = useState('all');
     const [showDropdown, setShowDropdown] = useState(false);
+    const [showUsersDropdown, setShowUsersDropdown] = useState(false);
+    const [showGamesDropdown, setShowGamesDropdown] = useState(false);
     const [users, setUsers] = useState([]);
-    const [gameFilter, setGameFilter] = useState('all');
     const [games, setGames] = useState([]);
+    const [filter, setFilter] = useState(new Set());
+    const [userFilter, setUserFilter] = useState(new Set());
+    const [gameFilter, setGameFilter] = useState(new Set());
+    
 
     useEffect(() => {
         fetchUsers();
@@ -22,21 +25,16 @@ function FilesPage() {
     useEffect(() => {
         let filtered = mediaList;
 
-        // Media type filter
-        if (filter !== 'all') {
-            filtered = filtered.filter(item => item.type === filter);
+        if (filter.size > 0) {
+            filtered = filtered.filter(item => filter.has(item.type));
         }
 
-        // User filter
-        if (userFilter !== 'all') {
-            filtered = filtered.filter(
-                item => item.owner_user_id === parseInt(userFilter)
-            );
+        if (userFilter.size > 0) {
+            filtered = filtered.filter(item => userFilter.has(item.owner_user_id.toString()));
         }
 
-        // 🔹 Game filter
-        if (gameFilter !== 'all') {
-            filtered = filtered.filter(item => item.game === gameFilter);
+        if (gameFilter.size > 0) {
+            filtered = filtered.filter(item => gameFilter.has(item.game));
         }
 
         setFilteredMedia(filtered);
@@ -193,108 +191,142 @@ function FilesPage() {
                 <div className="bg-white rounded-lg border border-gray-200 p-8">
                     <h2 className="text-xl font-medium text-gray-700 mb-4">Files</h2>
 
-                    {/* Filters Section */}
-                    <div className="mb-8 flex justify-between items-center">
-                        {/* User Filter Tabs */}
-                        <div className="flex flex-wrap gap-2">
-                            {users.map((user) => (
-                                <button
-                                    key={user.user_id}
-                                    onClick={() => setUserFilter(user.user_id)}
-                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                                        userFilter === user.user_id
-                                            ? 'bg-teal-500 text-white'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
-                                >
-                                    {user.username}
-                                </button>
-                            ))}
-                        </div>
-                        {/* Game Filter Tabs */}
-                        <div className="flex flex-wrap gap-2 mt-4">
-                            {games.map((game) => (
-                                <button
-                                    key={game}
-                                    onClick={() => setGameFilter(game)}
-                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                                        gameFilter === game
-                                            ? 'bg-indigo-500 text-white'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
-                                >
-                                    {game === 'all' ? 'All Apps' : game}
-                                </button>
-                            ))}
+                {/* Filters Section */}
+                    <div className="mb-8 flex flex-wrap gap-4">
 
-                        </div>
-                        {/* Media Filter Dropdown */}
-                        <div className="relative">
-                            <button
-                                className="bg-teal-500 text-white px-4 py-2 rounded flex items-center"
-                                onClick={() => setShowDropdown(!showDropdown)}
+                    {/* Media Type Dropdown */}
+                    <div className="relative">
+                    <button
+                        className="bg-teal-500 text-white px-4 py-2 rounded flex justify-between items-center w-48"
+                        onClick={() => setShowDropdown(!showDropdown)}
+                    >
+                        {filter.size === 0
+                        ? 'All Types'
+                        : Array.from(filter).map(f => getFilterDisplayName(f)).join(', ')}
+                        <ChevronDown size={18} className="ml-2" />
+                    </button>
+
+                    {showDropdown && (
+                        <div className="absolute top-full left-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-48 z-10">
+                        <ul>
+                            {['screenshot', 'audio', 'video'].map(type => (
+                            <li
+                                key={type}
+                                className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                                onClick={() => {
+                                const newFilter = new Set(filter);
+                                if (newFilter.has(type)) newFilter.delete(type);
+                                else newFilter.add(type);
+                                setFilter(newFilter);
+                                }}
                             >
-                                {getFilterDisplayName(filter)} <ChevronDown size={18} className="ml-2" />
-                            </button>
-
-                            {showDropdown && (
-                                <div className="absolute top-full right-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-40 z-10">
-                                    <ul>
-                                        <li className="px-4 py-2 hover:bg-gray-100 text-teal-500 cursor-pointer" onClick={() => handleFilterChange('all')}>
-                                            All
-                                        </li>
-                                        <li className="px-4 py-2 hover:bg-gray-100 text-teal-500 cursor-pointer" onClick={() => handleFilterChange('screenshot')}>
-                                            Screenshots
-                                        </li>
-                                        <li className="px-4 py-2 hover:bg-gray-100 text-teal-500 cursor-pointer" onClick={() => handleFilterChange('audio')}>
-                                            Audio
-                                        </li>
-                                        <li className="px-4 py-2 hover:bg-gray-100 text-teal-500 cursor-pointer" onClick={() => handleFilterChange('video')}>
-                                            Video
-                                        </li>
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {loading ? (
-                        <div className="grid grid-cols-3 gap-6">
-                            {[1, 2, 3, 4, 5, 6].map((_, index) => (
-                                <div key={index} className="animate-pulse bg-blue-100 h-48 rounded"></div>
+                                {getFilterDisplayName(type)}
+                                {filter.has(type) && <span>✔️</span>}
+                            </li>
                             ))}
-                        </div>
-                    ) : error ? (
-                        <div className="text-center py-12">
-                            <p className="text-red-500">{error}</p>
-                            <button
-                                className="mt-4 bg-teal-500 text-white px-4 py-2 rounded hover:bg-teal-600"
-                                onClick={fetchMedia}
-                            >
-                                Try Again
-                            </button>
-                        </div>
-                    ) : filteredMedia.length === 0 ? (
-                        <div className="text-center py-12">
-                            <p className="text-gray-500">No media files found.</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {filteredMedia.map((item) => (
-                                <div
-                                    key={item.media_id}
-                                    className="bg-white rounded-lg shadow-sm overflow-hidden p-4 flex flex-col"
-                                >
-                                    <div className="flex-grow">
-                                        {renderMediaItem(item)}
-                                    </div>
-                                </div>
-                            ))}
+                        </ul>
                         </div>
                     )}
+                    </div>
+                    {/* Users Dropdown */}
+                    <div className="relative">
+                    <button
+                        className="text-white px-4 py-2 rounded flex justify-between items-center w-48"
+                        style={{ backgroundColor: '#3e8fa6' }}
+                        onClick={() => setShowUsersDropdown(!showUsersDropdown)}
+                    >
+                        {userFilter.size === 0
+                        ? 'All Users'
+                        : Array.from(userFilter)
+                            .map(id => users.find(u => u.user_id === parseInt(id))?.username || '')
+                            .join(', ')}
+                        <ChevronDown size={18} className="ml-2" />
+                    </button>
+
+                    {showUsersDropdown && (
+                        <div className="absolute top-full left-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-48 z-10">
+                        <ul>
+                            {users
+                            .filter(u => u.user_id !== 'all')
+                            .map(user => (
+                                <li
+                                key={user.user_id}
+                                className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                                onClick={() => {
+                                    const newFilter = new Set(userFilter);
+                                    const idStr = user.user_id.toString();
+                                    if (newFilter.has(idStr)) newFilter.delete(idStr);
+                                    else newFilter.add(idStr);
+                                    setUserFilter(newFilter);
+                                }}
+                                >
+                                {user.username}
+                                {userFilter.has(user.user_id.toString()) && <span>✔️</span>}
+                                </li>
+                            ))}
+                        </ul>
+                        </div>
+                    )}
+                    </div>
+                    {/* Games Dropdown */}
+                    <div className="relative">
+                    <button
+                        className="text-white px-4 py-2 rounded flex justify-between items-center w-48"
+                        style={{ backgroundColor: '#44b785' }}
+                        onClick={() => setShowGamesDropdown(!showGamesDropdown)}
+                    >
+                        {gameFilter.size === 0
+                        ? 'All Apps'
+                        : Array.from(gameFilter).join(', ')}
+                        <ChevronDown size={18} className="ml-2" />
+                    </button>
+
+                    {showGamesDropdown && (
+                        <div className="absolute top-full left-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-48 z-10">
+                        <ul>
+                            {games
+                            .filter(g => g !== 'all') // remove the "all" placeholder
+                            .map(game => (
+                                <li
+                                key={game}
+                                className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                                onClick={() => {
+                                    const newFilter = new Set(gameFilter);
+                                    if (newFilter.has(game)) newFilter.delete(game);
+                                    else newFilter.add(game);
+                                    setGameFilter(newFilter);
+                                }}
+                                >
+                                {game}
+                                {gameFilter.has(game) && <span>✔️</span>}
+                                </li>
+                            ))}
+                        </ul>
+                        </div>
+                    )}
+                    </div>
+                {/* Media Grid */}
+                    <div className="mt-6">
+                        {loading ? (
+                            <div className="text-gray-500">Loading media...</div>
+                        ) : error ? (
+                            <div className="text-red-500">Error: {error}</div>
+                        ) : filteredMedia.length === 0 ? (
+                            <div className="text-gray-600">No media found.</div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-4">
+                                {filteredMedia.map(item => (
+                                    <div key={item.id || item.media_id || item.media_url} className="bg-white rounded-lg border border-gray-100 p-4 h-64 flex flex-col">
+                                        {renderMediaItem(item)}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
+    </div>
     );
 }
 

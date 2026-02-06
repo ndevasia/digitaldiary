@@ -1,12 +1,12 @@
 {
     "users": [
         {
-            "user_id": 1001,
-            "username": "cyberpunk_fan"
+            "user_id": "sophia",
+            "username": "sophia"
         },
         {
-            "user_id": 1002,
-            "username": "zelda_player"
+            "user_id": "ndevasia",
+            "username": "ndevasia"
         }
     ]
 }

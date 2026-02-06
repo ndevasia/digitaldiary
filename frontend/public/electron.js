@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -36,7 +36,12 @@ function startPythonBackend() {
     console.log("Starting Python backend at:", scriptPath);
 
     if (isDev) {
-        pythonProcess = spawn("python", [scriptPath], {
+        // Use the virtual environment Python if it exists
+        const venvPython = path.join(__dirname, "../../venv/Scripts/python.exe");
+        const pythonCmd = fs.existsSync(venvPython) ? venvPython : "python";
+        
+        console.log("Using Python:", pythonCmd);
+        pythonProcess = spawn(pythonCmd, [scriptPath], {
             stdio: "inherit"
         });
 
@@ -74,23 +79,20 @@ function startPythonBackend() {
 }
 
 function createOverlayWindow() {
-    const screen = require('electron').screen;
     const display = screen.getPrimaryDisplay();
     const { width } = display.workAreaSize;
 
-    overlayWindow = new BrowserWindow({
-        width: 65,     // Initial width
-        height: 300,    // Initial height
-        minWidth: 50,  // Minimum width
-        minHeight: 200, // Minimum height
-        maxWidth: 150,  // Maximum width
-        maxHeight: 600, // Maximum height
+        overlayWindow = new BrowserWindow({
+            width: 64,
+            height: 300,
+            minWidth: 64,
+            minHeight: 100,
         x: width - 100,
         y: 100,
         transparent: true,
         frame: false,
         alwaysOnTop: true,
-        resizable: false,  // Disable native resizing, we'll handle it manually
+        resizable: false,
         backgroundColor: '#00ffffff',
         hasShadow: false,
         webPreferences: {
@@ -115,23 +117,6 @@ function createOverlayWindow() {
         overlayWindow.webContents.openDevTools({ mode: 'detach' });
     }
 
-    // Handle drag events for overlay
-    ipcMain.on('dragging', (event, { x, y }) => {
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-            const position = overlayWindow.getPosition();
-            overlayWindow.setPosition(position[0] + x, position[1] + y);
-        }
-    });
-
-    // Handle resize events for overlay
-    ipcMain.on('resizing', (event, { deltaWidth, deltaHeight }) => {
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-            const [currentWidth, currentHeight] = overlayWindow.getSize();
-            const newWidth = Math.max(50, Math.min(150, currentWidth + deltaWidth));
-            const newHeight = Math.max(200, Math.min(600, currentHeight + deltaHeight));
-            overlayWindow.setSize(newWidth, newHeight);
-        }
-    });
 }
 
 function createMainWindow() {
@@ -176,7 +161,7 @@ function createMainWindow() {
     mainWindow.on('closed', () => {
         mainWindow = null;
         // Notify the overlay window that the main window is closed
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
+        if (overlayWindow) {
             overlayWindow.webContents.send('main-window-closed');
         }
     });
@@ -202,6 +187,30 @@ function setupIPC() {
         }
     });
 
+        // Resizing: main process uses global cursor position
+        let resizeInterval = null;
+
+        ipcMain.on('start-resize', () => {
+            if (!overlayWindow) return;
+            const startMouse = screen.getCursorScreenPoint();
+            const startBounds = overlayWindow.getBounds();
+
+            if (resizeInterval) clearInterval(resizeInterval);
+            resizeInterval = setInterval(() => {
+                const currentMouse = screen.getCursorScreenPoint();
+                const newWidth = Math.max(64, startBounds.width + (currentMouse.x - startMouse.x));
+                const newHeight = Math.max(100, startBounds.height + (currentMouse.y - startMouse.y));
+                overlayWindow.setResizable(true);
+                overlayWindow.setSize(Math.round(newWidth), Math.round(newHeight));
+                overlayWindow.setResizable(false);
+            }, 16);
+
+            ipcMain.once('stop-resize', () => {
+                clearInterval(resizeInterval);
+                resizeInterval = null;
+            });
+        });
+
     ipcMain.on('open-main-window', () => {
         if (!mainWindow) {
             createMainWindow();
@@ -211,7 +220,7 @@ function setupIPC() {
         }
 
         // Notify the overlay window that the main window is open
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
+        if (overlayWindow) {
             overlayWindow.webContents.send('main-window-opened');
         }
     });
@@ -220,7 +229,7 @@ function setupIPC() {
         if (mainWindow) {
             mainWindow.close();
             // Notify the overlay window that the main window is closed
-            if (overlayWindow && !overlayWindow.isDestroyed()) {
+            if (overlayWindow) {
                 overlayWindow.webContents.send('main-window-closed');
             }
         }

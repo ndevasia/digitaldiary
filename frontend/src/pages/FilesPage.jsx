@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 
@@ -10,6 +10,9 @@ function FilesPage() {
     const [showDropdown, setShowDropdown] = useState(false);
     const [showUsersDropdown, setShowUsersDropdown] = useState(false);
     const [showGamesDropdown, setShowGamesDropdown] = useState(false);
+    const mediaDropdownRef = useRef(null);
+    const usersDropdownRef = useRef(null);
+    const gamesDropdownRef = useRef(null);
     const [users, setUsers] = useState([]);
     const [games, setGames] = useState([]);
     const [filter, setFilter] = useState(new Set());
@@ -20,6 +23,26 @@ function FilesPage() {
     useEffect(() => {
         fetchUsers();
         fetchMedia();
+    }, []);
+
+    // Close dropdowns when clicking outside
+    useEffect(() => {
+        const handleDocumentClick = (e) => {
+            const target = e.target;
+
+            if (mediaDropdownRef.current && !mediaDropdownRef.current.contains(target)) {
+                setShowDropdown(false);
+            }
+            if (usersDropdownRef.current && !usersDropdownRef.current.contains(target)) {
+                setShowUsersDropdown(false);
+            }
+            if (gamesDropdownRef.current && !gamesDropdownRef.current.contains(target)) {
+                setShowGamesDropdown(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleDocumentClick);
+        return () => document.removeEventListener('mousedown', handleDocumentClick);
     }, []);
 
     useEffect(() => {
@@ -195,7 +218,7 @@ function FilesPage() {
                     <div className="mb-8 flex flex-wrap gap-4">
 
                     {/* Media Type Dropdown */}
-                    <div className="relative">
+                    <div className="relative" ref={mediaDropdownRef}>
                     <button
                         className="bg-teal-500 text-white px-4 py-2 rounded flex justify-between items-center w-48"
                         onClick={() => setShowDropdown(!showDropdown)}
@@ -229,7 +252,7 @@ function FilesPage() {
                     )}
                     </div>
                     {/* Users Dropdown */}
-                    <div className="relative">
+                    <div className="relative" ref={usersDropdownRef}>
                     <button
                         className="text-white px-4 py-2 rounded flex justify-between items-center w-48"
                         style={{ backgroundColor: '#3e8fa6' }}
@@ -269,7 +292,7 @@ function FilesPage() {
                     )}
                     </div>
                     {/* Games Dropdown */}
-                    <div className="relative">
+                    <div className="relative" ref={gamesDropdownRef}>
                     <button
                         className="text-white px-4 py-2 rounded flex justify-between items-center w-48"
                         style={{ backgroundColor: '#44b785' }}
@@ -305,8 +328,10 @@ function FilesPage() {
                         </div>
                     )}
                     </div>
+                    {/* end Filters Section */}
+                    </div>
                 {/* Media Grid */}
-                    <div className="mt-6">
+                    <div className="w-full mt-6">
                         {loading ? (
                             <div className="text-gray-500">Loading media...</div>
                         ) : error ? (
@@ -326,7 +351,6 @@ function FilesPage() {
                 </div>
             </div>
         </div>
-    </div>
     );
 }
 

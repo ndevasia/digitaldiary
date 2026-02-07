@@ -1,11 +1,12 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Gamepad2, FolderOpen, Edit, BarChart2 } from 'lucide-react';
+import ProfilePicture from './ProfilePicture';
 const { ipcRenderer } = window.require('electron');
 
 function Sidebar() {
     const location = useLocation();
-
+    
     const isActive = (path) => {
         return location.pathname === path;
     };
@@ -13,9 +14,7 @@ function Sidebar() {
     return (
         <div className="w-64 bg-white border-r border-teal-500 text-gray-700 flex flex-col h-full">
             {/* User profile */}
-            <div className="flex flex-col items-center p-6 pb-8">
-                <div className="w-32 h-32 bg-blue-100 rounded-full border border-teal-500 mb-6"></div>
-            </div>
+            <ProfilePicture />
 
             {/* Navigation links */}
             <nav className="flex-grow">

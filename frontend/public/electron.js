@@ -79,14 +79,18 @@ function createOverlayWindow() {
     const { width } = display.workAreaSize;
 
     overlayWindow = new BrowserWindow({
-        width: 64,     // w-16 == 64 Width for icons (16px * 4)
-        height: 300,    // h-56 == 224 Height for 3 icons + close button + spacing
+        width: 65,     // Initial width
+        height: 300,    // Initial height
+        minWidth: 50,  // Minimum width
+        minHeight: 200, // Minimum height
+        maxWidth: 150,  // Maximum width
+        maxHeight: 600, // Maximum height
         x: width - 100,
         y: 100,
         transparent: true,
         frame: false,
         alwaysOnTop: true,
-        resizable: false,
+        resizable: false,  // Disable native resizing, we'll handle it manually
         backgroundColor: '#00ffffff',
         hasShadow: false,
         webPreferences: {
@@ -113,9 +117,19 @@ function createOverlayWindow() {
 
     // Handle drag events for overlay
     ipcMain.on('dragging', (event, { x, y }) => {
-        if (overlayWindow) {
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
             const position = overlayWindow.getPosition();
             overlayWindow.setPosition(position[0] + x, position[1] + y);
+        }
+    });
+
+    // Handle resize events for overlay
+    ipcMain.on('resizing', (event, { deltaWidth, deltaHeight }) => {
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
+            const [currentWidth, currentHeight] = overlayWindow.getSize();
+            const newWidth = Math.max(50, Math.min(150, currentWidth + deltaWidth));
+            const newHeight = Math.max(200, Math.min(600, currentHeight + deltaHeight));
+            overlayWindow.setSize(newWidth, newHeight);
         }
     });
 }
@@ -162,7 +176,7 @@ function createMainWindow() {
     mainWindow.on('closed', () => {
         mainWindow = null;
         // Notify the overlay window that the main window is closed
-        if (overlayWindow) {
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
             overlayWindow.webContents.send('main-window-closed');
         }
     });
@@ -197,7 +211,7 @@ function setupIPC() {
         }
 
         // Notify the overlay window that the main window is open
-        if (overlayWindow) {
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
             overlayWindow.webContents.send('main-window-opened');
         }
     });
@@ -206,7 +220,7 @@ function setupIPC() {
         if (mainWindow) {
             mainWindow.close();
             // Notify the overlay window that the main window is closed
-            if (overlayWindow) {
+            if (overlayWindow && !overlayWindow.isDestroyed()) {
                 overlayWindow.webContents.send('main-window-closed');
             }
         }

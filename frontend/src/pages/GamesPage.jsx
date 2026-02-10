@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import Sidebar from '../components/Sidebar';
+import { UserContext } from '../context/UserContext.jsx';
 
 function GamesPage() {
   const [mediaData, setMediaData] = useState([]);
@@ -9,21 +9,7 @@ function GamesPage() {
   const [selectedGame, setSelectedGame] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState('');
-  const [currentUsername, setCurrentUsername] = useState('User');
-
-  useEffect(() => {
-    const fetchCurrentUser = async () => {
-      try {
-        const res = await fetch('/api/current_user');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.username) setCurrentUsername(data.username);
-      } catch (err) {
-        console.error('Error fetching current user:', err);
-      }
-    };
-    fetchCurrentUser();
-  }, []);
+  const currentUsername = useContext(UserContext).username || 'User';
 
   useEffect(() => {
     fetchMediaData();
@@ -300,9 +286,7 @@ function GamesPage() {
   };
 
   return (
-    <div className="flex h-screen bg-blue-50">
-      <Sidebar />
-      
+    <div>
       <div className="flex-1 p-8 overflow-y-auto">
         <header className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>

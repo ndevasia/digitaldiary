@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { ChevronDown } from 'lucide-react';
-import Sidebar from '../components/Sidebar';
+import { UserContext } from '../context/UserContext.jsx';
 
 function FilesPage() {
     const [mediaList, setMediaList] = useState([]);
@@ -15,25 +15,11 @@ function FilesPage() {
     const [newUsername, setNewUsername] = useState('');
     const [addUserLoading, setAddUserLoading] = useState(false);
     const [addUserError, setAddUserError] = useState(null);
-    const [currentUsername, setCurrentUsername] = useState('User');
+    const currentUsername = useContext(UserContext).username || 'User';
 
     useEffect(() => {
         fetchUsers();
         // initial media load will be handled by users/userFilter effect
-    }, []);
-
-    useEffect(() => {
-        const fetchCurrentUser = async () => {
-            try {
-                const res = await fetch('/api/current_user');
-                if (!res.ok) return;
-                const data = await res.json();
-                if (data.username) setCurrentUsername(data.username);
-            } catch (err) {
-                console.error('Error fetching current user:', err);
-            }
-        };
-        fetchCurrentUser();
     }, []);
 
     // Recompute filtered media whenever filter, userFilter, or mediaList changes
@@ -191,9 +177,7 @@ function FilesPage() {
     };
 
     return (
-        <div className="flex h-screen bg-blue-50">
-            <Sidebar />
-
+        <div>
             <div className="flex-1 p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>

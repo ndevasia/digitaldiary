@@ -11,7 +11,7 @@ function Sidebar() {
     };
 
     return (
-        <div className="w-64 bg-white border-r border-teal-500 text-gray-700 flex flex-col h-full">
+        <div className="min-w-64 bg-white border-r border-teal-500 text-gray-700 flex flex-col h-full">
             {/* User profile */}
             <div className="flex flex-col items-center p-6 pb-8">
                 <div className="w-32 h-32 bg-blue-100 rounded-full border border-teal-500 mb-6"></div>

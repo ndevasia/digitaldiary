@@ -8,7 +8,7 @@ class Media:
     type: str  # e.g., 'video', 'screenshot', 'audio'
     media_url: str
     timestamp: datetime
-    owner_user_id: int
+    owner_user_id: str
     game: str
 
 @dataclass

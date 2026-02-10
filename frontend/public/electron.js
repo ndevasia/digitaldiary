@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -37,7 +37,8 @@ function startPythonBackend() {
 
     if (isDev) {
         pythonProcess = spawn("python", [scriptPath], {
-            stdio: "inherit"
+            stdio: "inherit",
+            windowsHide: true,
         });
 
         pythonProcess.on("error", (err) => {
@@ -211,11 +212,15 @@ function setupIPC() {
             }
         }
     });
+
+    ipcMain.on('get-root-path', (event) => {
+        event.returnValue = app.getAppPath();
+    });
 }
 
 
 app.whenReady().then(() => {
-    startPythonBackend();
+    // startPythonBackend();
     createOverlayWindow();
     createMainWindow();
     setupIPC();

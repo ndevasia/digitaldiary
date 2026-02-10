@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import Sidebar from '../components/Sidebar';
+import { UserContext } from '../context/UserContext.jsx';
 
 function GamesPage() {
   const [mediaData, setMediaData] = useState([]);
@@ -9,21 +9,7 @@ function GamesPage() {
   const [selectedGame, setSelectedGame] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState('');
-  const [currentUsername, setCurrentUsername] = useState('User');
-
-  useEffect(() => {
-    const fetchCurrentUser = async () => {
-      try {
-        const res = await fetch('/api/current_user');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.username) setCurrentUsername(data.username);
-      } catch (err) {
-        console.error('Error fetching current user:', err);
-      }
-    };
-    fetchCurrentUser();
-  }, []);
+  const currentUsername = useContext(UserContext).username || 'User';
 
   useEffect(() => {
     fetchMediaData();
@@ -101,7 +87,7 @@ function GamesPage() {
     if (games.length === 0) {
       return (
         <div className="text-center py-12">
-          <p className="text-gray-500">No games available at the moment.</p>
+          <p className="text-gray-500">No apps available at the moment.</p>
         </div>
       );
     }
@@ -151,7 +137,7 @@ function GamesPage() {
                 <div className="text-sm text-gray-600 mb-1">
                   {game.media.length} media item{game.media.length !== 1 ? 's' : ''}
                 </div>
-                <div className="text-xs text-gray-500">Last played: {lastPlayed}</div>
+                <div className="text-xs text-gray-500">Last memory: {lastPlayed}</div>
               </div>
             </div>
           );
@@ -177,7 +163,7 @@ function GamesPage() {
             className="flex items-center text-teal-500 hover:text-teal-600 transition-colors"
           >
             <ChevronLeft size={20} className="mr-1" />
-            Back to Games
+            Back to apps
           </button>
         </div>
         
@@ -300,16 +286,14 @@ function GamesPage() {
   };
 
   return (
-    <div className="flex h-screen bg-blue-50">
-      <Sidebar />
-      
+    <div>
       <div className="flex-1 p-8 overflow-y-auto">
         <header className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
         </header>
         
         <section className="mb-8">
-          <h2 className="text-xl font-medium text-gray-700 mb-4">Games</h2>
+          <h2 className="text-xl font-medium text-gray-700 mb-4">Apps</h2>
           
           <div className="bg-white rounded-lg border border-gray-200 p-8">
             {loading ? (

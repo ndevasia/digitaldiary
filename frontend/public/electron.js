@@ -117,6 +117,18 @@ function createOverlayWindow() {
         overlayWindow.webContents.openDevTools({ mode: 'detach' });
     }
 
+    // Handle drag events for overlay
+    ipcMain.on('dragging', (event, { x, y }) => {
+        if (overlayWindow) {
+            const position = overlayWindow.getPosition();
+            overlayWindow.setPosition(position[0] + x, position[1] + y);
+        }
+    });
+
+    // Ensure overlayWindow reference is cleared when it's closed
+    overlayWindow.on('closed', () => {
+        overlayWindow = null;
+    });
 }
 
 function createMainWindow() {
@@ -161,7 +173,7 @@ function createMainWindow() {
     mainWindow.on('closed', () => {
         mainWindow = null;
         // Notify the overlay window that the main window is closed
-        if (overlayWindow) {
+        if (overlayWindow && overlayWindow.webContents && !overlayWindow.webContents.isDestroyed()) {
             overlayWindow.webContents.send('main-window-closed');
         }
     });
@@ -220,7 +232,7 @@ function setupIPC() {
         }
 
         // Notify the overlay window that the main window is open
-        if (overlayWindow) {
+        if (overlayWindow && overlayWindow.webContents && !overlayWindow.webContents.isDestroyed()) {
             overlayWindow.webContents.send('main-window-opened');
         }
     });
@@ -229,7 +241,7 @@ function setupIPC() {
         if (mainWindow) {
             mainWindow.close();
             // Notify the overlay window that the main window is closed
-            if (overlayWindow) {
+            if (overlayWindow && overlayWindow.webContents && !overlayWindow.webContents.isDestroyed()) {
                 overlayWindow.webContents.send('main-window-closed');
             }
         }

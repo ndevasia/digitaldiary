@@ -20,6 +20,12 @@ minjay_README.txt
 # !/dist/audio/.gitkeep
 # !/dist/recordings/.gitkeep
 
+/tests/*
+*dist
+
+# Might just have to ignore the whole bin folder and run npm install every time, apologies to everybody who hasn't installed it yet. It's too big to push.
+/frontend/bin/* 
+
 # PyInstaller build directory
 /build/
 /digitaldiary/

@@ -1,45 +1,81 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { ChevronDown } from 'lucide-react';
-import Sidebar from '../components/Sidebar';
+import { UserContext } from '../context/UserContext.jsx';
 
 function FilesPage() {
     const [mediaList, setMediaList] = useState([]);
     const [filteredMedia, setFilteredMedia] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [filter, setFilter] = useState('all');
-    const [userFilter, setUserFilter] = useState('all');
     const [showDropdown, setShowDropdown] = useState(false);
+    const [showUsersDropdown, setShowUsersDropdown] = useState(false);
+    const [showGamesDropdown, setShowGamesDropdown] = useState(false);
+    const mediaDropdownRef = useRef(null);
+    const usersDropdownRef = useRef(null);
+    const gamesDropdownRef = useRef(null);
     const [users, setUsers] = useState([]);
+    const [games, setGames] = useState([]);
+    const [filter, setFilter] = useState(new Set());
+    const [userFilter, setUserFilter] = useState(new Set());
+    const [gameFilter, setGameFilter] = useState(new Set());
     const [showAddUserModal, setShowAddUserModal] = useState(false);
     const [newUsername, setNewUsername] = useState('');
     const [addUserLoading, setAddUserLoading] = useState(false);
     const [addUserError, setAddUserError] = useState(null);
+    const currentUsername = useContext(UserContext).username || 'User';
+    const abortControllerRef = useRef(null);
 
     useEffect(() => {
         fetchUsers();
         // initial media load will be handled by users/userFilter effect
     }, []);
 
-    // Recompute filtered media whenever filter, userFilter, or mediaList changes
+    // Close dropdowns when clicking outside
+    useEffect(() => {
+        const handleDocumentClick = (e) => {
+            const target = e.target;
+
+            if (mediaDropdownRef.current && !mediaDropdownRef.current.contains(target)) {
+                setShowDropdown(false);
+            }
+            if (usersDropdownRef.current && !usersDropdownRef.current.contains(target)) {
+                setShowUsersDropdown(false);
+            }
+            if (gamesDropdownRef.current && !gamesDropdownRef.current.contains(target)) {
+                setShowGamesDropdown(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleDocumentClick);
+        return () => document.removeEventListener('mousedown', handleDocumentClick);
+    }, []);
     useEffect(() => {
         let filtered = mediaList;
 
-        // Apply media type filter
-        if (filter !== 'all') {
-            filtered = filtered.filter(item => item.type === filter);
+        if (filter.size > 0) {
+            filtered = filtered.filter(item => filter.has(item.type));
         }
 
-        // Apply user filter as a safeguard (mediaList may already be scoped by fetch)
-        if (userFilter !== 'all') {
-            filtered = filtered.filter(
-                item => String(item.owner_user_id) === String(userFilter)
-            );
+        if (userFilter.size > 0) {
+            filtered = filtered.filter(item => userFilter.has(item.owner_user_id.toString()));
+        }
+
+        if (gameFilter.size > 0) {
+            filtered = filtered.filter(item => gameFilter.has(item.game));
         }
 
         setFilteredMedia(filtered);
-    }, [filter, userFilter, mediaList]);
+    }, [filter, userFilter, gameFilter, mediaList]);
 
+    useEffect(() => {
+        fetchMedia();
+        return () => {
+            // Cancel any in-flight requests when dependencies change
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, [userFilter, users]);
 
 
     const fetchUsers = async () => {
@@ -60,59 +96,80 @@ function FilesPage() {
 
     const fetchMedia = async () => {
         try {
-            setLoading(true);
-            setError(null);
+          // Cancel any previous request
+          if (abortControllerRef.current) {
+              abortControllerRef.current.abort();
+          }
+          abortControllerRef.current = new AbortController();
+          const signal = abortControllerRef.current.signal;
 
-            // If "All Users" is selected, fetch per-user and concatenate results
-            if (userFilter === 'all') {
-                const userList = users
-                    .filter(u => String(u.user_id) !== 'all')
-                    .map(u => u.username || u.user_id);
+          setLoading(true);
+          setError(null);
 
-                if (userList.length === 0) {
-                    // Fallback to server default when there are no explicit users yet
-                    const resp = await fetch('/api/media_aws');
-                    if (!resp.ok) throw new Error('Failed to fetch media');
-                    const data = await resp.json();
-                    setMediaList(data);
-                    setFilteredMedia(data);
-                    return;
-                }
+          // If "All Users" is selected, fetch per-user and concatenate results
+          const isAllSelected = userFilter.size === 0 || userFilter.has('all');
 
-                const promises = userList.map(async (u) => {
-                    const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(u)}`);
-                    if (!resp.ok) return [];
-                    return resp.json();
-                });
+        if (isAllSelected) {
+            const userList = users
+                .filter(u => String(u.user_id) !== 'all')
+                .map(u => u.username);
 
-                const arrays = await Promise.all(promises);
-                const merged = arrays.flat();
-                setMediaList(merged);
-                setFilteredMedia(merged);
+            if (userList.length === 0) {
+                const resp = await fetch('/api/media_aws', { signal });
+                if (!resp.ok) throw new Error('Failed to fetch media');
+                const data = await resp.json();
+                setMediaList(data);
+                const uniqueGames = Array.from(
+                  new Set(data.map(item => item.game).filter(Boolean))
+                );
+                setGames(uniqueGames);
+                setGameFilter(new Set()); // Clear game filter when switching users
                 return;
             }
 
-            // Single user selected; `userFilter` holds the username
-            const username = userFilter;
-            const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(username)}`);
-            if (!resp.ok) {
-                throw new Error('Failed to fetch media for user');
-            }
-            const data = await resp.json();
-            setMediaList(data);
-            setFilteredMedia(data);
-        } catch (error) {
-            console.error('Error fetching media:', error);
-            setError(error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+            const promises = userList.map(async (u) => {
+                const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(u)}`, { signal });
+                return resp.ok ? resp.json() : [];
+            });
 
-    // Re-fetch media when selected user or users list changes
-    useEffect(() => {
-        fetchMedia();
-    }, [userFilter, users]);
+            const arrays = await Promise.all(promises);
+            const merged = arrays.flat();
+            setMediaList(merged);
+            const uniqueGames = Array.from(
+              new Set(merged.map(item => item.game).filter(Boolean))
+            );
+            setGames(uniqueGames);
+            setGameFilter(new Set()); // Clear game filter when switching users
+            return;
+        }
+
+        // Single user selected; `userFilter` holds the username
+        const usernames = users
+            .filter(u => userFilter.has(String(u.user_id)))
+            .map(u => u.username || u.user_id);
+        const promises = usernames.map(async (username) => {
+            const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(username)}`, { signal });
+            if (!resp.ok) return [];
+            return resp.json();
+        });
+          
+        const arrays = await Promise.all(promises);
+        const data = arrays.flat();
+        setMediaList(data);
+        const uniqueGames = Array.from(
+          new Set(data.map(item => item.game).filter(Boolean))
+        );
+        setGames(uniqueGames);
+        setGameFilter(new Set()); // Clear game filter when switching users
+      } catch (error) {
+          if (error.name !== 'AbortError') {
+              console.error('Error fetching media:', error);
+              setError(error.message);
+          }
+      } finally {
+          setLoading(false);
+      }
+  };
 
     const handleFilterChange = (filterType) => {
         setFilter(filterType);
@@ -211,33 +268,41 @@ function FilesPage() {
     };
 
     return (
-        <div className="flex h-screen bg-blue-50">
-            <Sidebar />
-
+        <div>
             <div className="flex-1 p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-semibold text-gray-700">Hello, User 1 & User 2</h1>
+                    <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
                 </header>
 
                 <div className="bg-white rounded-lg border border-gray-200 p-8">
                     <h2 className="text-xl font-medium text-gray-700 mb-4">Files</h2>
 
                     {/* Filters Section */}
-                    <div className="mb-8 flex justify-between items-center">
+                    <div className="mb-8 flex justify-between items-start gap-6">
                         {/* User Filter Tabs */}
                         <div className="flex flex-wrap gap-2">
                             {users.map((user) => (
-                                <button
-                                    key={user.user_id}
-                                    onClick={() => setUserFilter(user.user_id)}
-                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                                        userFilter === user.user_id
-                                            ? 'bg-teal-500 text-white'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
-                                >
-                                    {user.username}
-                                </button>
+                                  <button
+                                      onClick={() => {
+                                        if (user.user_id === 'all') {
+                                            setUserFilter(new Set()); // Clearing the set represents "All"
+                                        } else {
+                                            const newSet = new Set(userFilter);
+                                            newSet.delete('all'); // Remove 'all' if a specific user is picked
+                                            const id = String(user.user_id);
+                                            if (newSet.has(id)) newSet.delete(id);
+                                            else newSet.add(id);
+                                            setUserFilter(newSet);
+                                        }
+                                    }}
+                                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
+                                          (user.user_id === 'all' && userFilter.size === 0) || userFilter.has(String(user.user_id))
+                                              ? 'bg-teal-500 text-white'
+                                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                      }`}
+                                  >
+                                      {user.username}
+                                  </button>
                             ))}
                             <button
                                 onClick={() => {
@@ -250,71 +315,99 @@ function FilesPage() {
                                 Add User
                             </button>
                         </div>
+                    {/* Media + App Filters */}
+                    <div className="flex gap-4"></div>
+                        {/* Media Type Dropdown */}
+                        <div className="relative" ref={mediaDropdownRef}>
+                        <button
+                            className="bg-teal-500 text-white px-4 py-2 rounded flex justify-between items-center w-48"
+                            onClick={() => setShowDropdown(!showDropdown)}
+                        >
+                            {filter.size === 0
+                            ? 'All Types'
+                            : Array.from(filter).map(f => getFilterDisplayName(f)).join(', ')}
+                            <ChevronDown size={18} className="ml-2" />
+                        </button>
 
-                        {/* Media Filter Dropdown */}
-                        <div className="relative">
-                            <button
-                                className="bg-teal-500 text-white px-4 py-2 rounded flex items-center"
-                                onClick={() => setShowDropdown(!showDropdown)}
-                            >
-                                {getFilterDisplayName(filter)} <ChevronDown size={18} className="ml-2" />
-                            </button>
-
-                            {showDropdown && (
-                                <div className="absolute top-full right-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-40 z-10">
-                                    <ul>
-                                        <li className="px-4 py-2 hover:bg-gray-100 text-teal-500 cursor-pointer" onClick={() => handleFilterChange('all')}>
-                                            All
-                                        </li>
-                                        <li className="px-4 py-2 hover:bg-gray-100 text-teal-500 cursor-pointer" onClick={() => handleFilterChange('screenshot')}>
-                                            Screenshots
-                                        </li>
-                                        <li className="px-4 py-2 hover:bg-gray-100 text-teal-500 cursor-pointer" onClick={() => handleFilterChange('audio')}>
-                                            Audio
-                                        </li>
-                                        <li className="px-4 py-2 hover:bg-gray-100 text-teal-500 cursor-pointer" onClick={() => handleFilterChange('video')}>
-                                            Video
-                                        </li>
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {loading ? (
-                        <div className="grid grid-cols-3 gap-6">
-                            {[1, 2, 3, 4, 5, 6].map((_, index) => (
-                                <div key={index} className="animate-pulse bg-blue-100 h-48 rounded"></div>
-                            ))}
-                        </div>
-                    ) : error ? (
-                        <div className="text-center py-12">
-                            <p className="text-red-500">{error}</p>
-                            <button
-                                className="mt-4 bg-teal-500 text-white px-4 py-2 rounded hover:bg-teal-600"
-                                onClick={fetchMedia}
-                            >
-                                Try Again
-                            </button>
-                        </div>
-                    ) : filteredMedia.length === 0 ? (
-                        <div className="text-center py-12">
-                            <p className="text-gray-500">No media files found.</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {filteredMedia.map((item) => (
-                                <div
-                                    key={item.media_id}
-                                    className="bg-white rounded-lg shadow-sm overflow-hidden p-4 flex flex-col"
+                        {showDropdown && (
+                            <div className="absolute top-full left-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-48 z-10">
+                            <ul>
+                                {['screenshot', 'audio', 'video'].map(type => (
+                                <li
+                                    key={type}
+                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                                    onClick={() => {
+                                    const newFilter = new Set(filter);
+                                    if (newFilter.has(type)) newFilter.delete(type);
+                                    else newFilter.add(type);
+                                    setFilter(newFilter);
+                                    }}
                                 >
-                                    <div className="flex-grow">
+                                    {getFilterDisplayName(type)}
+                                    {filter.has(type) && <span>✔️</span>}
+                                </li>
+                                ))}
+                            </ul>
+                            </div>
+                        )}
+                        </div>
+                        {/* Games Dropdown */}
+                        <div className="relative" ref={gamesDropdownRef}>
+                        <button
+                            className="text-white px-4 py-2 rounded flex justify-between items-center w-48"
+                            style={{ backgroundColor: '#44b785' }}
+                            onClick={() => setShowGamesDropdown(!showGamesDropdown)}
+                        >
+                            {gameFilter.size === 0
+                            ? 'All Apps'
+                            : Array.from(gameFilter).join(', ')}
+                            <ChevronDown size={18} className="ml-2" />
+                        </button>
+
+                        {showGamesDropdown && (
+                            <div className="absolute top-full left-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-48 z-10">
+                            <ul>
+                                {games
+                                .filter(g => g !== 'all') // remove the "all" placeholder
+                                .map(game => (
+                                    <li
+                                    key={game}
+                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                                    onClick={() => {
+                                        const newFilter = new Set(gameFilter);
+                                        if (newFilter.has(game)) newFilter.delete(game);
+                                        else newFilter.add(game);
+                                        setGameFilter(newFilter);
+                                    }}
+                                    >
+                                    {game}
+                                    {gameFilter.has(game) && <span>✔️</span>}
+                                    </li>
+                                ))}
+                            </ul>
+                            </div>
+                        )}
+                        </div>
+                        {/* end Filters Section */}
+                        </div>
+                {/* Media Grid */}
+                    <div className="w-full mt-6">
+                        {loading ? (
+                            <div className="text-gray-500">Loading media...</div>
+                        ) : error ? (
+                            <div className="text-red-500">Error: {error}</div>
+                        ) : filteredMedia.length === 0 ? (
+                            <div className="text-gray-600">No media found.</div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-4">
+                                {filteredMedia.map(item => (
+                                    <div key={item.id || item.media_id || item.media_url} className="bg-white rounded-lg border border-gray-100 p-4 h-64 flex flex-col">
                                         {renderMediaItem(item)}
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
             {/* Add User Modal */}

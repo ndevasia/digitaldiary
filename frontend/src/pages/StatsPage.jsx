@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart2 } from 'lucide-react';
-import Sidebar from '../components/Sidebar';
 import Timeline from '../components/Timeline';
 
 function StatsPage() {
@@ -114,31 +113,27 @@ function StatsPage() {
     };
 
     return (
-        <div className="flex h-screen bg-blue-50">
-            <Sidebar />
+        <div className="flex-1 p-8 overflow-y-auto">
+            <header className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-semibold text-gray-700">Statistics</h1>
+            </header>
 
-            <div className="flex-1 p-8 overflow-y-auto">
-                <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-semibold text-gray-700">Statistics</h1>
-                </header>
+            {renderStatsSummary()}
 
-                {renderStatsSummary()}
-
-                {/* Timeline Section */}
-                <div className="max-w-7xl mx-auto px-4 py-8">
-                    <h2 className="text-2xl font-bold text-teal-700 mb-6">Recent Activity</h2>
-                    {loadingTimeline ? (
-                        <div className="animate-pulse bg-white rounded-lg border border-gray-200 p-6">
-                            <div className="space-y-4">
-                                {[1, 2, 3].map((i) => (
-                                    <div key={i} className="h-16 bg-gray-200 rounded"></div>
-                                ))}
-                            </div>
+            {/* Timeline Section */}
+            <div className="max-w-7xl mx-auto px-4 py-8">
+                <h2 className="text-2xl font-bold text-teal-700 mb-6">Recent Activity</h2>
+                {loadingTimeline ? (
+                    <div className="animate-pulse bg-white rounded-lg border border-gray-200 p-6">
+                        <div className="space-y-4">
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="h-16 bg-gray-200 rounded"></div>
+                            ))}
                         </div>
-                    ) : (
-                        <Timeline events={gameEvents} />
-                    )}
-                </div>
+                    </div>
+                ) : (
+                    <Timeline events={gameEvents} />
+                )}
             </div>
         </div>
     );

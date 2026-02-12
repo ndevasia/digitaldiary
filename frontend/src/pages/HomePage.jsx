@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, ChevronLeft } from 'lucide-react';
-import Sidebar from '../components/Sidebar';
 import HeroImage from '../components/HeroImage';
 import Timeline from '../components/Timeline';
+import { UserContext } from '../context/UserContext.jsx';
 
 function HomePage() {
     const [screenshotUrl, setScreenshotUrl] = useState(null);
@@ -18,6 +18,7 @@ function HomePage() {
     const [gameEvents, setGameEvents] = useState([]);
     const [loadingTimeline, setLoadingTimeline] = useState(true);
     const navigate = useNavigate();
+    const currentUsername = useContext(UserContext).username || 'User';
 
     useEffect(() => {
         // Fetch the latest screenshot when component mounts
@@ -281,46 +282,42 @@ function HomePage() {
     };
 
     return (
-        <div className="flex h-screen bg-blue-50">
-            <Sidebar />
+        <div className="flex-1 p-8 overflow-y-auto">
+            <header className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
+                <button className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-3 rounded-full flex items-center transition-colors">
+                    <Plus size={20} className="mr-2" />
+                    New Memory
+                </button>
+            </header>
 
-            <div className="flex-1 p-8 overflow-y-auto">
-                <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-semibold text-gray-700">Hello, User 1 & User 2</h1>
-                    <button className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-3 rounded-full flex items-center transition-colors">
-                        <Plus size={20} className="mr-2" />
-                        New Memory
-                    </button>
-                </header>
+            {/* Hero Image */}
+            <div className="mb-8">
+                <HeroImage onImageChange={handleHeroImageChange} />
+            </div>
 
-                {/* Hero Image */}
-                <div className="mb-8">
-                    <HeroImage onImageChange={handleHeroImageChange} />
-                </div>
+            {/* Main Content */}
+            <main>
+                {selectedTimeframe ? renderTimeframeDetail() : renderMemoriesList()}
+            </main>
 
-                {/* Main Content */}
-                <main>
-                    {selectedTimeframe ? renderTimeframeDetail() : renderMemoriesList()}
-                </main>
+            {/* Image Modal */}
+            {renderImageModal()}
 
-                {/* Image Modal */}
-                {renderImageModal()}
-
-                {/* Timeline Section */}
-                <div className="max-w-7xl mx-auto px-4 py-8">
-                    <h2 className="text-2xl font-bold text-teal-700 mb-6">Recent Activity</h2>
-                    {loadingTimeline ? (
-                        <div className="animate-pulse bg-white rounded-lg border border-gray-200 p-6">
-                            <div className="space-y-4">
-                                {[1, 2, 3].map((i) => (
-                                    <div key={i} className="h-16 bg-gray-200 rounded"></div>
-                                ))}
-                            </div>
+            {/* Timeline Section */}
+            <div className="max-w-7xl mx-auto px-4 py-8">
+                <h2 className="text-2xl font-bold text-teal-700 mb-6">Recent Activity</h2>
+                {loadingTimeline ? (
+                    <div className="animate-pulse bg-white rounded-lg border border-gray-200 p-6">
+                        <div className="space-y-4">
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="h-16 bg-gray-200 rounded"></div>
+                            ))}
                         </div>
-                    ) : (
-                        <Timeline events={gameEvents} />
-                    )}
-                </div>
+                    </div>
+                ) : (
+                    <Timeline events={gameEvents} />
+                )}
             </div>
         </div>
     );

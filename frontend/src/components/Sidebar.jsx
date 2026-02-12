@@ -12,7 +12,7 @@ function Sidebar() {
     };
 
     return (
-        <div className="w-64 bg-white border-r border-teal-500 text-gray-700 flex flex-col h-full">
+        <div className="min-w-64 bg-white border-r border-teal-500 text-gray-700 flex flex-col h-full">
             {/* User profile */}
             <ProfilePicture />
 

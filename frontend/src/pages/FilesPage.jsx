@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { ChevronDown } from 'lucide-react';
-import Sidebar from '../components/Sidebar';
+import { UserContext } from '../context/UserContext.jsx';
 
 function FilesPage() {
     const [mediaList, setMediaList] = useState([]);
@@ -14,15 +14,11 @@ function FilesPage() {
     const usersDropdownRef = useRef(null);
     const gamesDropdownRef = useRef(null);
     const [users, setUsers] = useState([]);
-    const [games, setGames] = useState([]);
-    const [filter, setFilter] = useState(new Set());
-    const [userFilter, setUserFilter] = useState(new Set());
-    const [gameFilter, setGameFilter] = useState(new Set());
-    
     const [showAddUserModal, setShowAddUserModal] = useState(false);
     const [newUsername, setNewUsername] = useState('');
     const [addUserLoading, setAddUserLoading] = useState(false);
     const [addUserError, setAddUserError] = useState(null);
+    const currentUsername = useContext(UserContext).username || 'User';
 
     useEffect(() => {
         fetchUsers();
@@ -49,6 +45,7 @@ function FilesPage() {
         return () => document.removeEventListener('mousedown', handleDocumentClick);
     }, []);
 
+    // Recompute filtered media whenever filter, userFilter, or mediaList changes
     useEffect(() => {
         let filtered = mediaList;
 
@@ -63,12 +60,24 @@ function FilesPage() {
         if (gameFilter.size > 0) {
             filtered = filtered.filter(item => gameFilter.has(item.game));
         }
+        
+        // Apply user filter as a safeguard (mediaList may already be scoped by fetch)
+        if (userFilter !== 'all') {
+            filtered = filtered.filter(
+                item => String(item.owner_user_id) === String(userFilter)
+            );
+        }
 
         setFilteredMedia(filtered);
     }, [filter, userFilter, gameFilter, mediaList]);
 
 
 
+
+    useEffect(() => {
+        fetchUsers();
+        fetchMedia();
+    }, []);
 
     const fetchUsers = async () => {
         try {
@@ -253,12 +262,10 @@ function FilesPage() {
     };
 
     return (
-        <div className="flex h-screen bg-blue-50">
-            <Sidebar />
-
+        <div>
             <div className="flex-1 p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-semibold text-gray-700">Hello, User 1 & User 2</h1>
+                    <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
                 </header>
 
                 <div className="bg-white rounded-lg border border-gray-200 p-8">
@@ -269,28 +276,40 @@ function FilesPage() {
                         {/* User Filter Tabs */}
                         <div className="flex flex-wrap gap-2">
                             {users.map((user) => (
-                                {users.map((user) => (
-                                  <button
-                                      key={user.user_id}
-                                      onClick={() => {
-                                          const newSet = new Set(userFilter);
-                                          const id = String(user.user_id);
+                                <button
+                                    key={user.user_id}
+                                    onClick={() => {
+                                        const newSet = new Set(userFilter);
+                                        const id = String(user.user_id);
 
-                                          if (newSet.has(id)) newSet.delete(id);
-                                          else newSet.add(id);
+                                        if (newSet.has(id)) newSet.delete(id);
+                                        else newSet.add(id);
 
-                                          setUserFilter(newSet);
-                                      }}
-                                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                                          userFilter.has(String(user.user_id))
-                                              ? 'bg-teal-500 text-white'
-                                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                      }`}
-                                  >
-                                      {user.username}
-                                  </button>
-                              ))}
+                                        setUserFilter(newSet);
+                                    }}
+                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
+                                        userFilter.has(String(user.user_id))
+                                            ? 'bg-teal-500 text-white'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    {user.username}
+                                </button>
                             ))}
+                            <button
+                                onClick={() => {
+                                    setNewUsername('');
+                                    setAddUserError(null);
+                                    setShowAddUserModal(true);
+                                }}
+                                className="px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            >
+                                Add User
+                            </button>
+                        </div>
+
+                        {/* Media Filter Dropdown */}
+                        <div className="relative">
                             <button
                                 onClick={() => {
                                     setNewUsername('');

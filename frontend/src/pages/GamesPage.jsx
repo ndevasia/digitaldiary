@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import Sidebar from '../components/Sidebar';
+import { UserContext } from '../context/UserContext.jsx';
 
 function GamesPage() {
   const [mediaData, setMediaData] = useState([]);
@@ -9,6 +9,7 @@ function GamesPage() {
   const [selectedGame, setSelectedGame] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState('');
+  const currentUsername = useContext(UserContext).username || 'User';
 
   useEffect(() => {
     fetchMediaData();
@@ -17,7 +18,7 @@ function GamesPage() {
   const fetchMediaData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/media');
+      const response = await fetch('/api/media_aws');
       if (!response.ok) {
         throw new Error('Failed to fetch media');
       }
@@ -285,12 +286,10 @@ function GamesPage() {
   };
 
   return (
-    <div className="flex h-screen bg-blue-50">
-      <Sidebar />
-      
+    <div>
       <div className="flex-1 p-8 overflow-y-auto">
         <header className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-semibold text-gray-700">Hello, User 1 & User 2</h1>
+          <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
         </header>
         
         <section className="mb-8">

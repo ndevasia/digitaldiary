@@ -9,14 +9,11 @@
 /tests/*
 *dist
 
-# If you want to ensure that the directories themselves are kept (but empty), you can add a .gitkeep file in each.
-# Uncomment the lines below if you are using .gitkeep files to keep empty directories in your repository
-# !/screenshots/.gitkeep
-# !/audio/.gitkeep
-# !/recordings/.gitkeep
-# !/dist/screenshots/.gitkeep
-# !/dist/audio/.gitkeep
-# !/dist/recordings/.gitkeep
+# Might just have to ignore the whole bin folder and run npm install every time, apologies to everybody who hasn't installed it yet. It's too big to push.
+/frontend/bin/* 
+
+/tests/*
+*dist
 
 # PyInstaller build directory
 /build/

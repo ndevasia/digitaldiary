@@ -49,7 +49,7 @@ function HeroImage({ onImageChange }) {
         try {
             setLoadingAllScreenshots(true);
             console.log('Fetching all screenshots...');
-            const response = await fetch('/api/media_aws');
+            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
             if (!response.ok) {
                 throw new Error('Failed to fetch screenshots');
             }

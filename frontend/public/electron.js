@@ -37,7 +37,8 @@ function startPythonBackend() {
 
     if (isDev) {
         pythonProcess = spawn("python", [scriptPath], {
-            stdio: "inherit"
+            stdio: "inherit",
+            windowsHide: true,
         });
 
         pythonProcess.on("error", (err) => {
@@ -215,6 +216,10 @@ function setupIPC() {
                 overlayWindow.webContents.send('main-window-closed');
             }
         }
+    });
+
+    ipcMain.on('get-root-path', (event) => {
+        event.returnValue = app.getAppPath();
     });
 }
 

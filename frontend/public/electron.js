@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, desktopCapturer } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -225,7 +225,7 @@ function setupIPC() {
 
 
 app.whenReady().then(() => {
-    // startPythonBackend();
+    startPythonBackend();
     createOverlayWindow();
     createMainWindow();
     setupIPC();

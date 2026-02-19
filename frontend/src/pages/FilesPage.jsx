@@ -49,8 +49,6 @@ function FilesPage() {
         document.addEventListener('mousedown', handleDocumentClick);
         return () => document.removeEventListener('mousedown', handleDocumentClick);
     }, []);
-
-    // Recompute filtered media whenever filter, userFilter, or mediaList changes
     useEffect(() => {
         let filtered = mediaList;
 
@@ -65,13 +63,6 @@ function FilesPage() {
         if (gameFilter.size > 0) {
             filtered = filtered.filter(item => gameFilter.has(item.game));
         }
-        
-        // Apply user filter as a safeguard (mediaList may already be scoped by fetch)
-        if (userFilter !== 'all') {
-            filtered = filtered.filter(
-                item => String(item.owner_user_id) === String(userFilter)
-            );
-        }
 
         setFilteredMedia(filtered);
     }, [filter, userFilter, gameFilter, mediaList]);
@@ -85,11 +76,6 @@ function FilesPage() {
             }
         };
     }, [userFilter, users]);
-
-    useEffect(() => {
-        fetchUsers();
-        fetchMedia();
-    }, []);
 
     const fetchUsers = async () => {
         try {

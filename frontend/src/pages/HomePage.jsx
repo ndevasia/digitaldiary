@@ -60,7 +60,7 @@ function HomePage() {
     const fetchGameSessions = async () => {
         try {
             setLoadingTimeline(true);
-            const response = await fetch('/api/media_aws');
+            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
             const mediaData = await response.json();
 
             // Group media by game_id and get the latest timestamp for each game

@@ -115,7 +115,7 @@ function FilesPage() {
                 .map(u => u.username);
 
             if (userList.length === 0) {
-                const resp = await fetch('/api/media_aws', { signal });
+                const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`, { signal });
                 if (!resp.ok) throw new Error('Failed to fetch media');
                 const data = await resp.json();
                 setMediaList(data);

@@ -40,7 +40,7 @@ except ImportError as e:
             return self
 
         def get_presigned_url(self, file_path):
-            object_name = f"sophia/{os.path.basename(file_path)}"
+            object_name = f"{os.getenv('USERNAME')}/{os.path.basename(file_path)}"
             url = self.client.generate_presigned_url(
                 'put_object',
                 Params={'Bucket': self.bucket_name, 'Key': object_name},

@@ -506,107 +506,34 @@ def stop_screen_recording():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/audio/start', methods=['POST'])
-def start_audio_recording():
+@app.route('/api/audio/upload', methods=['POST'])
+def upload_audio_recording():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part in the request'}), 400
+    file = request.files['file']
+    if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() not in ['mp3', 'wav', 'flac']:
+        return jsonify({'error': 'Invalid file type'}), 400
+    
     try:
-        global audio_recorder
+        # Generate presigned URL for upload
+        object_name = f"{USERNAME}/recordings/{file.filename}"
+        url = s3_client.generate_presigned_url(
+            'put_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
 
-        # Initialize audio recorder with the same parameters as AudioRecorderThread
-        audio_recorder = {
-            'recording': True,
-            'frames': [],
-            'samplerate': 44100
-        }
-
-        # Detect the default input device
-        default_device = sd.query_devices(kind='input')
-
-        # Ensure the device supports at least 1 channel (same logic as AudioRecorderThread)
-        channels = min(default_device['max_input_channels'], 2)
-        if channels < 1:
-            return jsonify({'error': "No valid input channels found on the default recording device."}), 500
-
-        audio_recorder['channels'] = channels
-
-        def audio_callback(indata, frames, time, status):
-            if status:
-                print(status)
-            audio_recorder['frames'].append(indata.copy())
-
-        # Start recording in a separate thread
-        def record_audio():
-            try:
-                with sd.InputStream(samplerate=audio_recorder['samplerate'],
-                                   channels=audio_recorder['channels'],
-                                   callback=audio_callback):
-                    while audio_recorder['recording']:
-                        sd.sleep(100)  # Sleep to allow audio recording to happen
-            except Exception as e:
-                print(f"Error during audio recording: {e}")
-
-        import threading
-        recording_thread = threading.Thread(target=record_audio)
-        recording_thread.daemon = True  # Make thread daemon so it exits when main thread exits
-        recording_thread.start()
-
-        return jsonify({'status': 'started'})
-    except Exception as e:
-        print(f"Audio start error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/audio/stop', methods=['POST'])
-def stop_audio_recording():
-    try:
-        global audio_recorder
-        if audio_recorder and audio_recorder['recording']:
-            # Stop recording
-            audio_recorder['recording'] = False
-
-            # Wait a bit for the recording to finalize
-            sd.sleep(200)
-
-            # Generate filename using QDateTime for consistency
-            now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
-            audio_path = os.path.join(AUDIO_DIR, f'audio_recording_{now}.wav')
-
-            try:
-                # Save the audio data to a file (same as AudioRecorderThread)
-                sf.write(audio_path, np.concatenate(audio_recorder['frames']), audio_recorder['samplerate'])
-                print(f"Audio recording finalized at {audio_path}")
-            except Exception as e:
-                print(f"Error saving audio file: {e}")
-                return jsonify({'error': f"Failed to save audio: {str(e)}"}), 500
-
-            # Upload to S3
-            try:
-                object_name = f"{USERNAME}/{os.path.basename(audio_path)}"
-                url = s3_client.generate_presigned_url(
-                    'put_object',
-                    Params={'Bucket': BUCKET_NAME, 'Key': object_name},
-                    ExpiresIn=3600
-                )
-
-                with open(audio_path, 'rb') as f:
-                    response = requests.put(url, data=f)
-                    if response.status_code != 200:
-                        raise Exception("Failed to upload audio file")
-                print("Audio uploaded successfully.")
-            except Exception as e:
-                print(f"Error uploading audio: {e}")
-                return jsonify({'error': f"Failed to upload audio: {str(e)}"}), 500
-
-            # Clear the recorder
-            temp_path = audio_path  # Save path before clearing
-            audio_recorder = None
-
+        # Upload to S3
+        response = requests.put(url, data=file)
+        if response.status_code != 200:
+            raise Exception("Failed to upload audio recording")
+        else:
             return jsonify({
-                'status': 'stopped',
-                'path': temp_path
+                'status': 'success',
+                'url': url
             })
-
-        return jsonify({'error': 'No active recording'}), 400
     except Exception as e:
-        print(f"Audio stop error: {str(e)}")
+        print(f'Audio upload error: {str(e)}')
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/media', methods=['GET'])

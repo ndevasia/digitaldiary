@@ -57,9 +57,7 @@ function SettingsPage() {
         );
     }
 
-    return (<div className="flex h-screen bg-blue-50">
-        <Sidebar />
-
+    return (
         <div className="flex-1 p-8 overflow-y-auto">
             <header className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-semibold text-gray-700">Settings</h1>
@@ -85,7 +83,7 @@ function SettingsPage() {
                 </div>
             </section>
         </div>
-    </div>);
+    );
 }
 
 export default SettingsPage;

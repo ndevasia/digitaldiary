@@ -105,8 +105,17 @@ class FFMpeg {
             '../recordings',
             'thumbnails'
         );
-        this.process = null;
-        this.currentRecordingName = null;
+        this.screenProcess = null;
+        this.audioProcess = null;
+        this.currentScreenRecordingName = null;
+        this.currentAudioRecordingName = null;
+
+        // Ensure directories exist
+        [this.screenshotPath, this.audioRecordingPath, this.videoRecordingPath, this.thumbnailPath].forEach(dir => {
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+        });
     }
 
     /**
@@ -157,12 +166,12 @@ class FFMpeg {
             console.log('Starting FFMpeg at path:', this.path);
 
         return new Promise((resolve, reject) => {
-            if (this.process) {
-                reject(new Error('FFMpeg is already running a process'));
+            if (this.screenProcess) {
+                reject(new Error('FFMpeg is already running a screen process'));
                 return;
             }
             
-            this.currentRecordingName = `recording_${Date.now()}`;
+            this.currentScreenRecordingName = `recording_${Date.now()}`;
             const args = [...this.getVideoRecordingArgs()];
             
             if (withAudio) {
@@ -183,7 +192,7 @@ class FFMpeg {
             
             console.log('FFMpeg args:', args);
             
-            this.process = spawn(
+            this.screenProcess = spawn(
                 this.path, 
                 args, 
                 {stdio: ['pipe', 'pipe', 'pipe']}
@@ -191,23 +200,23 @@ class FFMpeg {
 
             let opened = false;
 
-            this.process.on('spawn', () => {
-                console.log('FFMpeg process started');
+            this.screenProcess.on('spawn', () => {
+                console.log('FFMpeg screen process started');
                 setTimeout(() => {
                     if (!opened) {
-                        this.process.kill('SIGKILL');
-                        this.process = null;
-                        reject(new Error('FFMpeg failed to start recording in time'));
+                        this.screenProcess.kill('SIGKILL');
+                        this.screenProcess = null;
+                        reject(new Error('FFMpeg failed to start screen recording in time'));
                     }
                 }, 10000);
             });
 
-            this.process.on('error', (err) => {
-                this.process = null;
+            this.screenProcess.on('error', (err) => {
+                this.screenProcess = null;
                 reject(new Error(`Failed to start FFMpeg: ${err.message}`));
             });
 
-            this.process.stderr.on('data', (data) => {
+            this.screenProcess.stderr.on('data', (data) => {
                 if (VERBOSE)
                     console.log(`FFMpeg stderr: ${data}`);
                 // Resolve when we see the first frame being recorded
@@ -227,33 +236,33 @@ class FFMpeg {
      */
     async stopVideoStream() {
         return new Promise((resolve, reject) => {
-            if (this.process) {
+            if (this.screenProcess) {
                 // Set a timeout to force kill if not exiting in time
                 const timeout = setTimeout(() => {
-                    if (this.process) {
+                    if (this.screenProcess) {
                         // Force killing will corrupt the video, but ensures process termination
                         if (VERBOSE)
-                            console.log('Force killing FFMpeg process');
-                        this.process.kill('SIGKILL');
-                        this.process = null;
-                        reject(new Error('FFMpeg process force killed due to timeout'));
+                            console.log('Force killing FFMpeg screen process');
+                        this.screenProcess.kill('SIGKILL');
+                        this.screenProcess = null;
+                        reject(new Error('FFMpeg screen process force killed due to timeout'));
                     }
                 }, 5000);
 
                 // Only resolve when process exits
                 // We also need to generate the thumbnail after recording stops
-                this.process.on('exit', (code) => {
+                this.screenProcess.on('exit', (code) => {
                     if (VERBOSE)
-                        console.log(`FFMpeg process exited with code ${code}`);
-                    this.process = null;
+                        console.log(`FFMpeg screen process exited with code ${code}`);
+                    this.screenProcess = null;
                     clearTimeout(timeout);
                     resolve();
                 });
 
                 // Send 'q' to gracefully stop recording
-                this.process.stdin.write('q\n');
+                this.screenProcess.stdin.write('q\n');
             } else {
-                reject(new Error('FFMpeg is not recording or process is not available'));
+                reject(new Error('FFMpeg is not recording or screen process is not available'));
             }
         });
     }
@@ -269,30 +278,30 @@ class FFMpeg {
                 reject(new Error('Audio recording device is set to none'));
                 return;
             }
-            if (this.process) {
-                reject(new Error('FFMpeg is already running a process'));
+            if (this.audioProcess) {
+                reject(new Error('FFMpeg is already running an audio recording process'));
                 return;
             }
 
             this.currentRecordingName = `audio_recording_${Date.now()}`;
-            this.process = spawn(
+            this.audioProcess = spawn(
                 this.path, 
-                [...this.getAudioRecordingArgs(device), path.join(this.audioRecordingPath, this.currentRecordingName + '.mp3')], 
+                [...this.getAudioRecordingArgs(device), path.join(this.audioRecordingPath, this.currentAudioRecordingName + '.mp3')], 
                 {stdio: ['pipe', 'pipe', 'pipe']}
             );
 
-            this.process.on('spawn', () => {
+            this.audioProcess.on('spawn', () => {
                 if (VERBOSE)
                     console.log('FFMpeg audio recording process started');
                 resolve();
             });
 
-            this.process.on('error', (err) => {
-                this.process = null;
+            this.audioProcess.on('error', (err) => {
+                this.audioProcess = null;
                 reject(new Error(`Failed to start FFMpeg audio recording: ${err.message}`));
             });
 
-            this.process.stderr.on('data', (data) => {
+            this.audioProcess.stderr.on('data', (data) => {
                 if (VERBOSE)
                     console.log(`FFMpeg stderr: ${data}`);
             });
@@ -301,34 +310,37 @@ class FFMpeg {
 
     /**
      * Stops the current audio recording.
-     * @returns {Promise<void>} Resolves when audio recording stops.
+     * @returns {Promise<File>} Resolves when audio recording stops with the recorded audio file.
      */
     stopAudioRecording() {
         return new Promise((resolve, reject) => {
-            if (this.process) {
+            if (this.audioProcess) {
                 // Set a timeout to force kill if not exiting in time
                 const timeout = setTimeout(() => {
-                    if (this.process) {
-                        // Force killing will corrupt the video, but ensures process termination
+                    if (this.audioProcess) {
+                        // Force killing will corrupt the audio, but ensures process termination
                         if (VERBOSE)
-                            console.log('Force killing FFMpeg process');
-                        this.process.kill('SIGKILL');
-                        this.process = null;
-                        reject(new Error('FFMpeg process force killed due to timeout'));
+                            console.log('Force killing FFMpeg audio recording process');
+                        this.audioProcess.kill('SIGKILL');
+                        this.audioProcess = null;
+                        reject(new Error('FFMpeg audio recording process force killed due to timeout'));
                     }
                 }, 5000);
 
                 // Only resolve when process exits
-                this.process.on('exit', (code) => {
+                this.audioProcess.on('exit', (code) => {
                     if (VERBOSE)
                         console.log(`FFMpeg audio recording process exited with code ${code}`);
-                    this.process = null;
+                    this.audioProcess = null;
                     clearTimeout(timeout);
-                    resolve();
+                    resolve(new File(
+                        [fs.readFileSync(path.join(this.audioRecordingPath, this.currentAudioRecordingName + '.mp3'))],
+                        this.currentAudioRecordingName + '.mp3',
+                    ));
                 });
 
                 // Send 'q' to gracefully stop recording
-                this.process.stdin.write('q\n');
+                this.audioProcess.stdin.write('q\n');
             } else {
                 reject(new Error('FFMpeg audio recording process is not available'));
             }

@@ -167,8 +167,21 @@ function App() {
                     console.error('Audio recording error:', err);
                 });
             } else {
-                FFMpeg.stopAudioRecording().then(() => {
+                FFMpeg.stopAudioRecording().then((audio_file) => {
                     console.log('Audio recording stopped');
+                    const formData = new FormData();
+                    formData.append('enctype', 'multipart/form-data');
+                    formData.append('file', audio_file);
+                    fetch('/api/audio/upload', {
+                        method: 'POST',
+                        body: formData,
+                    }).then((response) => {
+                        if (response.ok) {
+                            console.log('Audio file uploaded successfully');
+                        }
+                    }).catch((err) => {
+                        console.error('Audio file upload error:', err);
+                    });
                     setIsAudioRecording(false);
                 }).catch((err) => {
                     console.error('Audio recording error:', err);

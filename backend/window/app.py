@@ -193,7 +193,7 @@ def get_media_aws():
 
             # Determine media type
             media_type = "unknown"
-            if file_extension in ['mp4', 'mov']:
+            if file_extension in ['mp4', 'mov', 'mkv']:
                 media_type = "video"
             elif file_extension in ['mp3', 'wav']:
                 media_type = "audio"
@@ -479,6 +479,7 @@ def stop_screen_recording():
                 Params={'Bucket': BUCKET_NAME, 'Key': object_name},
                 ExpiresIn=3600
             )
+            
             with open(ffmpeg_output, 'rb') as f:
                 response = requests.put(url, data=f)
                 if response.status_code != 200:

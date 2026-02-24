@@ -54,6 +54,11 @@ function FilesPage() {
     useEffect(() => {
         let filtered = mediaList;
 
+        // Filter out items with invalid types or missing timestamps
+        filtered = filtered.filter(item => 
+            item.timestamp && ['video', 'audio', 'screenshot'].includes(item.type)
+        );
+
         if (filter.size > 0) {
             filtered = filtered.filter(item => filter.has(item.type));
         }
@@ -81,11 +86,16 @@ function FilesPage() {
 
     // calculate date range boundaries from media
     useEffect(() => {
-        if (mediaList.length === 0) {
+        // Filter out invalid items before calculating date range
+        const validMedia = mediaList.filter(item => 
+            item.timestamp && ['video', 'audio', 'screenshot'].includes(item.type)
+        );
+        
+        if (validMedia.length === 0) {
             setDateRangeInfo({ min: '', max: '' });
             return;
         }
-        const dates = mediaList
+        const dates = validMedia
             .map(item => new Date(item.timestamp).toISOString().split('T')[0])
             .sort();
         setDateRangeInfo({
@@ -161,9 +171,10 @@ function FilesPage() {
                 const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`, { signal });
                 if (!resp.ok) throw new Error('Failed to fetch media');
                 const data = await resp.json();
-                setMediaList(data);
+                const sorted = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                setMediaList(sorted);
                 const uniqueGames = Array.from(
-                  new Set(data.map(item => item.game).filter(Boolean))
+                  new Set(sorted.map(item => item.game).filter(Boolean))
                 );
                 setGames(uniqueGames);
                 setGameFilter(new Set()); // Clear game filter when switching users
@@ -176,7 +187,7 @@ function FilesPage() {
             });
 
             const arrays = await Promise.all(promises);
-            const merged = arrays.flat();
+            const merged = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             setMediaList(merged);
             const uniqueGames = Array.from(
               new Set(merged.map(item => item.game).filter(Boolean))
@@ -197,7 +208,7 @@ function FilesPage() {
         });
           
         const arrays = await Promise.all(promises);
-        const data = arrays.flat();
+        const data = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         setMediaList(data);
         const uniqueGames = Array.from(
           new Set(data.map(item => item.game).filter(Boolean))

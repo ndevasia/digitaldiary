@@ -107,6 +107,19 @@ function FilesPage() {
         };
     }, [userFilter, users]);
 
+    // auto-refresh media when the date range changes
+    useEffect(() => {
+        // only trigger a fetch if a date was actually picked
+        if (dateRange.startDate || dateRange.endDate) {
+            fetchMedia();
+        }
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, [dateRange.startDate, dateRange.endDate]);
+
 
     const fetchUsers = async () => {
         try {

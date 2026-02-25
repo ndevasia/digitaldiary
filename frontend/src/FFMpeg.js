@@ -70,6 +70,15 @@ if (isDev && window.location.href.includes('overlay')) {
             console.log(output.stdout.toString());
             console.log('FFMpeg download script exited with code:', output.status);
         }
+    } else if (platform === 'mac' && arch === 'arm64') {
+        console.log("Giving FMMPEG binary executable permissions for mac arm64");
+        output = spawnSync(
+            'chmod',
+            ['+x', defaultFFMpegPath],
+            { stdio: ['ignore', 'pipe', 'pipe'] }
+        );
+        console.log(output.stdout.toString());
+        console.log('FFMpeg chmod script exited with code:', output.status);
     }
 }
 

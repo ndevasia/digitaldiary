@@ -18,6 +18,8 @@ function FilesPage() {
     const [filter, setFilter] = useState(new Set());
     const [userFilter, setUserFilter] = useState(new Set());
     const [gameFilter, setGameFilter] = useState(new Set());
+    const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
+    const [dateRangeInfo, setDateRangeInfo] = useState({ min: '', max: '' });
     const [showAddUserModal, setShowAddUserModal] = useState(false);
     const [newUsername, setNewUsername] = useState('');
     const [addUserLoading, setAddUserLoading] = useState(false);
@@ -52,6 +54,11 @@ function FilesPage() {
     useEffect(() => {
         let filtered = mediaList;
 
+        // Filter out items with invalid types or missing timestamps
+        filtered = filtered.filter(item => 
+            item.timestamp && ['video', 'audio', 'screenshot'].includes(item.type)
+        );
+
         if (filter.size > 0) {
             filtered = filtered.filter(item => filter.has(item.type));
         }
@@ -64,8 +71,41 @@ function FilesPage() {
             filtered = filtered.filter(item => gameFilter.has(item.game));
         }
 
+        // apply date range filter
+        if (dateRange.startDate || dateRange.endDate) {
+            filtered = filtered.filter(item => {
+                const itemDate = new Date(item.timestamp).toISOString().split('T')[0];
+                if (dateRange.startDate && itemDate < dateRange.startDate) return false;
+                if (dateRange.endDate && itemDate > dateRange.endDate) return false;
+                return true;
+            });
+        }
+
         setFilteredMedia(filtered);
-    }, [filter, userFilter, gameFilter, mediaList]);
+    }, [filter, userFilter, gameFilter, mediaList, dateRange]);
+
+    // calculate date range boundaries from media
+    useEffect(() => {
+        // Filter out invalid items before calculating date range
+        const validMedia = mediaList.filter(item => 
+            item.timestamp && ['video', 'audio', 'screenshot'].includes(item.type)
+        );
+        
+        if (validMedia.length === 0) {
+            setDateRangeInfo({ min: '', max: '' });
+            return;
+        }
+        const dates = validMedia
+            .map(item => new Date(item.timestamp).toISOString().split('T')[0])
+            .sort();
+        setDateRangeInfo({
+            min: dates[0],
+            max: dates[dates.length - 1]
+        });
+        if (!dateRange.startDate && !dateRange.endDate) {
+            setDateRange({ startDate: dates[0], endDate: dates[dates.length - 1] });
+        }
+    }, [mediaList]);
 
     useEffect(() => {
         fetchMedia();
@@ -76,6 +116,20 @@ function FilesPage() {
             }
         };
     }, [userFilter, users]);
+
+    // auto-refresh media when the date range changes
+    useEffect(() => {
+        // only trigger a fetch if a date was actually picked
+        if (dateRange.startDate || dateRange.endDate) {
+            fetchMedia();
+        }
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, [dateRange.startDate, dateRange.endDate]);
+
 
     const fetchUsers = async () => {
         try {
@@ -117,9 +171,10 @@ function FilesPage() {
                 const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`, { signal });
                 if (!resp.ok) throw new Error('Failed to fetch media');
                 const data = await resp.json();
-                setMediaList(data);
+                const sorted = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                setMediaList(sorted);
                 const uniqueGames = Array.from(
-                  new Set(data.map(item => item.game).filter(Boolean))
+                  new Set(sorted.map(item => item.game).filter(Boolean))
                 );
                 setGames(uniqueGames);
                 setGameFilter(new Set()); // Clear game filter when switching users
@@ -132,7 +187,7 @@ function FilesPage() {
             });
 
             const arrays = await Promise.all(promises);
-            const merged = arrays.flat();
+            const merged = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             setMediaList(merged);
             const uniqueGames = Array.from(
               new Set(merged.map(item => item.game).filter(Boolean))
@@ -153,7 +208,7 @@ function FilesPage() {
         });
           
         const arrays = await Promise.all(promises);
-        const data = arrays.flat();
+        const data = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         setMediaList(data);
         const uniqueGames = Array.from(
           new Set(data.map(item => item.game).filter(Boolean))
@@ -277,9 +332,9 @@ function FilesPage() {
                     <h2 className="text-xl font-medium text-gray-700 mb-4">Files</h2>
 
                     {/* Filters Section */}
-                    <div className="mb-8 flex justify-between items-start gap-6">
+                    <div className="mb-8">
                         {/* User Filter Tabs */}
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2 mb-6">
                             {users.map((user) => (
                                   <button
                                       onClick={() => {
@@ -314,81 +369,105 @@ function FilesPage() {
                                 Add User
                             </button>
                         </div>
-                    {/* Media + App Filters */}
-                    <div className="flex gap-4"></div>
-                        {/* Media Type Dropdown */}
-                        <div className="relative" ref={mediaDropdownRef}>
-                        <button
-                            className="bg-teal-500 text-white px-4 py-2 rounded flex justify-between items-center w-48"
-                            onClick={() => setShowDropdown(!showDropdown)}
-                        >
-                            {filter.size === 0
-                            ? 'All Types'
-                            : Array.from(filter).map(f => getFilterDisplayName(f)).join(', ')}
-                            <ChevronDown size={18} className="ml-2" />
-                        </button>
+                        {/* Media + App + Date Filters */}
+                        <div className="flex flex-wrap gap-4">
+                            {/* Media Type Dropdown */}
+                            <div className="relative" ref={mediaDropdownRef}>
+                            <button
+                                className="bg-teal-500 text-white px-4 py-2 rounded flex justify-between items-center w-48"
+                                onClick={() => setShowDropdown(!showDropdown)}
+                            >
+                                {filter.size === 0
+                                ? 'All Types'
+                                : Array.from(filter).map(f => getFilterDisplayName(f)).join(', ')}
+                                <ChevronDown size={18} className="ml-2" />
+                            </button>
 
-                        {showDropdown && (
-                            <div className="absolute top-full left-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-48 z-10">
-                            <ul>
-                                {['screenshot', 'audio', 'video'].map(type => (
-                                <li
-                                    key={type}
-                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
-                                    onClick={() => {
-                                    const newFilter = new Set(filter);
-                                    if (newFilter.has(type)) newFilter.delete(type);
-                                    else newFilter.add(type);
-                                    setFilter(newFilter);
-                                    }}
-                                >
-                                    {getFilterDisplayName(type)}
-                                    {filter.has(type) && <span>✔️</span>}
-                                </li>
-                                ))}
-                            </ul>
-                            </div>
-                        )}
-                        </div>
-                        {/* Games Dropdown */}
-                        <div className="relative" ref={gamesDropdownRef}>
-                        <button
-                            className="text-white px-4 py-2 rounded flex justify-between items-center w-48"
-                            style={{ backgroundColor: '#44b785' }}
-                            onClick={() => setShowGamesDropdown(!showGamesDropdown)}
-                        >
-                            {gameFilter.size === 0
-                            ? 'All Apps'
-                            : Array.from(gameFilter).join(', ')}
-                            <ChevronDown size={18} className="ml-2" />
-                        </button>
-
-                        {showGamesDropdown && (
-                            <div className="absolute top-full left-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-48 z-10">
-                            <ul>
-                                {games
-                                .filter(g => g !== 'all') // remove the "all" placeholder
-                                .map(game => (
+                            {showDropdown && (
+                                <div className="absolute top-full left-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-48 z-10">
+                                <ul>
+                                    {['screenshot', 'audio', 'video'].map(type => (
                                     <li
-                                    key={game}
-                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
-                                    onClick={() => {
-                                        const newFilter = new Set(gameFilter);
-                                        if (newFilter.has(game)) newFilter.delete(game);
-                                        else newFilter.add(game);
-                                        setGameFilter(newFilter);
-                                    }}
+                                        key={type}
+                                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                                        onClick={() => {
+                                        const newFilter = new Set(filter);
+                                        if (newFilter.has(type)) newFilter.delete(type);
+                                        else newFilter.add(type);
+                                        setFilter(newFilter);
+                                        }}
                                     >
-                                    {game}
-                                    {gameFilter.has(game) && <span>✔️</span>}
+                                        {getFilterDisplayName(type)}
+                                        {filter.has(type) && <span>✔️</span>}
                                     </li>
-                                ))}
-                            </ul>
+                                    ))}
+                                </ul>
+                                </div>
+                            )}
                             </div>
-                        )}
+                            {/* Games Dropdown */}
+                            <div className="relative" ref={gamesDropdownRef}>
+                            <button
+                                className="text-white px-4 py-2 rounded flex justify-between items-center w-48"
+                                style={{ backgroundColor: '#44b785' }}
+                                onClick={() => setShowGamesDropdown(!showGamesDropdown)}
+                            >
+                                {gameFilter.size === 0
+                                ? 'All Apps'
+                                : Array.from(gameFilter).join(', ')}
+                                <ChevronDown size={18} className="ml-2" />
+                            </button>
+
+                            {showGamesDropdown && (
+                                <div className="absolute top-full left-0 mt-1 bg-white shadow-md rounded-lg border border-gray-200 w-48 z-10">
+                                <ul>
+                                    {games
+                                    .filter(g => g !== 'all') // remove the "all" placeholder
+                                    .map(game => (
+                                        <li
+                                        key={game}
+                                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between"
+                                        onClick={() => {
+                                            const newFilter = new Set(gameFilter);
+                                            if (newFilter.has(game)) newFilter.delete(game);
+                                            else newFilter.add(game);
+                                            setGameFilter(newFilter);
+                                        }}
+                                        >
+                                        {game}
+                                        {gameFilter.has(game) && <span>✔️</span>}
+                                        </li>
+                                    ))}
+                                </ul>
+                                </div>
+                            )}
+                            </div>
+                            {/* Date Range Filter */}
+                            <div className="bg-gray-100 border border-gray-200 rounded px-4 py-2 flex gap-2 items-center"
+                                style={{ backgroundColor: '#8ddab7' }}>
+                                <input
+                                    type="date"
+                                    value={dateRange.startDate}
+                                    onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
+                                    onBlur={() => {}}
+                                    min={dateRangeInfo.min}
+                                    max={dateRangeInfo.max}
+                                    className="px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 bg-white"
+                                />
+                                <span className="text-gray-600 text-sm">to</span>
+                                <input
+                                    type="date"
+                                    value={dateRange.endDate}
+                                    onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
+                                    onBlur={() => {}}
+                                    min={dateRangeInfo.min}
+                                    max={dateRangeInfo.max}
+                                    className="px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 bg-white"
+                                />
+                            </div>
                         </div>
                         {/* end Filters Section */}
-                        </div>
+                    </div>
                 {/* Media Grid */}
                     <div className="w-full mt-6">
                         {loading ? (

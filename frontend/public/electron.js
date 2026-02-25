@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -36,9 +36,13 @@ function startPythonBackend() {
     console.log("Starting Python backend at:", scriptPath);
 
     if (isDev) {
-        pythonProcess = spawn("python", [scriptPath], {
-            stdio: "inherit",
-            windowsHide: true,
+        // Use the virtual environment Python if it exists
+        const venvPython = path.join(__dirname, "../../venv/Scripts/python.exe");
+        const pythonCmd = fs.existsSync(venvPython) ? venvPython : "python";
+        
+        console.log("Using Python:", pythonCmd);
+        pythonProcess = spawn(pythonCmd, [scriptPath], {
+            stdio: "inherit"
         });
 
         pythonProcess.on("error", (err) => {
@@ -75,13 +79,14 @@ function startPythonBackend() {
 }
 
 function createOverlayWindow() {
-    const screen = require('electron').screen;
     const display = screen.getPrimaryDisplay();
     const { width } = display.workAreaSize;
 
-    overlayWindow = new BrowserWindow({
-        width: 64,     // w-16 == 64 Width for icons (16px * 4)
-        height: 300,    // h-56 == 224 Height for 3 icons + close button + spacing
+        overlayWindow = new BrowserWindow({
+            width: 64,
+            height: 300,
+            minWidth: 64,
+            minHeight: 100,
         x: width - 100,
         y: 100,
         transparent: true,
@@ -193,6 +198,30 @@ function setupIPC() {
             currentWindow.minimize();
         }
     });
+
+        // Resizing: main process uses global cursor position
+        let resizeInterval = null;
+
+        ipcMain.on('start-resize', () => {
+            if (!overlayWindow) return;
+            const startMouse = screen.getCursorScreenPoint();
+            const startBounds = overlayWindow.getBounds();
+
+            if (resizeInterval) clearInterval(resizeInterval);
+            resizeInterval = setInterval(() => {
+                const currentMouse = screen.getCursorScreenPoint();
+                const newWidth = Math.max(64, startBounds.width + (currentMouse.x - startMouse.x));
+                const newHeight = Math.max(100, startBounds.height + (currentMouse.y - startMouse.y));
+                overlayWindow.setResizable(true);
+                overlayWindow.setSize(Math.round(newWidth), Math.round(newHeight));
+                overlayWindow.setResizable(false);
+            }, 16);
+
+            ipcMain.once('stop-resize', () => {
+                clearInterval(resizeInterval);
+                resizeInterval = null;
+            });
+        });
 
     ipcMain.on('open-main-window', () => {
         if (!mainWindow) {

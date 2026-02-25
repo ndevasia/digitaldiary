@@ -3,8 +3,8 @@ import os
 import boto3
 import json
 import sys
+import signal
 from flask_cors import CORS  # You'll need to install flask-cors
-# import pyautogui
 import subprocess
 import platform
 from datetime import datetime, timedelta, timezone
@@ -38,7 +38,7 @@ except ImportError as e:
             return self
 
         def get_presigned_url(self, file_path):
-            object_name = f"{USERNAME}/{os.path.basename(file_path)}"
+            object_name = f"{os.getenv('USERNAME')}/{os.path.basename(file_path)}"
             url = self.client.generate_presigned_url(
                 'put_object',
                 Params={'Bucket': self.bucket_name, 'Key': object_name},
@@ -161,6 +161,46 @@ audio_recorder = None
 
 ffmpeg = None
 ffmpeg_output = None
+# Define a cleanup function to run when the app closes
+def graceful_exit(signum, frame):
+    print("Received stop signal. Cleaning up...")
+    
+    # 1. Stop Video Recording if active
+    global recorder_thread
+    if recorder_thread and hasattr(recorder_thread, 'recording') and recorder_thread.recording:
+        print("Stopping active video recording...")
+        try:
+            recorder_thread.stop()
+            # Wait briefly for file to save
+            import time
+            time.sleep(1)
+        except Exception as e:
+            print(f"Error stopping video recording: {e}")
+        
+    # 2. Stop Audio Recording if active
+    global audio_recorder
+    if audio_recorder and audio_recorder.get('recording', False):
+        print("Stopping active audio recording...")
+        try:
+            # Stop recording
+            audio_recorder['recording'] = False
+            sd.sleep(200)  # Wait for recording to finalize
+            
+            # Save the audio file
+            if audio_recorder['frames']:
+                now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
+                audio_path = os.path.join(AUDIO_DIR, f'audio_recording_{now}.wav')
+                sf.write(audio_path, np.concatenate(audio_recorder['frames']), audio_recorder['samplerate'])
+                print(f"Audio recording saved to {audio_path}")
+        except Exception as e:
+            print(f"Error stopping audio recording: {e}")
+    
+    print("Cleanup done. Exiting.")
+    sys.exit(0)
+
+# Register the signals
+signal.signal(signal.SIGTERM, graceful_exit)  # Handle kill() from Electron
+signal.signal(signal.SIGINT, graceful_exit)   # Handle Ctrl+C
 
 @app.route('/api/test', methods=['GET'])
 def test_endpoint():

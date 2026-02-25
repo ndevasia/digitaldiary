@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mic, Video, Camera, X, Minus, Maximize, Minimize, BarChart2 } from 'lucide-react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import FFMpeg from './FFMpeg';
@@ -31,9 +31,7 @@ const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
 function App() {
     const [isAudioRecording, setIsAudioRecording] = useState(false);
     const [isScreenRecording, setIsScreenRecording] = useState(false);
-    const [isDragging, setIsDragging] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
-    const dragStartPos = useRef(null);
 
     // Add effect to listen for main window open/close events
     useEffect(() => {
@@ -71,27 +69,20 @@ function App() {
             const deltaY = e.screenY - dragStartPos.current.y;
             ipcRenderer.send('dragging', { x: deltaX, y: deltaY });
             dragStartPos.current = { x: e.screenX, y: e.screenY };
-        };
-
-        const handleMouseUp = () => {
-            setIsDragging(false);
-            dragStartPos.current = null;
-        };
-
-        if (isDragging) {
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
         }
+    });
+    
+    const handleResizeMouseDown = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        ipcRenderer.send('start-resize');
 
-        return () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
+        const stopResize = () => {
+            ipcRenderer.send('stop-resize');
+            window.removeEventListener('mouseup', stopResize);
         };
-    }, [isDragging]);
 
-    const handleMouseDown = (e) => {
-        setIsDragging(true);
-        dragStartPos.current = { x: e.screenX, y: e.screenY };
+        window.addEventListener('mouseup', stopResize);
     };
 
     const handleScreenshot = async () => {
@@ -211,15 +202,15 @@ function App() {
 
     return (
         <Router>
-            <div className="flex h-screen">
+            <div className="h-screen w-screen flex flex-col overflow-hidden bg-transparent">
                 {/* Sidebar */}
                 <div
-                    className="border border-red-500 bg-white flex flex-col p-1 rounded-lg"
-                    onMouseDown={handleMouseDown}
+                    className="bg-white flex flex-col p-1 rounded-lg border border-zinc-200 shadow-lg h-full relative"
+                    style={{ WebkitAppRegion: 'drag' }}
                 >
                     <div className="flex flex-col w-full h-full p-1 gap-2 items-center justify-between">
                         {/* Title bar */}
-                        <div className="flex flex-row w-full justify-center gap-1">
+                        <div className="flex flex-row w-full justify-center gap-1 pb-2 border-b border-zinc-100" style={{ WebkitAppRegion: 'no-drag' }}>
                             <button
                                 className="cursor-pointer aspect-square transition-all duration-200 p-0.5 rounded-full text-amber-950 bg-amber-400 hover:bg-amber-500"
                                 onClick={() => ipcRenderer.send('minimize-window')}
@@ -235,7 +226,7 @@ function App() {
                         </div>
 
                         {/* Main toolbar */}
-                        <div className="flex flex-col items-center gap-1">
+                        <div className="flex flex-col items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
                             <IconButton
                                 icon={Camera}
                                 onClick={handleScreenshot}
@@ -265,6 +256,15 @@ function App() {
                                 // tooltip={isMaximized ? "Close Main Window" : "Open Main Window"}
                             />
                         </div>
+                    </div>
+
+                    {/* Resize handle */}
+                    <div
+                        className="mt-auto w-full h-6 cursor-s-resize flex items-center justify-center hover:bg-zinc-100 rounded"
+                        style={{ WebkitAppRegion: 'no-drag' }}
+                        onMouseDown={handleResizeMouseDown}
+                    >
+                        <div className="w-8 h-1 bg-zinc-400 rounded-full" />
                     </div>
                 </div>
 

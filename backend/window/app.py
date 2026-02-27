@@ -427,7 +427,10 @@ def start_screen_recording():
         global ffmpeg
         global ffmpeg_output
 
-        url = 'srt://127.0.0.1:40052'  # Use 127.0.0.1 to listen on localhost
+        if (platform_os == 'mac'):
+            url = 'srtp://127.0.0.1:40052'
+        else:
+            url = 'srt://127.0.0.1:40052'
 
         if (ffmpeg):
             if ffmpeg.poll() is None:

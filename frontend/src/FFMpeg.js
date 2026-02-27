@@ -367,6 +367,20 @@ class FFMpeg {
                 // Put new args at the front of existing args to avoid vframes conflict
                 args.unshift('-f', 'gdigrab', '-i', 'desktop');
                 break;
+            case 'mac':
+                const process = spawnSync(
+                    this.path, 
+                    ['-f', 'avfoundation', '-list_devices', 'true', '-i', '""'], 
+                    { stdio: ['ignore', 'pipe', 'pipe'] }
+                );
+                const devices = this.parseMacDevices(process.stderr.toString());
+                const videoDevices = devices.filter(d => d.type === 'video');
+                const captureDevice = videoDevices.findIndex(d => d.name.toLowerCase().includes('capture'));
+                if (!captureDevice) {
+                    throw new Error('No video capture device found for Mac');
+                }
+                args.unshift('-f', 'avfoundation', '-i', `${captureDevice}:none`);
+                break;
             default:
                 console.error('Screenshot not implemented for this platform:', platform);
         }
@@ -386,13 +400,18 @@ class FFMpeg {
                 break;
             case 'mac':
                 // DEBUG INFO: Print out Apple devices
-                const process = spawn(this.path, ['-f', 'avfoundation', '-list_devices', 'true', '-i', '""'], { stdio: ['ignore', 'pipe', 'pipe'] });
-                process.stderr.on('data', (data) => {
-                    if (VERBOSE)
-                        console.log(`FFMpeg device list: ${data}`);
-                });
-                console.error("Mac device listing not fully implemented");
-                args.push('-f', 'avfoundation', '-i', '1:none');
+                const process = spawnSync(
+                    this.path, 
+                    ['-f', 'avfoundation', '-list_devices', 'true', '-i', '""'], 
+                    { stdio: ['ignore', 'pipe', 'pipe'] }
+                );
+                const devices = this.parseMacDevices(process.stderr.toString());
+                const videoDevices = devices.filter(d => d.type === 'video');
+                const captureDevice = videoDevices.findIndex(d => d.name.toLowerCase().includes('capture'));
+                if (!captureDevice) {
+                    throw new Error('No video capture device found for Mac');
+                }
+                args.push('-f', 'avfoundation', '-i', `${captureDevice}:none`);
                 break;
             case 'linux':
                 // Use X11 screen capture and ALSA for audio
@@ -432,7 +451,18 @@ class FFMpeg {
                 args.push('-f', 'dshow', '-i', `audio=${audioDeviceName}`);
                 break;
             case 'mac':
-                args.push('-f', 'avfoundation', '-i', 'none:0');
+                const process = spawnSync(
+                    this.path, 
+                    ['-f', 'avfoundation', '-list_devices', 'true', '-i', '""'], 
+                    { stdio: ['ignore', 'pipe', 'pipe'] }
+                );
+                const devices = this.parseMacDevices(process.stderr.toString());
+                const audioDevices = devices.filter(d => d.type === 'audio');
+                if (!audioDevices.length) {
+                    throw new Error('No audio capture device found for Mac');
+                }
+                const selectedAudioIndex = audioDevices.findIndex(d => d.name.contains(audioDeviceName)) || 0;
+                args.push('-f', 'avfoundation', '-i', `none:${selectedAudioIndex || "0"}`);
                 break;
             case 'linux':
                 args.push('-f', 'alsa', '-ac', '2', '-i', 'hw:0');
@@ -470,10 +500,12 @@ class FFMpeg {
                         ['-hide_banner', '-f', 'avfoundation', '-list_devices', 'true', '-i', 'dummy'],
                         { stdio: ['ignore', 'pipe', 'pipe'] }
                     );
-                    // I don't have access to a Mac to see what this looks like
-                    console.error('Device listing for Mac is not implemented yet');
-                    if (VERBOSE) 
+                    const devicesMac = this.parseMacDevices(ffmpegResult.stderr.toString());
+                    if (VERBOSE) {
                         console.log(`FFMpeg device list: ${ffmpegResult.stderr.toString()}`);
+                        console.log('Parsed devices:', devicesMac);
+                    }
+                    resolve(devicesMac);
                     break;
                 case 'linux':
                     // Linux is complicated and I'm also not sure how to list devices for it
@@ -481,6 +513,23 @@ class FFMpeg {
                     break;
             }
         });
+    }
+
+    // Private method to parse Mac devices from ffmpeg output
+    parseMacDevices(ffmpegOutput) {
+        const [videoLines, audioLines] = ffmpegOutput.split('AVFoundation audio devices:');
+        const videoDeviceLines = videoLines.split('\n').filter(line => line.includes(/\[[0-9]+\]/));
+        const audioDeviceLines = audioLines.split('\n').filter(line => line.includes(/\[[0-9]+\]/));
+        const devicesMac = [];
+        videoDeviceLines.forEach(line => {
+            const name = line.split(']')[2].trim();
+            devicesMac.push({ name, type: 'video' });
+        });
+        audioDeviceLines.forEach(line => {
+            const name = line.split(']')[2].trim();
+            devicesMac.push({ name, type: 'audio' });
+        });
+        return devicesMac;
     }
 }
 

@@ -202,13 +202,13 @@ function App() {
 
     return (
         <Router>
-            <div className="h-screen w-screen flex flex-col overflow-hidden bg-transparent">
+            <div className="h-screen w-screen flex flex-col min-w-0 min-h-0 overflow-hidden bg-transparent">
                 {/* Sidebar */}
                 <div
-                    className="bg-white flex flex-col p-1 rounded-lg border border-zinc-200 shadow-lg h-full relative"
+                    className="bg-white flex flex-col min-w-0 min-h-0 p-1 rounded-lg border border-zinc-200 shadow-lg h-full relative"
                     style={{ WebkitAppRegion: 'drag' }}
                 >
-                    <div className="flex flex-col w-full h-full p-1 gap-2 items-center justify-between">
+                    <div className="flex flex-col min-w-0 min-h-0 w-full h-full p-1 gap-2 items-center justify-between">
                         {/* Title bar */}
                         <div className="flex flex-row w-full justify-center gap-1 pb-2 border-b border-zinc-100" style={{ WebkitAppRegion: 'no-drag' }}>
                             <button
@@ -226,7 +226,7 @@ function App() {
                         </div>
 
                         {/* Main toolbar */}
-                        <div className="flex flex-col items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
+                        <div className="flex flex-col min-w-0 min-h-0 items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
                             <IconButton
                                 icon={Camera}
                                 onClick={handleScreenshot}

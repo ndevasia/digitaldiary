@@ -72,7 +72,7 @@ if (isDev && window.location.href.includes('overlay')) {
         }
     } else if (platform === 'mac' && arch === 'arm64') {
         console.log("Giving FMMPEG binary executable permissions for mac arm64");
-        output = spawnSync(
+        let output = spawnSync(
             'chmod',
             ['+x', defaultFFMpegPath],
             { stdio: ['ignore', 'pipe', 'pipe'] }

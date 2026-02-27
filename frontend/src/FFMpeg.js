@@ -518,8 +518,8 @@ class FFMpeg {
     // Private method to parse Mac devices from ffmpeg output
     parseMacDevices(ffmpegOutput) {
         const [videoLines, audioLines] = ffmpegOutput.split('AVFoundation audio devices:');
-        const videoDeviceLines = videoLines.split('\n').filter(line => line.includes(/\[[0-9]+\]/));
-        const audioDeviceLines = audioLines.split('\n').filter(line => line.includes(/\[[0-9]+\]/));
+        const videoDeviceLines = videoLines.split('\n').filter(line => line.match(/\[[0-9]+\]/).length > 0);
+        const audioDeviceLines = audioLines.split('\n').filter(line => line.match(/\[[0-9]+\]/).length > 0);
         const devicesMac = [];
         videoDeviceLines.forEach(line => {
             const name = line.split(']')[2].trim();

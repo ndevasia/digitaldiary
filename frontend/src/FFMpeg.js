@@ -292,7 +292,7 @@ class FFMpeg {
                 return;
             }
 
-            this.currentRecordingName = `audio_recording_${Date.now()}`;
+            this.currentAudioRecordingName = `audio_recording_${Date.now()}`;
             this.audioProcess = spawn(
                 this.path, 
                 [...this.getAudioRecordingArgs(device), path.join(this.audioRecordingPath, this.currentAudioRecordingName + '.mp3')], 

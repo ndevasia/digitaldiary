@@ -20,11 +20,6 @@ body {
   -webkit-app-region: no-drag;
 }
 
-.flex-col {
-  min-height: 0;
-  min-width: 0;
-}
-
 button {
   @apply cursor-pointer;
 }

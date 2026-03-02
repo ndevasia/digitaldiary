@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mic, Video, Camera, X, Minus, Maximize, Minimize, BarChart2 } from 'lucide-react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import FFMpeg from './FFMpeg';
 const { ipcRenderer } = window.require('electron');
 
 const API_URL = 'http://localhost:5173/api';
@@ -46,6 +47,31 @@ function App() {
         };
     }, []);
 
+    useEffect(() => {
+        // Effect to make sure an audio device is selected
+        const audioDeviceName = localStorage.getItem('audioDeviceName');
+        if (!audioDeviceName) {
+            FFMpeg.getDevices().then(devices => {
+                const audioDevices = devices.filter(d => d.type === 'audio');
+                if (audioDevices.length > 0) {
+                    localStorage.setItem('audioDeviceName', audioDevices[0].name);
+                } else {
+                    console.error('No audio devices found');
+                }
+            });
+        }
+    }, []);
+
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            if (!isDragging || !dragStartPos.current) return;
+            const deltaX = e.screenX - dragStartPos.current.x;
+            const deltaY = e.screenY - dragStartPos.current.y;
+            ipcRenderer.send('dragging', { x: deltaX, y: deltaY });
+            dragStartPos.current = { x: e.screenX, y: e.screenY };
+        }
+    });
+    
     const handleResizeMouseDown = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -61,15 +87,21 @@ function App() {
 
     const handleScreenshot = async () => {
         try {
-            const response = await fetch(`${API_URL}/screenshot`, {
-                method: 'POST'
+            const screenshot = await FFMpeg.takeScreenshot();
+            const formData = new FormData();
+            formData.append('enctype', 'multipart/form-data');
+            formData.append('file', screenshot);
+
+            await fetch('/api/screenshot', {
+                method: 'POST',
+                body: formData,
+            }).then((response) => {
+                if (response.ok) {
+                    console.log('Screenshot uploaded successfully');
+                }
+            }).catch((err) => {
+                console.error('Screenshot upload error:', err);
             });
-            const data = await response.json();
-            if (data.error) {
-                console.error('Screenshot error:', data.error);
-                return;
-            }
-            console.log('Screenshot saved:', data.path);
         } catch (error) {
             console.error('Screenshot error:', error);
         }
@@ -78,28 +110,36 @@ function App() {
     const handleScreenRecording = async () => {
         try {
             if (!isScreenRecording) {
-                const response = await fetch(`${API_URL}/recording/start`, {
-                    method: 'POST'
+                fetch('/api/recording/start', { method: 'POST' }).then(async (response) => {
+                    if (!response.ok) {
+                        throw new Error('Failed to start recording on backend');
+                    }
+                    const withAudio = localStorage.getItem('recordAudioWithScreen') === "true";
+                    const streamDestination = (await response.json()).url;
+                    FFMpeg.startVideoStream(streamDestination, withAudio).then(() => {
+                        console.log('Screen recording started');
+                        setIsScreenRecording(true);
+                    }).catch((err) => {
+                        console.error('Screen recording error:', err);
+                    });
+                }).catch((err) => {
+                    console.error('Recording start error:', err);
                 });
-                const data = await response.json();
-                if (data.error) {
-                    console.error('Recording error:', data.error);
-                    return;
-                }
-                setIsScreenRecording(true);
-                console.log('Recording started:', data.path);
             } else {
-                const response = await fetch(`${API_URL}/recording/stop`, {
-                    method: 'POST'
+                fetch('/api/recording/stop', { method: 'POST' }).then(() => {
+                    console.log('Notified backend of recording stop');
+                    FFMpeg.stopVideoStream().then(() => {
+                        console.log('Screen recording stopped');
+                        setIsScreenRecording(false);
+                    }).catch((err) => {
+                        console.error('Screen recording error:', err);
+                        setIsScreenRecording(false);
+                    });
+                }).catch((err) => {
+                    fetch('/api/recording/stop', { method: 'POST' });
+                    console.error('Screen recording error:', err);
+                    setIsScreenRecording(false);
                 });
-                const data = await response.json();
-                if (data.error) {
-                    console.error('Recording error:', data.error);
-                    return;
-                }
-                setIsScreenRecording(false);
-                console.log('Recording stopped:', data.video_path);
-                console.log('Thumbnail created:', data.thumbnail_path);
             }
         } catch (error) {
             console.error('Recording error:', error);
@@ -109,27 +149,35 @@ function App() {
     const handleAudioRecording = async () => {
         try {
             if (!isAudioRecording) {
-                const response = await fetch(`${API_URL}/audio/start`, {
-                    method: 'POST'
+                const audioDeviceName = localStorage.getItem('audioDeviceName');
+                console.log('Using audio device:', audioDeviceName);
+                FFMpeg.startAudioRecording(audioDeviceName).then(() => {
+                    console.log('Audio recording started');
+                    setIsAudioRecording(true);
+                }).catch((err) => {
+                    console.error('Audio recording error:', err);
                 });
-                const data = await response.json();
-                if (data.error) {
-                    console.error('Audio recording error:', data.error);
-                    return;
-                }
-                setIsAudioRecording(true);
-                console.log('Audio recording started:', data.path);
             } else {
-                const response = await fetch(`${API_URL}/audio/stop`, {
-                    method: 'POST'
+                FFMpeg.stopAudioRecording().then((audio_file) => {
+                    console.log('Audio recording stopped');
+                    const formData = new FormData();
+                    formData.append('enctype', 'multipart/form-data');
+                    formData.append('file', audio_file);
+                    fetch('/api/audio/upload', {
+                        method: 'POST',
+                        body: formData,
+                    }).then((response) => {
+                        if (response.ok) {
+                            console.log('Audio file uploaded successfully');
+                        }
+                    }).catch((err) => {
+                        console.error('Audio file upload error:', err);
+                    });
+                    setIsAudioRecording(false);
+                }).catch((err) => {
+                    console.error('Audio recording error:', err);
+                    setIsAudioRecording(false);
                 });
-                const data = await response.json();
-                if (data.error) {
-                    console.error('Audio recording error:', data.error);
-                    return;
-                }
-                setIsAudioRecording(false);
-                console.log('Audio recording stopped:', data.path);
             }
         } catch (error) {
             console.error('Audio recording error:', error);
@@ -154,13 +202,13 @@ function App() {
 
     return (
         <Router>
-            <div className="h-screen w-screen flex flex-col overflow-hidden bg-transparent">
+            <div className="h-screen w-screen flex flex-col min-w-0 min-h-0 overflow-hidden bg-transparent">
                 {/* Sidebar */}
                 <div
-                    className="bg-white flex flex-col p-1 rounded-lg border border-zinc-200 shadow-lg h-full relative"
+                    className="bg-white flex flex-col min-w-0 min-h-0 p-1 rounded-lg border border-zinc-200 shadow-lg h-full relative"
                     style={{ WebkitAppRegion: 'drag' }}
                 >
-                    <div className="flex flex-col w-full h-full p-1 gap-2 items-center justify-between">
+                    <div className="flex flex-col min-w-0 min-h-0 w-full h-full p-1 gap-2 items-center justify-between">
                         {/* Title bar */}
                         <div className="flex flex-row w-full justify-center gap-1 pb-2 border-b border-zinc-100" style={{ WebkitAppRegion: 'no-drag' }}>
                             <button
@@ -178,7 +226,7 @@ function App() {
                         </div>
 
                         {/* Main toolbar */}
-                        <div className="flex flex-col items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
+                        <div className="flex flex-col min-w-0 min-h-0 items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
                             <IconButton
                                 icon={Camera}
                                 onClick={handleScreenshot}

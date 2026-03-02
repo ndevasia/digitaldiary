@@ -58,13 +58,13 @@ if (isDev && window.location.href.includes('overlay')) {
                 output = spawnSync(
                     'powershell', 
                     ['-File', path.join(rootPath, '../bin', 'install_win64.ps1')], 
-                    { stdio: ['ignore', 'pipe', 'pipe'] }
+                    { stdio: ['ignore', 'pipe', 'pipe'], shell: true }
                 );
             } else if (platform === 'mac') {
                 output = spawnSync(
                     'bash', 
                     [path.join(rootPath, '../bin', 'install_mac64.sh')],
-                    { stdio: ['ignore', 'pipe', 'pipe'] }
+                    { stdio: ['ignore', 'pipe', 'pipe'], shell: true }
                 );
             }
             console.log(output.stdout.toString());

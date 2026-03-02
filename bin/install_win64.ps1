@@ -20,7 +20,8 @@ try {
     # Download FFmpeg
     Write-Host "Downloading FFmpeg..."
     $ZipPath = Join-Path $TempDir "ffmpeg.zip"
-    Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-lgpl.zip" -OutFile $ZipPath
+    curl.exe -L -o $ZipPath "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+    Write-Host "Download completed: $ZipPath"
 
     # Extract
     Write-Host "Extracting FFmpeg..."

@@ -18,7 +18,7 @@ mkdir -p "$TARGET_DIR"
 # Download FFmpeg
 echo "Downloading FFmpeg..."
 cd "$TEMP_DIR"
-curl -L -o ffmpeg.zip "https://evermeet.cx/ffmpeg/ffmpeg-8.0.1.zip"
+curl -L -o ffmpeg.zip "https://ffmpeg.martin-riedl.de/download/macos/amd64/1767299902_N-122320-g38e89fe502/ffmpeg.zip"
 
 # Extract
 echo "Extracting FFmpeg..."

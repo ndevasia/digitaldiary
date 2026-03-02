@@ -427,14 +427,11 @@ def start_screen_recording():
         global ffmpeg
         global ffmpeg_output
 
-        if (platform_os == 'mac'):
-            url = 'srtp://127.0.0.1:40052'
-        else:
-            url = 'srt://127.0.0.1:40052'
+        url = 'srt://127.0.0.1:40052'
 
         if (ffmpeg):
             if ffmpeg.poll() is None:
-                return jsonify({'status': 'ffmpeg available', 'url': url}), 200
+                return jsonify({'status': 'ffmpeg available', 'url': url + '?mode=caller'}), 200
             else:
                 ffmpeg = None  # Reset if process has ended
 

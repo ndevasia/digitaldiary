@@ -193,7 +193,7 @@ class FFMpeg {
                 args.push('-ar', '44100', '-ac', '2', '-c:a', 'aac', '-b:a', '128k');
             } else {
                 // Video only
-                args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
+                //args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
             }
             
             // Output format and destination

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
+import VideoPlayer from '../components/VideoPlayer.jsx';
 
 function GamesPage() {
   const [mediaData, setMediaData] = useState([]);
@@ -219,10 +220,7 @@ function GamesPage() {
                   className={`${mediaClass} rounded overflow-hidden shadow-sm`}
                 >
                   <div className="p-4">
-                    <video controls className="w-full rounded mb-2">
-                      <source src={item.media_url} type="video/mp4" />
-                      Your browser does not support the video tag.
-                    </video>
+                    <VideoPlayer src={item.media_url} />
                     <div className="mt-2">
                       <div className="font-medium text-gray-700">{item.game}</div>
                       <div className="text-xs text-gray-500">{date}</div>

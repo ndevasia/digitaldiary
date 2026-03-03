@@ -320,7 +320,7 @@ function FilesPage() {
     };
 
     return (
-        <div>
+        <div className="h-screen flex flex-col">
             <div className="flex-1 p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>

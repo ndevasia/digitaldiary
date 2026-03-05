@@ -4,7 +4,6 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import FFMpeg from './FFMpeg';
 const { ipcRenderer } = window.require('electron');
 
-const API_URL = 'http://localhost:5173/api';
 const INACTIVE = "inactive";
 const ACTIVE = "active";
 const LOADING = "loading";

@@ -243,7 +243,7 @@ class FFMpeg {
      * Stop the server receiving the stream first!
      * @returns {Promise<void>} Resolves when recording stops.
      */
-    async stopVideoStream() {
+    async stopVideoStream(force = false) {
         return new Promise((resolve, reject) => {
             if (this.screenProcess) {
                 // Set a timeout to force kill if not exiting in time
@@ -269,7 +269,13 @@ class FFMpeg {
                 });
 
                 // Send 'q' to gracefully stop recording
-                this.screenProcess.stdin.write('q\n');
+                if (!force) {
+                    this.screenProcess.stdin.write('q\n');
+                } else {
+                    this.screenProcess.kill('SIGKILL');
+                    this.screenProcess = null;
+                    resolve();
+                }
             } else {
                 reject(new Error('FFMpeg is not recording or screen process is not available'));
             }
@@ -302,7 +308,6 @@ class FFMpeg {
             this.audioProcess.on('spawn', () => {
                 if (VERBOSE)
                     console.log('FFMpeg audio recording process started');
-                resolve();
             });
 
             this.audioProcess.on('error', (err) => {
@@ -313,6 +318,9 @@ class FFMpeg {
             this.audioProcess.stderr.on('data', (data) => {
                 if (VERBOSE)
                     console.log(`FFMpeg stderr: ${data}`);
+                if (data.toString().includes('size=')) {
+                    resolve();
+                }
             });
         });
     }

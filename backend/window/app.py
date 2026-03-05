@@ -159,8 +159,11 @@ os.makedirs(PROFILE_PICS_DIR, exist_ok=True)
 recorder_thread = None
 audio_recorder = None
 
-ffmpeg = None
-ffmpeg_output = None
+# recording_processes will map file UIDs
+# to processes recording to those files
+# to manage multiple recordings and ensure 
+# we can stop the correct one on exit
+recording_processes = {}
 # Define a cleanup function to run when the app closes
 def graceful_exit(signum, frame):
     print("Received stop signal. Cleaning up...")
@@ -424,26 +427,21 @@ def upload_screenshot():
 @app.route('/api/recording/start', methods=['POST'])
 def start_screen_recording():
     try:
-        global ffmpeg
-        global ffmpeg_output
+        global recording_processes
 
-        url = 'srt://127.0.0.1:40052'
+        port = random.randint(40000, 50000)
+        url = f"srt://127.0.0.1:{port}"
 
-        if (ffmpeg):
-            if ffmpeg.poll() is None:
-                return jsonify({'status': 'ffmpeg available', 'url': url + '?mode=caller'}), 200
-            else:
-                ffmpeg = None  # Reset if process has ended
-
-        timestamp = datetime.now().strftime('recording_%Y%m%d_%H%M%S.mkv')
-        ffmpeg_output = os.path.normpath(os.path.join(RECORDINGS_DIR, timestamp))
+        file_uid = datetime.now().strftime(f"{port}%Y%m%d_%H%M%S")
+        filename = f"recording_{file_uid}.mkv"
+        ffmpeg_output = os.path.normpath(os.path.join(RECORDINGS_DIR, filename))
         
         log_message(f"Output file path: {ffmpeg_output}")
         log_message(f"FFmpeg path: {FFMPEG_PATH}")
         log_message(f"FFmpeg exists: {os.path.exists(FFMPEG_PATH)}")
         
-        # Start FFmpeg process - COPY BOTH video AND audio
-        ffmpeg = subprocess.Popen(
+        # Start FFmpeg process
+        ffmpeg_process = subprocess.Popen(
             [FFMPEG_PATH, 
              '-probesize', '10M',
              '-flags', 'low_delay',
@@ -455,20 +453,21 @@ def start_screen_recording():
              ffmpeg_output],
             stdin=subprocess.PIPE
         )
+        recording_processes[file_uid] = ffmpeg_process
 
-        log_message(f"Started ffmpeg with PID {ffmpeg.pid} for screen recording.")
+        log_message(f"Started ffmpeg with PID {ffmpeg_process.pid} for screen recording.")
         
         # Check if process started successfully
         try:
-            ffmpeg.wait(timeout=0.5)
+            ffmpeg_process.wait(timeout=0.5)
             # Process ended immediately - something went wrong
-            ffmpeg = None
+            del recording_processes[file_uid]
             return jsonify({'error': f'FFmpeg failed to start'}), 500
         except subprocess.TimeoutExpired:
             # Process is still running - good!
             log_message("FFmpeg process is running")
 
-        return jsonify({'status': 'ffmpeg available', 'url': url + '?mode=caller'}), 200
+        return jsonify({'status': 'ffmpeg available', 'url': url + '?mode=caller', 'uid': file_uid}), 200
         
     except Exception as e:
         log_message(f"Recording start error: {str(e)}")
@@ -476,11 +475,11 @@ def start_screen_recording():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/recording/status', methods=['GET'])
-def recording_status():
+@app.route('/api/recording/status/<file_uid>', methods=['GET'])
+def recording_status(file_uid):
     try:
-        global ffmpeg
-        if ffmpeg and ffmpeg.poll() is None:
+        global recording_processes
+        if file_uid in recording_processes and recording_processes[file_uid].poll() is None:
             return jsonify({'recording': True}), 200
         else:
             return jsonify({'recording': False}), 200
@@ -488,32 +487,35 @@ def recording_status():
         print(f"Recording status error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/recording/stop', methods=['POST'])
-def stop_screen_recording():
+@app.route('/api/recording/stop/<file_uid>', methods=['POST'])
+def stop_screen_recording(file_uid):
     try:
-        global ffmpeg
-        global ffmpeg_output
+        global recording_processes
 
         # Check if recording is in progress
-        if not ffmpeg:
+        if file_uid not in recording_processes:
             return jsonify({'error': 'No active recording'}), 400
 
-        # Send 'q' to FFmpeg stdin to gracefully stop (recommended method)
+        ffmpeg_process = recording_processes[file_uid]
+
+        # Send 'q' to FFmpeg stdin to gracefully stop
         try:
-            ffmpeg.communicate(input=b'q', timeout=5)
+            ffmpeg_process.communicate(input=b'q', timeout=5)
             log_message("Sent 'q' to ffmpeg stdin to stop recording.")
         except:
             log_message("Failed to send 'q' to ffmpeg stdin, attempting to terminate.")
-            ffmpeg.terminate()
+            ffmpeg_process.terminate()
         
-        ffmpeg = None
+        del recording_processes[file_uid]
         log_message("Stopped ffmpeg for screen recording.")
 
+        filename = f"recording_{file_uid}.mkv"
+        ffmpeg_output = os.path.normpath(os.path.join(RECORDINGS_DIR, filename))
         video_url = None
 
         # Upload the recording to S3
         try:
-            object_name = f"{USERNAME}/recordings/{os.path.basename(ffmpeg_output)}"
+            object_name = f"{USERNAME}/recordings/{filename}"
             url = s3_client.generate_presigned_url(
                 'put_object',
                 Params={'Bucket': BUCKET_NAME, 'Key': object_name},

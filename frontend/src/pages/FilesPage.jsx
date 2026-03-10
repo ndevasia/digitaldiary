@@ -141,7 +141,7 @@ function FilesPage() {
             const data = await response.json();
             // Only take the first two users plus 'all' option
             const limitedUsers = data.slice(0, 2);
-            setUsers([{ user_id: 'all', username: 'All Users' }, ...limitedUsers]);
+            setUsers([{ user_id: -1, username: 'All Users' }, ...limitedUsers]);
         } catch (error) {
             console.error('Error fetching users:', error);
             setError(error.message);
@@ -165,7 +165,7 @@ function FilesPage() {
 
         if (isAllSelected) {
             const userList = users
-                .filter(u => String(u.user_id) !== 'all')
+                .filter(u => u.user_id !== -1)
                 .map(u => u.username);
 
             if (userList.length === 0) {
@@ -336,7 +336,7 @@ function FilesPage() {
                             {users.map((user) => (
                                   <button
                                       onClick={() => {
-                                        if (user.user_id === 'all') {
+                                        if (user.user_id === -1) {
                                             setUserFilter(new Set()); // Clearing the set represents "All"
                                         } else {
                                             const newSet = new Set(userFilter);
@@ -348,7 +348,7 @@ function FilesPage() {
                                         }
                                     }}
                                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                                          (user.user_id === 'all' && userFilter.size === 0) || userFilter.has(String(user.user_id))
+                                          (user.user_id === -1 && userFilter.size === 0) || userFilter.has(String(user.user_id))
                                               ? 'bg-teal-500 text-white'
                                               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                       }`}

@@ -81,6 +81,23 @@ def get_user_json_path():
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
 
 
+def get_user_id_from_username(username):
+    """Convert username to integer user_id by looking it up in user.json."""
+    try:
+        path = get_user_json_path()
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                data = json.load(f)
+            users = data.get('users', [])
+            user = next((u for u in users if u.get('username') == username), None)
+            if user:
+                return user.get('user_id')
+    except Exception as e:
+        print(f"Error getting user_id from username: {e}")
+    # Return None if not found
+    return None
+
+
 def ensure_user_json_exists():
     """Create user.json from configured USERNAME if it doesn't exist, and ensure default is present."""
     try:
@@ -92,20 +109,27 @@ def ensure_user_json_exists():
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         if not os.path.exists(path):
-            default_user = {"user_id": USERNAME, "username": USERNAME}
+            # Create default owner with user_id 0
+            default_user = {"user_id": 0, "username": USERNAME}
             tmp_path = path + '.tmp'
             with open(tmp_path, 'w') as f:
                 json.dump({"users": [default_user]}, f, indent=4)
             os.replace(tmp_path, path)
             return
 
-        # If file exists, ensure default user is present
+        # If file exists, ensure USERNAME user exists with user_id 0
         with open(path, 'r') as f:
             data = json.load(f)
 
         users = data.get('users', [])
-        if not any(str(u.get('username')) == str(USERNAME) or str(u.get('user_id')) == str(USERNAME) for u in users):
-            users.append({"user_id": USERNAME, "username": USERNAME})
+        # Check if USERNAME exists with any user_id
+        username_exists = any(str(u.get('username')) == str(USERNAME) for u in users)
+        
+        if not username_exists:
+            # Find highest user_id and add new user with next ID
+            max_id = max([u.get('user_id', 0) for u in users if isinstance(u.get('user_id'), int)], default=-1)
+            new_id = max(max_id + 1, 1)  # Next ID, but not 0 (reserved for owner)
+            users.append({"user_id": new_id, "username": USERNAME})
             data['users'] = users
             tmp_path = path + '.tmp'
             with open(tmp_path, 'w') as f:
@@ -207,8 +231,15 @@ def get_media_aws():
             # Extract username and game_id from S3 path
             # Format: username/game_id/filename
             parts = item['Key'].split('/')
-            owner_user_id = parts[0]
+            s3_username = parts[0]
             game_id = parts[1] if len(parts) > 2 else None
+
+            # Convert S3 username to integer user_id
+            owner_user_id = get_user_id_from_username(s3_username)
+            if owner_user_id is None:
+                # Fallback: if user not found, skip this item
+                print(f"Warning: User '{s3_username}' not found in user.json")
+                continue
 
             # Determine media type
             media_type = "unknown"
@@ -619,7 +650,13 @@ def get_media():
             media = [item for item in media if item['type'] == media_type]
 
         if user_id:
-            media = [item for item in media if str(item['owner_user_id']) == str(user_id)]
+            # Convert user_id to int for consistent filtering with integer user_ids
+            try:
+                user_id_int = int(user_id)
+                media = [item for item in media if item['owner_user_id'] == user_id_int]
+            except ValueError:
+                # If conversion fails, fall back to string comparison
+                media = [item for item in media if str(item['owner_user_id']) == str(user_id)]
 
         return jsonify(media)
     except Exception as e:
@@ -799,8 +836,11 @@ def add_user():
         if existing:
             return jsonify(existing), 200
 
-        # Use username string as the user_id to match owner_user_id in media
-        new_user = {"user_id": username, "username": username}
+        # Assign next integer user_id
+        max_id = max([u.get('user_id', 0) for u in users if isinstance(u.get('user_id'), int)], default=-1)
+        new_id = max(max_id + 1, 1)  # Start from 1 (0 is reserved for owner)
+        
+        new_user = {"user_id": new_id, "username": username}
         users.append(new_user)
         user_data['users'] = users
 

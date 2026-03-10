@@ -69,7 +69,7 @@ function FilesPage() {
         }
 
         if (gameFilter.size > 0) {
-            filtered = filtered.filter(item => gameFilter.has(item.game));
+            filtered = filtered.filter(item => gameFilter.has(item.app_name));
         }
 
         // apply date range filter
@@ -175,7 +175,7 @@ function FilesPage() {
                 const sorted = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 setMediaList(sorted);
                 const uniqueGames = Array.from(
-                  new Set(sorted.map(item => item.game).filter(Boolean))
+                  new Set(sorted.map(item => item.app_name).filter(Boolean))
                 );
                 setGames(uniqueGames);
                 setGameFilter(new Set()); // Clear game filter when switching users
@@ -191,7 +191,7 @@ function FilesPage() {
             const merged = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             setMediaList(merged);
             const uniqueGames = Array.from(
-              new Set(merged.map(item => item.game).filter(Boolean))
+              new Set(merged.map(item => item.app_name).filter(Boolean))
             );
             setGames(uniqueGames);
             setGameFilter(new Set()); // Clear game filter when switching users
@@ -212,7 +212,7 @@ function FilesPage() {
         const data = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         setMediaList(data);
         const uniqueGames = Array.from(
-          new Set(data.map(item => item.game).filter(Boolean))
+          new Set(data.map(item => item.app_name).filter(Boolean))
         );
         setGames(uniqueGames);
         setGameFilter(new Set()); // Clear game filter when switching users
@@ -282,7 +282,7 @@ function FilesPage() {
                             <VideoPlayer src={item.media_url} />
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.game}</div>
+                            <div className="font-medium text-gray-700">{item.app_name}</div>
                             <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
@@ -297,7 +297,7 @@ function FilesPage() {
                             </audio>
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.game}</div>
+                            <div className="font-medium text-gray-700">{item.app_name}</div>
                             <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
@@ -309,7 +309,7 @@ function FilesPage() {
                             <img src={item.media_url} alt="Screenshot" className="w-full rounded" />
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.game}</div>
+                            <div className="font-medium text-gray-700">{item.app_name}</div>
                             <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>

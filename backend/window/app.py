@@ -228,11 +228,11 @@ def get_media_aws():
             filename = os.path.basename(item['Key'])
             file_extension = os.path.splitext(filename)[1][1:].lower()
 
-            # Extract username and game_id from S3 path
-            # Format: username/game_id/filename
+            # Extract username and session_id from S3 path
+            # Format: username/session_id/filename
             parts = item['Key'].split('/')
             s3_username = parts[0]
-            game_id = parts[1] if len(parts) > 2 else None
+            session_id = parts[1] if len(parts) > 2 else None
 
             # Convert S3 username to integer user_id
             owner_user_id = get_user_id_from_username(s3_username)
@@ -264,8 +264,8 @@ def get_media_aws():
                 "media_url": media_url,
                 "timestamp": item['LastModified'].isoformat(),
                 "owner_user_id": owner_user_id,
-                "game_id": game_id,
-                "game": game_id if game_id else "game1"  # Use game_id if available, else fallback
+                "session_id": session_id,
+                "app_name": session_id if session_id else "app1"  # Use session_id if available, else fallback
             }
 
             media_list.append(media_item)
@@ -306,14 +306,16 @@ def generate_presigned_url():
 def latest_screenshot():
     """Returns the URL for the latest screenshot"""
     try:
-        prefix = USERNAME + "/screenshot_"
+        # List all objects under USERNAME prefix to find any screenshots
+        prefix = USERNAME + "/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
 
         if 'Contents' in response:
-            files = [file for file in response['Contents'] if file['Key'].startswith(prefix)]
+            # Find all screenshot files (recursively from any session folder)
+            screenshot_files = [file for file in response['Contents'] if 'screenshot_' in file['Key']]
 
-            if files:
-                latest_file = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+            if screenshot_files:
+                latest_file = sorted(screenshot_files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
                 screenshot_url = s3_client.generate_presigned_url(
                     'get_object',
                     Params={'Bucket': BUCKET_NAME, 'Key': latest_file},
@@ -331,15 +333,16 @@ def latest_screenshot():
 def get_hero_image():
     try:
         # Get the latest screenshot from S3
-        prefix = USERNAME + "/screenshot_"
+        prefix = USERNAME + "/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
         
         if 'Contents' in response:
-            files = [file for file in response['Contents'] if file['Key'].startswith(prefix)]
+            # Find all screenshot files (recursively from any session folder)
+            screenshot_files = [file for file in response['Contents'] if 'screenshot_' in file['Key']]
             
-            if files:
+            if screenshot_files:
                 # Sort by LastModified (newest first)
-                latest_file = sorted(files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
+                latest_file = sorted(screenshot_files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
                 screenshot_url = s3_client.generate_presigned_url(
                     'get_object',
                     Params={'Bucket': BUCKET_NAME, 'Key': latest_file},
@@ -404,6 +407,10 @@ def get_screenshot(filename):
 @app.route('/api/screenshot', methods=['POST'])
 def take_screenshot():
     try:
+        data = request.json or {}
+        app_name = data.get('app_name')
+        user_with = data.get('user_with')
+        
         now = datetime.now().strftime('%Y%m%d_%H%M%S')
         screenshot_path = os.path.join(SCREENSHOTS_DIR, f'screenshot_{now}.png')
 
@@ -411,15 +418,18 @@ def take_screenshot():
         screenshot = pyautogui.screenshot()
         screenshot.save(screenshot_path)
 
-        # Generate presigned URL for upload
-        object_name = f"{USERNAME}/screenshot_{now}.png"
+        # Generate presigned URL for upload with session metadata in S3 path
+        # Store as: username/session_id/screenshot_{timestamp}.png
+        # where session_id incorporates the app info
+        session_id = app_name if app_name else 'default'
+        object_name = f"{USERNAME}/{session_id}/screenshot_{now}.png"
         url = s3_client.generate_presigned_url(
             'put_object',
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},
             ExpiresIn=3600
         )
 
-        # Upload to S3
+        # Upload to S3 with metadata
         with open(screenshot_path, 'rb') as f:
             response = requests.put(url, data=f)
             if response.status_code != 200:
@@ -428,7 +438,9 @@ def take_screenshot():
         return jsonify({
             'status': 'success',
             'path': screenshot_path,
-            'url': url
+            'url': url,
+            'app_name': app_name,
+            'user_with': user_with
         })
     except Exception as e:
         print(f"Screenshot error: {str(e)}")
@@ -439,6 +451,10 @@ def start_screen_recording():
     try:
         global recorder_thread
 
+        # Extract session metadata from request
+        data = request.json or {}
+        app_name = data.get('app_name')
+        
         # Check if recording is already in progress
         if recorder_thread and recorder_thread.recording:
             return jsonify({'error': 'Recording already in progress'}), 400
@@ -453,8 +469,8 @@ def start_screen_recording():
             s3_client_instance = S3()
             client = s3_client_instance.get()
 
-            # Generate pre-signed URL for the video file
-            video_url = client.get_presigned_url(recorder_thread.video_path)
+            # Generate pre-signed URL for the video file with session_id
+            video_url = client.get_presigned_url(recorder_thread.video_path, session_id=app_name)
             print(f"Video URL: {video_url}")
 
             try:
@@ -467,8 +483,8 @@ def start_screen_recording():
             except Exception as e:
                 print(f"Error uploading video: {str(e)}")
 
-            # Generate pre-signed URL for the thumbnail file
-            thumbnail_url = client.get_presigned_url(recorder_thread.thumbnail_path)
+            # Generate pre-signed URL for the thumbnail file with session_id
+            thumbnail_url = client.get_presigned_url(recorder_thread.thumbnail_path, session_id=app_name)
             print(f"Thumbnail URL: {thumbnail_url}")
 
             try:
@@ -535,11 +551,16 @@ def start_audio_recording():
     try:
         global audio_recorder
 
+        # Extract session metadata from request
+        data = request.json or {}
+        app_name = data.get('app_name')
+
         # Initialize audio recorder with the same parameters as AudioRecorderThread
         audio_recorder = {
             'recording': True,
             'frames': [],
-            'samplerate': 44100
+            'samplerate': 44100,
+            'app_name': app_name  # Store app_name for later use in stop
         }
 
         # Detect the default input device
@@ -583,6 +604,9 @@ def stop_audio_recording():
     try:
         global audio_recorder
         if audio_recorder and audio_recorder['recording']:
+            # Get app_name before stopping
+            app_name = audio_recorder.get('app_name')
+            
             # Stop recording
             audio_recorder['recording'] = False
 
@@ -603,7 +627,9 @@ def stop_audio_recording():
 
             # Upload to S3
             try:
-                object_name = f"{USERNAME}/{os.path.basename(audio_path)}"
+                # Use app_name as session_id in S3 path
+                session_id = app_name if app_name else 'default'
+                object_name = f"{USERNAME}/{session_id}/{os.path.basename(audio_path)}"
                 url = s3_client.generate_presigned_url(
                     'put_object',
                     Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -662,26 +688,54 @@ def get_media():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/session/create', methods=['POST'])
+def create_session():
+    try:
+        data = request.json
+        app_name = data.get('appName')
+        user_with = data.get('userWith') or '0'  # Default to user_id 0 if empty
+        
+        if not app_name:
+            return jsonify({"error": "appName is required"}), 400
+        
+        # Import aws.py's S3 class and call create_session
+        from server.aws import S3
+        s3 = S3()
+        success = s3.create_session(app_name, user_with)
+        
+        if not success:
+            return jsonify({"error": "Failed to create session in S3"}), 500
+        
+        return jsonify({
+            "status": "success",
+            "app_name": app_name,
+            "user_with": user_with
+        })
+        
+    except Exception as e:
+        print(f"Error creating session: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/session/update', methods=['POST'])
 def update_session():
     try:
         data = request.json
-        game_id = data.get('game_id')
+        session_id = data.get('session_id')
         
-        if not game_id:
-            return jsonify({"error": "game_id is required"}), 400
+        if not session_id:
+            return jsonify({"error": "session_id is required"}), 400
         
         # Import aws.py's S3 class and call update_session
         from server.aws import S3
         s3 = S3()
-        success = s3.update_session(game_id)
+        success = s3.update_session(session_id)
         
         if not success:
             return jsonify({"error": "Failed to update session in S3"}), 500
         
         return jsonify({
             "status": "success",
-            "game_id": game_id
+            "session_id": session_id
         })
         
     except Exception as e:
@@ -706,6 +760,23 @@ def get_latest_session():
         
     except Exception as e:
         print(f"Error getting latest session: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/session/end', methods=['POST'])
+def end_session():
+    try:
+        # Import aws.py's S3 class and call end_session
+        from server.aws import S3
+        s3 = S3()
+        success = s3.end_session()
+        
+        if not success:
+            return jsonify({"error": "Failed to end session in S3"}), 500
+        
+        return jsonify({"status": "success"})
+        
+    except Exception as e:
+        print(f"Error ending session: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/users', methods=['GET'])

@@ -68,7 +68,7 @@ class S3:
     # Presigned URL helpers
     # ----------------------------
 
-    def get_presigned_url(self, file_path, game_id=None):
+    def get_presigned_url(self, file_path, session_id=None):
         """
         Ask the local Flask API to generate a presigned upload URL.
         """
@@ -79,8 +79,8 @@ class S3:
             "username": USERNAME,
         }
 
-        if game_id:
-            payload["game_id"] = game_id
+        if session_id:
+            payload["session_id"] = session_id
 
         response = requests.post(url, json=payload)
         response.raise_for_status()
@@ -91,10 +91,46 @@ class S3:
     # Session tracking
     # ----------------------------
 
-    def update_session(self, game_id):
+    def create_session(self, app_name, user_with):
         try:
             session_entry = {
-                "game_id": game_id,
+                "app_name": app_name,
+                "user_with": user_with,
+                "timestamp": datetime.now().isoformat(),
+            }
+
+            try:
+                response = self.client.get_object(
+                    Bucket=self.bucket_name,
+                    Key=self.session_file,
+                )
+                existing_data = json.loads(
+                    response["Body"].read().decode("utf-8")
+                )
+                if not isinstance(existing_data, list):
+                    existing_data = []
+            except self.client.exceptions.NoSuchKey:
+                existing_data = []
+
+            existing_data.append(session_entry)
+
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=self.session_file,
+                Body=json.dumps(existing_data),
+                ContentType="application/json",
+            )
+
+            return True
+
+        except Exception as e:
+            print(f"Error creating session: {e}")
+            return False
+
+    def update_session(self, session_id):
+        try:
+            session_entry = {
+                "session_id": session_id,
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -140,10 +176,53 @@ class S3:
             if not session_data:
                 return None
 
-            return session_data[-1]
+            # Return the latest active session (skip ended sessions)
+            for session in reversed(session_data):
+                if session.get("status") != "ended":
+                    return session
+            
+            # If all sessions are ended, return an empty session
+            return {"app_name": None, "user_with": None}
 
         except self.client.exceptions.NoSuchKey:
             return None
         except Exception as e:
             print(f"Error getting latest session: {e}")
             return None
+    def end_session(self):
+        try:
+            # Create an end session marker
+            session_entry = {
+                "app_name": None,
+                "user_with": None,
+                "timestamp": datetime.now().isoformat(),
+                "status": "ended"
+            }
+
+            try:
+                response = self.client.get_object(
+                    Bucket=self.bucket_name,
+                    Key=self.session_file,
+                )
+                existing_data = json.loads(
+                    response["Body"].read().decode("utf-8")
+                )
+                if not isinstance(existing_data, list):
+                    existing_data = []
+            except self.client.exceptions.NoSuchKey:
+                existing_data = []
+
+            existing_data.append(session_entry)
+
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=self.session_file,
+                Body=json.dumps(existing_data),
+                ContentType="application/json",
+            )
+
+            return True
+
+        except Exception as e:
+            print(f"Error ending session: {e}")
+            return False

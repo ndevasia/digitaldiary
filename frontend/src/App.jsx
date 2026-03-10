@@ -61,8 +61,28 @@ function App() {
 
     const handleScreenshot = async () => {
         try {
+            // Fetch current session metadata
+            let sessionMetadata = {};
+            try {
+                const sessionResponse = await fetch('/api/session/latest');
+                if (sessionResponse.ok) {
+                    const sessionData = await sessionResponse.json();
+                    sessionMetadata = {
+                        app_name: sessionData.app_name,
+                        user_with: sessionData.user_with
+                    };
+                    console.log('Fetched session metadata:', sessionMetadata);
+                }
+            } catch (err) {
+                console.log('Could not fetch active session:', err);
+            }
+
             const response = await fetch(`${API_URL}/screenshot`, {
-                method: 'POST'
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(sessionMetadata)
             });
             const data = await response.json();
             if (data.error) {
@@ -77,9 +97,29 @@ function App() {
 
     const handleScreenRecording = async () => {
         try {
+            // Fetch current session metadata
+            let sessionMetadata = {};
+            try {
+                const sessionResponse = await fetch('/api/session/latest');
+                if (sessionResponse.ok) {
+                    const sessionData = await sessionResponse.json();
+                    sessionMetadata = {
+                        app_name: sessionData.app_name,
+                        user_with: sessionData.user_with
+                    };
+                    console.log('Fetched session metadata:', sessionMetadata);
+                }
+            } catch (err) {
+                console.log('Could not fetch active session:', err);
+            }
+
             if (!isScreenRecording) {
                 const response = await fetch(`${API_URL}/recording/start`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(sessionMetadata)
                 });
                 const data = await response.json();
                 if (data.error) {
@@ -108,9 +148,29 @@ function App() {
 
     const handleAudioRecording = async () => {
         try {
+            // Fetch current session metadata
+            let sessionMetadata = {};
+            try {
+                const sessionResponse = await fetch('/api/session/latest');
+                if (sessionResponse.ok) {
+                    const sessionData = await sessionResponse.json();
+                    sessionMetadata = {
+                        app_name: sessionData.app_name,
+                        user_with: sessionData.user_with
+                    };
+                    console.log('Fetched session metadata:', sessionMetadata);
+                }
+            } catch (err) {
+                console.log('Could not fetch active session:', err);
+            }
+
             if (!isAudioRecording) {
                 const response = await fetch(`${API_URL}/audio/start`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(sessionMetadata)
                 });
                 const data = await response.json();
                 if (data.error) {

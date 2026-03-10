@@ -39,20 +39,20 @@ function GamesPage() {
     
     // Process each media item
     mediaData.forEach(item => {
-      if (item.game) {
-        // Create a slug (URL-friendly ID) from the game name
-        const gameSlug = item.game.replace(/\s+/g, '-').toLowerCase();
+      if (item.app_name) {
+        // Create a slug (URL-friendly ID) from the app name
+        const gameSlug = item.app_name.replace(/\s+/g, '-').toLowerCase();
         
-        // If this game isn't in our map yet, add it
+        // If this app isn't in our map yet, add it
         if (!gamesMap.has(gameSlug)) {
           gamesMap.set(gameSlug, {
-            name: item.game,
+            name: item.app_name,
             slug: gameSlug,
             media: []
           });
         }
         
-        // Add this media to the game's media array
+        // Add this media to the app's media array
         gamesMap.get(gameSlug).media.push(item);
       }
     });
@@ -207,7 +207,7 @@ function GamesPage() {
                       onClick={() => enlargeImage(item.media_url)}
                     />
                     <div className="mt-2">
-                      <div className="font-medium text-gray-700">{item.game}</div>
+                      <div className="font-medium text-gray-700">{item.app_name}</div>
                       <div className="text-xs text-gray-500">{date}</div>
                     </div>
                   </div>
@@ -222,7 +222,7 @@ function GamesPage() {
                   <div className="p-4">
                     <VideoPlayer src={item.media_url} />
                     <div className="mt-2">
-                      <div className="font-medium text-gray-700">{item.game}</div>
+                      <div className="font-medium text-gray-700">{item.app_name}</div>
                       <div className="text-xs text-gray-500">{date}</div>
                     </div>
                   </div>
@@ -240,7 +240,7 @@ function GamesPage() {
                       Your browser does not support the audio tag.
                     </audio>
                     <div className="mt-2">
-                      <div className="font-medium text-gray-700">{item.game}</div>
+                      <div className="font-medium text-gray-700">{item.app_name}</div>
                       <div className="text-xs text-gray-500">{date}</div>
                     </div>
                   </div>
@@ -284,7 +284,7 @@ function GamesPage() {
   };
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <div className="flex-1 p-8 overflow-y-auto">
         <header className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>

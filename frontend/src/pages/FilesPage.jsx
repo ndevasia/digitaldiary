@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext, useRef } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 
@@ -69,7 +69,7 @@ function FilesPage() {
         }
 
         if (gameFilter.size > 0) {
-            filtered = filtered.filter(item => gameFilter.has(item.game));
+            filtered = filtered.filter(item => gameFilter.has(item.app_name));
         }
 
         // apply date range filter
@@ -141,7 +141,7 @@ function FilesPage() {
             const data = await response.json();
             // Only take the first two users plus 'all' option
             const limitedUsers = data.slice(0, 2);
-            setUsers([{ user_id: 'all', username: 'All Users' }, ...limitedUsers]);
+            setUsers([{ user_id: -1, username: 'All Users' }, ...limitedUsers]);
         } catch (error) {
             console.error('Error fetching users:', error);
             setError(error.message);
@@ -165,7 +165,7 @@ function FilesPage() {
 
         if (isAllSelected) {
             const userList = users
-                .filter(u => String(u.user_id) !== 'all')
+                .filter(u => u.user_id !== -1)
                 .map(u => u.username);
 
             if (userList.length === 0) {
@@ -175,7 +175,7 @@ function FilesPage() {
                 const sorted = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 setMediaList(sorted);
                 const uniqueGames = Array.from(
-                  new Set(sorted.map(item => item.game).filter(Boolean))
+                  new Set(sorted.map(item => item.app_name).filter(Boolean))
                 );
                 setGames(uniqueGames);
                 setGameFilter(new Set()); // Clear game filter when switching users
@@ -191,7 +191,7 @@ function FilesPage() {
             const merged = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             setMediaList(merged);
             const uniqueGames = Array.from(
-              new Set(merged.map(item => item.game).filter(Boolean))
+              new Set(merged.map(item => item.app_name).filter(Boolean))
             );
             setGames(uniqueGames);
             setGameFilter(new Set()); // Clear game filter when switching users
@@ -212,7 +212,7 @@ function FilesPage() {
         const data = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         setMediaList(data);
         const uniqueGames = Array.from(
-          new Set(data.map(item => item.game).filter(Boolean))
+          new Set(data.map(item => item.app_name).filter(Boolean))
         );
         setGames(uniqueGames);
         setGameFilter(new Set()); // Clear game filter when switching users
@@ -243,6 +243,51 @@ function FilesPage() {
                 return 'Video';
             default:
                 return 'All';
+        }
+    };
+
+    const extractS3Key = (item) => {
+        // DEPRECATED: S3 key is now passed directly from backend via s3_key field
+        return item.s3_key || null;
+    };
+
+    const handleDeleteMedia = async (item) => {
+        if (!window.confirm(`Delete this ${item.type}?`)) return;
+
+        try {
+            // Use the s3_key directly from the item
+            const s3Key = item.s3_key;
+            if (!s3Key) {
+                alert('Could not determine file location');
+                console.error('No s3_key found in item:', item);
+                return;
+            }
+
+            console.log('Deleting file with key:', s3Key);
+            const response = await fetch('/api/media/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_key: s3Key })
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || `Server error: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('Delete response:', result);
+
+            // Remove using media_url as the unique identifier
+            const updatedFiltered = filteredMedia.filter(m => m.media_url !== item.media_url);
+            const updatedList = mediaList.filter(m => m.media_url !== item.media_url);
+
+            setFilteredMedia(updatedFiltered);
+            setMediaList(updatedList);
+            alert('File deleted successfully');
+        } catch (error) {
+            console.error('Error deleting media:', error);
+            alert('Error deleting file: ' + error.message);
         }
     };
 
@@ -282,7 +327,7 @@ function FilesPage() {
                             <VideoPlayer src={item.media_url} />
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.game}</div>
+                            <div className="font-medium text-gray-700">{item.app_name}</div>
                             <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
@@ -297,7 +342,7 @@ function FilesPage() {
                             </audio>
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.game}</div>
+                            <div className="font-medium text-gray-700">{item.app_name}</div>
                             <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
@@ -309,7 +354,7 @@ function FilesPage() {
                             <img src={item.media_url} alt="Screenshot" className="w-full rounded" />
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.game}</div>
+                            <div className="font-medium text-gray-700">{item.app_name}</div>
                             <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
@@ -320,7 +365,7 @@ function FilesPage() {
     };
 
     return (
-        <div>
+        <div className="h-screen flex flex-col">
             <div className="flex-1 p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
@@ -336,7 +381,7 @@ function FilesPage() {
                             {users.map((user) => (
                                   <button
                                       onClick={() => {
-                                        if (user.user_id === 'all') {
+                                        if (user.user_id === -1) {
                                             setUserFilter(new Set()); // Clearing the set represents "All"
                                         } else {
                                             const newSet = new Set(userFilter);
@@ -348,7 +393,7 @@ function FilesPage() {
                                         }
                                     }}
                                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                                          (user.user_id === 'all' && userFilter.size === 0) || userFilter.has(String(user.user_id))
+                                          (user.user_id === -1 && userFilter.size === 0) || userFilter.has(String(user.user_id))
                                               ? 'bg-teal-500 text-white'
                                               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                       }`}
@@ -477,8 +522,15 @@ function FilesPage() {
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-4">
                                 {filteredMedia.map(item => (
-                                    <div key={item.id || item.media_id || item.media_url} className="bg-white rounded-lg border border-gray-100 p-4 h-64 flex flex-col">
+                                    <div key={item.id || item.media_id || item.media_url} className="relative group bg-white rounded-lg border border-gray-100 p-4 h-64 flex flex-col">
                                         {renderMediaItem(item)}
+                                        <button
+                                            onClick={() => handleDeleteMedia(item)}
+                                            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="Delete this file"
+                                        >
+                                            <X size={16} />
+                                        </button>
                                     </div>
                                 ))}
                             </div>

@@ -226,3 +226,17 @@ class S3:
         except Exception as e:
             print(f"Error ending session: {e}")
             return False
+
+    def delete_file(self, file_key):
+        """
+        Delete a file from S3 by its key.
+        """
+        try:
+            self.client.delete_object(
+                Bucket=self.bucket_name,
+                Key=file_key
+            )
+            return True
+        except Exception as e:
+            print(f"Error deleting file from S3: {e}")
+            return False

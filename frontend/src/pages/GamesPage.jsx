@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, X } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 
@@ -147,6 +147,54 @@ function GamesPage() {
     );
   };
 
+  const extractS3Key = (item) => {
+    // DEPRECATED: S3 key is now passed directly from backend via s3_key field
+    return item.s3_key || null;
+  };
+
+  const handleDeleteMedia = async (item) => {
+    if (!window.confirm(`Delete this ${item.type}?`)) return;
+
+    try {
+      // Use the s3_key directly from the item
+      const s3Key = item.s3_key;
+      if (!s3Key) {
+        alert('Could not determine file location');
+        console.error('No s3_key found in item:', item);
+        return;
+      }
+
+      console.log('Deleting file with key:', s3Key);
+      const response = await fetch('/api/media/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_key: s3Key })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || `Server error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Delete response:', result);
+
+      // Remove using media_url as the unique identifier
+      const updatedMedia = selectedGame.media.filter(m => m.media_url !== item.media_url);
+      const updatedGame = { ...selectedGame, media: updatedMedia };
+      setSelectedGame(updatedGame);
+
+      // Also update full media data
+      const updatedData = mediaData.filter(m => m.media_url !== item.media_url);
+      setMediaData(updatedData);
+      
+      alert('File deleted successfully');
+    } catch (error) {
+      console.error('Error deleting media:', error);
+      alert('Error deleting file: ' + error.message);
+    }
+  };
+
   // Render the game detail view
   const renderGameDetail = () => {
     if (!selectedGame) return null;
@@ -197,7 +245,7 @@ function GamesPage() {
               return (
                 <div 
                   key={item.media_id} 
-                  className={`${mediaClass} rounded overflow-hidden shadow-sm`}
+                  className={`${mediaClass} rounded overflow-hidden shadow-sm relative group`}
                 >
                   <div className="p-4">
                     <img 
@@ -211,13 +259,20 @@ function GamesPage() {
                       <div className="text-xs text-gray-500">{date}</div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleDeleteMedia(item)}
+                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete this file"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
               );
             } else if (item.type === 'video') {
               return (
                 <div 
                   key={item.media_id} 
-                  className={`${mediaClass} rounded overflow-hidden shadow-sm`}
+                  className={`${mediaClass} rounded overflow-hidden shadow-sm relative group`}
                 >
                   <div className="p-4">
                     <VideoPlayer src={item.media_url} />
@@ -226,13 +281,20 @@ function GamesPage() {
                       <div className="text-xs text-gray-500">{date}</div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleDeleteMedia(item)}
+                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete this file"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
               );
             } else if (item.type === 'audio') {
               return (
                 <div 
                   key={item.media_id} 
-                  className={`${mediaClass} rounded overflow-hidden shadow-sm`}
+                  className={`${mediaClass} rounded overflow-hidden shadow-sm relative group`}
                 >
                   <div className="p-4">
                     <audio controls className="w-full mb-2">
@@ -244,6 +306,13 @@ function GamesPage() {
                       <div className="text-xs text-gray-500">{date}</div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleDeleteMedia(item)}
+                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete this file"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
               );
             }

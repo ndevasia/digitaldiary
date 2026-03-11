@@ -265,7 +265,8 @@ def get_media_aws():
                 "timestamp": item['LastModified'].isoformat(),
                 "owner_user_id": owner_user_id,
                 "session_id": session_id,
-                "app_name": session_id if session_id else "app1"  # Use session_id if available, else fallback
+                "app_name": session_id if session_id else "app1",  # Use session_id if available, else fallback
+                "s3_key": item['Key']  # Add the actual S3 key for deletion
             }
 
             media_list.append(media_item)
@@ -777,6 +778,29 @@ def end_session():
         
     except Exception as e:
         print(f"Error ending session: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/media/delete', methods=['DELETE', 'POST'])
+def delete_media():
+    try:
+        data = request.json
+        file_key = data.get('file_key')
+        
+        if not file_key:
+            return jsonify({"error": "file_key is required"}), 400
+        
+        # Import aws.py's S3 class and delete the file
+        from server.aws import S3
+        s3 = S3()
+        success = s3.delete_file(file_key)
+        
+        if not success:
+            return jsonify({"error": "Failed to delete file from S3"}), 500
+        
+        return jsonify({"status": "success"})
+        
+    except Exception as e:
+        print(f"Error deleting media: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/users', methods=['GET'])

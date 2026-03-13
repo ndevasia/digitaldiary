@@ -10,6 +10,7 @@ function HeroImage({ onImageChange }) {
     const [showScreenshotSelector, setShowScreenshotSelector] = useState(false);
     const [noScreenshotsAvailable, setNoScreenshotsAvailable] = useState(false);
     const fileInputRef = useRef(null);
+    const currentUsername = localStorage.getItem('username') || 'User';
     
     useEffect(() => {
         // Fetch the hero image from the backend
@@ -19,7 +20,7 @@ function HeroImage({ onImageChange }) {
     const fetchHeroImage = async () => {
         try {
             console.log('Fetching hero image from backend...');
-            const response = await fetch('/api/hero-image');
+            const response = await fetch(`/api/${encodeURIComponent(currentUsername)}/hero-image`);
             if (!response.ok) {
                 throw new Error('Failed to fetch hero image');
             }
@@ -49,7 +50,7 @@ function HeroImage({ onImageChange }) {
         try {
             setLoadingAllScreenshots(true);
             console.log('Fetching all screenshots...');
-            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
+            const response = await fetch(`/api/${encodeURIComponent(currentUsername)}/media_aws`);
             if (!response.ok) {
                 throw new Error('Failed to fetch screenshots');
             }

@@ -26,7 +26,7 @@ function StatsPage() {
     const fetchMediaStats = async () => {
         try {
             setLoadingStats(true);
-            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
+            const response = await fetch(`/api/${encodeURIComponent(currentUsername)}/media_aws`);
             const mediaData = await response.json();
 
             const stats = mediaData.reduce((acc, item) => {
@@ -47,7 +47,7 @@ function StatsPage() {
     const fetchGameSessions = async () => {
         try {
             setLoadingTimeline(true);
-            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
+            const response = await fetch(`/api/${encodeURIComponent(currentUsername)}/media_aws`);
             const mediaData = await response.json();
 
             const gameSessions = mediaData.reduce((acc, item) => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, StrictMode } from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './index.css';
@@ -8,6 +8,7 @@ import FilesPage from './pages/FilesPage.jsx';
 import GamesPage from './pages/GamesPage';
 import StatsPage from './pages/StatsPage';
 import SettingsPage from './pages/SettingsPage.jsx';
+import SetupPage from './pages/SetupPage.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import { UserContext } from './context/UserContext.jsx';
 
@@ -15,29 +16,28 @@ import { UserContext } from './context/UserContext.jsx';
 function MainApp() {
   // Check if we should render the overlay tool or the full app
   const isOverlay = new URLSearchParams(window.location.search).has('overlay');
-  const [currentUsername, setCurrentUsername] = useState('User');
+  const currentUsername = localStorage.getItem('username');
+
+  if (!currentUsername) {
+    // enter setup mode if no username is found in local storage
+    if (!isOverlay) {
+      return <SetupPage />;
+    } else {
+      return <></>;
+    }
+  }
 
   if (isOverlay) {
-    return <App />;
-  } else {
-    useEffect(() => {
-        const fetchCurrentUser = async () => {
-            try {
-                const res = await fetch('/api/current_user');
-                if (!res.ok) return;
-                const data = await res.json();
-                if (data.username) setCurrentUsername(data.username);
-            } catch (err) {
-                console.error('Error fetching current user:', err);
-            }
-        };
-        fetchCurrentUser();
-    }, []);
+    return (
+      <UserContext.Provider value={{ username: currentUsername, friends: [] }}>
+        <App />
+      </UserContext.Provider>
+    );
   }
 
   return (
     <Router>
-      <UserContext.Provider value={{ username: currentUsername }}>
+      <UserContext.Provider value={{ username: currentUsername, friends: [] }}>
         <div className="flex h-screen bg-blue-50">
           <Sidebar />
           <Routes>

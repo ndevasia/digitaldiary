@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import { Mic, Video, Camera, X, Minus, Maximize, Minimize, BarChart2 } from 'lucide-react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { UserContext } from './context/UserContext';
 import FFMpeg from './FFMpeg';
 const { ipcRenderer } = window.require('electron');
 
@@ -38,6 +39,7 @@ function App() {
     const [screenRecordingState, setScreenRecordingState] = useState(INACTIVE);
     const screenRecordingUID = useRef(null);
     const [isMaximized, setIsMaximized] = useState(false);
+    const currentUsername = useContext(UserContext).username || 'User';
 
     // Add effect to listen for main window open/close events
     useEffect(() => {
@@ -99,7 +101,7 @@ function App() {
             formData.append('enctype', 'multipart/form-data');
             formData.append('file', screenshot);
 
-            await fetch('/api/screenshot', {
+            await fetch(`/api/${encodeURIComponent(currentUsername)}/screenshot`, {
                 method: 'POST',
                 body: formData,
             }).then((response) => {
@@ -119,7 +121,7 @@ function App() {
         try {
             setScreenRecordingState(LOADING);
             if (screenRecordingState === INACTIVE) {
-                fetch('/api/recording/start', { method: 'POST' }).then(async (response) => {
+                fetch(`/api/${encodeURIComponent(currentUsername)}/recording/start`, { method: 'POST' }).then(async (response) => {
                     if (!response.ok) {
                         throw new Error('Failed to start recording on backend');
                     }
@@ -140,7 +142,7 @@ function App() {
                     setScreenRecordingState(INACTIVE);
                 });
             } else if (screenRecordingState === ACTIVE) {
-                fetch(`/api/recording/stop/${screenRecordingUID.current}`, { method: 'POST' }).then(() => {
+                fetch(`/api/${encodeURIComponent(currentUsername)}/recording/stop/${screenRecordingUID.current}`, { method: 'POST' }).then(() => {
                     console.log('Notified backend of recording stop');
                     FFMpeg.stopVideoStream(true).then(() => {
                         console.log('Screen recording stopped');
@@ -179,7 +181,7 @@ function App() {
                     const formData = new FormData();
                     formData.append('enctype', 'multipart/form-data');
                     formData.append('file', audio_file);
-                    fetch('/api/audio/upload', {
+                    fetch(`/api/${encodeURIComponent(currentUsername)}/audio/upload`, {
                         method: 'POST',
                         body: formData,
                     }).then((response) => {

@@ -34,7 +34,7 @@ function HomePage() {
     const fetchLatestScreenshot = async () => {
         try {
             setLoading(true);
-            const response = await fetch('/api/latest-screenshot');
+            const response = await fetch(`/api/${encodeURIComponent(currentUsername)}/latest-screenshot`);
             const data = await response.json();
             setScreenshotUrl(data.screenshot_url);
         } catch (error) {
@@ -47,7 +47,7 @@ function HomePage() {
     const fetchScreenshotByDays = async (days, setScreenshotUrl, setLoading) => {
         try {
             setLoading(true);
-            const response = await fetch(`/api/random-screenshot-by-days/${days}`);
+            const response = await fetch(`/api/${encodeURIComponent(currentUsername)}/random-screenshot-by-days/${days}`);
             const data = await response.json();
             setScreenshotUrl(data.screenshot_url);
         } catch (error) {
@@ -60,7 +60,7 @@ function HomePage() {
     const fetchGameSessions = async () => {
         try {
             setLoadingTimeline(true);
-            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
+            const response = await fetch(`/api/${encodeURIComponent(currentUsername)}/media_aws`);
             const mediaData = await response.json();
 
             // Group media by game_id and get the latest timestamp for each game

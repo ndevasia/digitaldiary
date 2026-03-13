@@ -19,7 +19,7 @@ function GamesPage() {
   const fetchMediaData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
+      const response = await fetch(`/api/${encodeURIComponent(currentUsername)}/media_aws`);
       if (!response.ok) {
         throw new Error('Failed to fetch media');
       }

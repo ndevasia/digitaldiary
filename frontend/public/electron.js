@@ -246,6 +246,10 @@ function setupIPC() {
             }
         }
     });
+
+    ipcMain.on('get-root-path', (event) => {
+        event.returnValue = app.getAppPath();
+    });
 }
 
 

@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage.jsx';
 import FilesPage from './pages/FilesPage.jsx';
 import GamesPage from './pages/GamesPage';
 import StatsPage from './pages/StatsPage';
+import SettingsPage from './pages/SettingsPage.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import { UserContext } from './context/UserContext.jsx';
 
@@ -45,7 +46,7 @@ function MainApp() {
             <Route path="/games" element={<GamesPage />} />
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/journals" element={<HomePage />} /> {/* Placeholder */}
-            <Route path="/settings" element={<HomePage />} /> {/* Placeholder */}
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </div>
       </UserContext.Provider>

@@ -244,22 +244,8 @@ def get_media_aws():
         if 'Contents' not in response:
             return jsonify([])
 
-        # Load metadata overrides for this user
-        try:
-            metadata_response = s3_client.get_object(
-                Bucket=BUCKET_NAME,
-                Key=f"{prefix_username}/metadata.json"
-            )
-            metadata_overrides = json.loads(metadata_response["Body"].read().decode("utf-8"))
-        except s3_client.exceptions.NoSuchKey:
-            metadata_overrides = {}
-
         media_list = []
         for idx, item in enumerate(response['Contents'], 1):
-            # Skip metadata.json files
-            if item['Key'].endswith('metadata.json'):
-                continue
-
             # Extract filename and extension
             filename = os.path.basename(item['Key'])
             file_extension = os.path.splitext(filename)[1][1:].lower()
@@ -293,6 +279,14 @@ def get_media_aws():
                 ExpiresIn=3600
             )
 
+            # Get custom metadata from S3 object tags
+            try:
+                tag_response = s3_client.get_object_tagging(Bucket=BUCKET_NAME, Key=item['Key'])
+                s3_metadata = {tag['Key']: tag['Value'] for tag in tag_response.get('TagSet', [])}
+            except Exception as e:
+                print(f"Warning: Could not retrieve tags for {item['Key']}: {e}")
+                s3_metadata = {}
+
             # Transform into media data type format
             media_item = {
                 "media_id": idx,
@@ -305,9 +299,9 @@ def get_media_aws():
                 "s3_key": item['Key']  # Add the actual S3 key for deletion
             }
 
-            # Apply metadata overrides if they exist
-            if item['Key'] in metadata_overrides:
-                media_item.update(metadata_overrides[item['Key']])
+            # Apply custom metadata from S3 object headers
+            # S3 metadata will override the defaults
+            media_item.update(s3_metadata)
 
             media_list.append(media_item)
 
@@ -317,6 +311,7 @@ def get_media_aws():
             media_list = [item for item in media_list if item['type'] == media_type]
 
         return jsonify(media_list)
+
 
     except Exception as e:
         print(f"Error in get_media_aws: {str(e)}")
@@ -846,10 +841,16 @@ def update_media_metadata():
         if not s3_key:
             return jsonify({"error": "s3_key is required"}), 400
         
+        # Trim whitespace from all metadata values
+        trimmed_metadata = {
+            key: value.strip() if isinstance(value, str) else value 
+            for key, value in metadata.items()
+        }
+        
         # Import aws.py's S3 class and update metadata
         from server.aws import S3
         s3 = S3()
-        success = s3.update_media_metadata(s3_key, metadata)
+        success = s3.update_media_metadata(s3_key, trimmed_metadata)
         
         if not success:
             return jsonify({"error": "Failed to update media metadata"}), 500

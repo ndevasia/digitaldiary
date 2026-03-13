@@ -36,6 +36,16 @@ function FilesPage() {
     useEffect(() => {
         fetchUsers();
         // initial media load will be handled by users/userFilter effect
+
+        // Refetch data when page becomes visible (user navigates back)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchMedia();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, []);
 
     // Close dropdowns when clicking outside
@@ -323,12 +333,13 @@ function FilesPage() {
         }
 
         try {
+            const trimmedValue = editValue.trim();
             const response = await fetch('/api/media/update-metadata', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     s3_key: item.s3_key,
-                    metadata: { [editingField]: editValue }
+                    metadata: { [editingField]: trimmedValue }
                 })
             });
 
@@ -339,7 +350,7 @@ function FilesPage() {
             // Update local media data
             const updatedList = mediaList.map(media => {
                 if (media.s3_key === item.s3_key) {
-                    return { ...media, [editingField]: editValue };
+                    return { ...media, [editingField]: trimmedValue };
                 }
                 return media;
             });
@@ -352,7 +363,7 @@ function FilesPage() {
         }
     };
 
-    const renderEditableField = (label, value, item, field) => {
+    const renderEditableField = (label, value, item, field, isEditable = true) => {
         const isEditing = editingItemKey === item.s3_key && editingField === field;
 
         if (isEditing) {
@@ -387,9 +398,13 @@ function FilesPage() {
 
         return (
             <div
-                onDoubleClick={() => startEditing(item.s3_key, field, value)}
-                className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded transition-colors"
-                title="Double-click to edit"
+                onDoubleClick={() => isEditable && startEditing(item.s3_key, field, value)}
+                className={`px-2 py-1 rounded transition-colors ${
+                    isEditable
+                        ? 'cursor-pointer hover:bg-gray-100'
+                        : 'cursor-not-allowed opacity-60'
+                }`}
+                title={isEditable ? 'Double-click to edit' : 'You do not have permission to edit this file'}
             >
                 <span className="font-medium text-gray-700">{label}:</span> {value || 'Not set'}
             </div>
@@ -424,6 +439,8 @@ function FilesPage() {
                 mediaClass = 'bg-blue-100';
         }
 
+        const isOwned = item.owner_user_id === 0;
+
         switch (item.type) {
             case 'video':
                 return (
@@ -432,7 +449,7 @@ function FilesPage() {
                             <VideoPlayer src={item.media_url} />
                         </div>
                         <div className="mt-2">
-                            {renderEditableField('App', item.app_name, item, 'app_name')}
+                            {renderEditableField('App', item.app_name, item, 'app_name', isOwned)}
                             <div className="text-xs text-gray-500 mt-1">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
@@ -447,7 +464,7 @@ function FilesPage() {
                             </audio>
                         </div>
                         <div className="mt-2">
-                            {renderEditableField('App', item.app_name, item, 'app_name')}
+                            {renderEditableField('App', item.app_name, item, 'app_name', isOwned)}
                             <div className="text-xs text-gray-500 mt-1">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
@@ -464,7 +481,7 @@ function FilesPage() {
                             />
                         </div>
                         <div className="mt-2">
-                            {renderEditableField('App', item.app_name, item, 'app_name')}
+                            {renderEditableField('App', item.app_name, item, 'app_name', isOwned)}
                             <div className="text-xs text-gray-500 mt-1">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
@@ -516,6 +533,7 @@ function FilesPage() {
                         <div className="flex flex-wrap gap-2 mb-6">
                             {users.map((user) => (
                                   <button
+                                      key={user.user_id}
                                       onClick={() => {
                                         if (user.user_id === -1) {
                                             setUserFilter(new Set()); // Clearing the set represents "All"
@@ -657,18 +675,31 @@ function FilesPage() {
                             <div className="text-gray-600">No media found.</div>
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-4">
-                                {filteredMedia.map(item => (
-                                    <div key={item.id || item.media_id || item.media_url} className="relative group bg-white rounded-lg border border-gray-100 p-4 h-64 flex flex-col">
-                                        {renderMediaItem(item)}
-                                        <button
-                                            onClick={() => handleDeleteMedia(item)}
-                                            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                                            title="Delete this file"
-                                        >
-                                            <X size={16} />
-                                        </button>
-                                    </div>
-                                ))}
+                                {filteredMedia.map(item => {
+                                    const isOwned = item.owner_user_id === 0;
+                                    return (
+                                        <div key={item.s3_key} className="relative group bg-white rounded-lg border border-gray-100 p-4 h-64 flex flex-col">
+                                            {renderMediaItem(item)}
+                                            {!isOwned && (
+                                                <div className="absolute top-2 left-2 bg-gray-400 text-white p-1 rounded" title="Read-only: owned by another user">
+                                                    🔒
+                                                </div>
+                                            )}
+                                            <button
+                                                onClick={() => handleDeleteMedia(item)}
+                                                disabled={!isOwned}
+                                                className={`absolute top-2 right-2 p-1 rounded transition-opacity ${
+                                                    isOwned
+                                                        ? 'bg-red-500 hover:bg-red-600 text-white opacity-0 group-hover:opacity-100 cursor-pointer'
+                                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50'
+                                                }`}
+                                                title={isOwned ? 'Delete this file' : 'You do not have permission to delete this file'}
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

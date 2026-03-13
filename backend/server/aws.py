@@ -295,46 +295,34 @@ class S3:
             print(f"Error deleting file from S3: {e}")
             return False
 
-    def get_media_metadata(self):
-        """
-        Get all media metadata for this user. Returns a dict mapping s3_key -> metadata overrides.
-        """
-        try:
-            metadata_file = f"{self.username}/metadata.json"
-            response = self.client.get_object(
-                Bucket=self.bucket_name,
-                Key=metadata_file,
-            )
-            data = json.loads(response["Body"].read().decode("utf-8"))
-            return data if isinstance(data, dict) else {}
-        except self.client.exceptions.NoSuchKey:
-            return {}
-        except Exception as e:
-            print(f"Error getting media metadata: {e}")
-            return {}
-
     def update_media_metadata(self, s3_key, metadata):
         """
-        Update metadata for a specific media file. Metadata is stored in a per-user metadata.json file.
+        Update metadata for a specific media file using S3 Object Tags.
+        Tags allow metadata to be stored without modifying the object's LastModified timestamp.
         
         Args:
             s3_key: The S3 key of the media file (e.g., "username/session123/video_timestamp.mp4")
             metadata: Dict of metadata to update (e.g., {"app_name": "Discord"})
         """
         try:
-            # Get existing metadata
-            all_metadata = self.get_media_metadata()
+            # Get existing tags for this object
+            try:
+                response = self.client.get_object_tagging(Bucket=self.bucket_name, Key=s3_key)
+                existing_tags = {tag['Key']: tag['Value'] for tag in response.get('TagSet', [])}
+            except self.client.exceptions.NoSuchKey:
+                existing_tags = {}
             
-            # Update metadata for this file
-            all_metadata[s3_key] = metadata
+            # Update with new metadata
+            updated_tags = {**existing_tags, **metadata}
             
-            # Save back to S3
-            metadata_file = f"{self.username}/metadata.json"
-            self.client.put_object(
+            # Convert to TagSet format for put_object_tagging
+            tag_set = [{'Key': k, 'Value': str(v)} for k, v in updated_tags.items()]
+            
+            # Update object tags (does not modify LastModified)
+            self.client.put_object_tagging(
                 Bucket=self.bucket_name,
-                Key=metadata_file,
-                Body=json.dumps(all_metadata),
-                ContentType="application/json",
+                Key=s3_key,
+                Tagging={'TagSet': tag_set}
             )
             return True
         except Exception as e:

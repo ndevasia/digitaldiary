@@ -17,6 +17,16 @@ function GamesPage() {
 
   useEffect(() => {
     fetchMediaData();
+
+    // Refetch data when page becomes visible (user navigates back)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchMediaData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   const fetchMediaData = async () => {
@@ -28,6 +38,13 @@ function GamesPage() {
       }
       const data = await response.json();
       setMediaData(data);
+      
+      // Log all media with their app_names
+      console.log('Raw media data from API:');
+      data.forEach((item, index) => {
+        console.log(`  [${index}] s3_key="${item.s3_key}" app_name="${item.app_name}"`);
+      });
+      
       setLoading(false);
     } catch (error) {
       console.error('Error fetching media data:', error);
@@ -46,6 +63,8 @@ function GamesPage() {
         // Create a slug (URL-friendly ID) from the app name
         const gameSlug = item.app_name.replace(/\s+/g, '-').toLowerCase();
         
+        console.log(`Processing media: app_name="${item.app_name}" (slug="${gameSlug}")`);
+        
         // If this app isn't in our map yet, add it
         if (!gamesMap.has(gameSlug)) {
           gamesMap.set(gameSlug, {
@@ -60,10 +79,13 @@ function GamesPage() {
       }
     });
     
-    // Convert map to array and sort by game name
-    return Array.from(gamesMap.values()).sort((a, b) => 
+    const games = Array.from(gamesMap.values()).sort((a, b) => 
       a.name.localeCompare(b.name)
     );
+    
+    console.log('Unique games found:', games.map(g => ({ name: g.name, count: g.media.length })));
+    
+    return games;
   };
 
   const handleGameClick = (game) => {
@@ -102,12 +124,13 @@ function GamesPage() {
     }
 
     try {
+      const trimmedValue = editValue.trim();
       const response = await fetch('/api/media/update-metadata', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           s3_key: item.s3_key,
-          metadata: { [editingField]: editValue }
+          metadata: { [editingField]: trimmedValue }
         })
       });
 
@@ -118,7 +141,7 @@ function GamesPage() {
       // Update local media data
       const updatedData = mediaData.map(media => {
         if (media.s3_key === item.s3_key) {
-          return { ...media, [editingField]: editValue };
+          return { ...media, [editingField]: trimmedValue };
         }
         return media;
       });
@@ -129,7 +152,7 @@ function GamesPage() {
         const updatedGame = {
           ...selectedGame,
           media: selectedGame.media.map(m => 
-            m.s3_key === item.s3_key ? { ...m, [editingField]: editValue } : m
+            m.s3_key === item.s3_key ? { ...m, [editingField]: trimmedValue } : m
           )
         };
         setSelectedGame(updatedGame);
@@ -351,7 +374,7 @@ function GamesPage() {
             if (item.type === 'screenshot') {
               return (
                 <div 
-                  key={item.media_id} 
+                  key={item.s3_key} 
                   className={`${mediaClass} rounded overflow-hidden shadow-sm relative group`}
                 >
                   <div className="p-4">
@@ -378,7 +401,7 @@ function GamesPage() {
             } else if (item.type === 'video') {
               return (
                 <div 
-                  key={item.media_id} 
+                  key={item.s3_key} 
                   className={`${mediaClass} rounded overflow-hidden shadow-sm relative group`}
                 >
                   <div className="p-4">
@@ -400,7 +423,7 @@ function GamesPage() {
             } else if (item.type === 'audio') {
               return (
                 <div 
-                  key={item.media_id} 
+                  key={item.s3_key} 
                   className={`${mediaClass} rounded overflow-hidden shadow-sm relative group`}
                 >
                   <div className="p-4">

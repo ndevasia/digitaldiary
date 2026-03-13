@@ -129,6 +129,22 @@ function HomePage() {
 
         try {
             setCreatingSession(true);
+
+            // If there's an active session, end it first
+            if (activeSession && activeSession.status === 'active') {
+                const endResponse = await fetch('/api/session/end', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (!endResponse.ok) {
+                    throw new Error('Failed to end current session');
+                }
+            }
+
+            // Now create the new session
             const response = await fetch('/api/session/create', {
                 method: 'POST',
                 headers: {

@@ -103,7 +103,7 @@ class S3:
 
         payload = {
             "file_name": os.path.basename(file_path),
-            "username": USERNAME,
+            "username": self.username,
         }
 
         if session_id:

@@ -23,9 +23,6 @@ minjay_README.txt
 /tests/*
 *dist
 
-# Might just have to ignore the whole bin folder and run npm install every time, apologies to everybody who hasn't installed it yet. It's too big to push.
-bin/* 
-
 # PyInstaller build directory
 /build/
 /digitaldiary/

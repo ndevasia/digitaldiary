@@ -10,8 +10,6 @@ import platform
 from datetime import datetime, timedelta, timezone
 import numpy as np
 import requests
-import sounddevice as sd  # Used in AudioRecorderThread
-import soundfile as sf    # Used in AudioRecorderThread
 from PyQt5.QtCore import QDateTime  # For consistent date formatting
 import random
 from dotenv import load_dotenv

@@ -254,7 +254,7 @@ function setupIPC() {
 
 
 app.whenReady().then(() => {
-    startPythonBackend();
+    // startPythonBackend();
     createOverlayWindow();
     createMainWindow();
     setupIPC();

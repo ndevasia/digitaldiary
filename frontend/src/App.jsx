@@ -127,7 +127,8 @@ function App() {
                     screenRecordingUID.current = data.uid;
                     const streamDestination = data.url;
                     const withAudio = localStorage.getItem('recordAudioWithScreen') === "true";
-                    FFMpeg.startVideoStream(streamDestination, withAudio).then(() => {
+                    const audioDeviceName = localStorage.getItem('audioDeviceName');
+                    FFMpeg.startVideoStream(streamDestination, withAudio, audioDeviceName).then(() => {
                         console.log('Screen recording started');
                         setScreenRecordingState(ACTIVE);
                     }).catch((err) => {

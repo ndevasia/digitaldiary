@@ -20,7 +20,7 @@ function Timeline({ events }) {
                         <div className="ml-12">
                             <div className="bg-white rounded-lg shadow-sm border border-teal-100 p-4">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-gray-600">Played {event.title}</span>
+                                    <span className="text-gray-600"> {event.title}</span>
                                     <span className="text-sm text-gray-500">{event.date}</span>
                                 </div>
                             </div>

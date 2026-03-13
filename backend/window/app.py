@@ -752,6 +752,23 @@ def end_session():
         print(f"Error ending session: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/sessions/list', methods=['GET'])
+def list_sessions():
+    try:
+        # Import aws.py's S3 class and get all sessions
+        from server.aws import S3
+        s3 = S3()
+        sessions = s3.get_all_sessions()
+        
+        if not sessions:
+            return jsonify([])
+        
+        return jsonify(sessions)
+        
+    except Exception as e:
+        print(f"Error listing sessions: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/media/delete', methods=['DELETE', 'POST'])
 def delete_media():
     try:

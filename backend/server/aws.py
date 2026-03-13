@@ -37,7 +37,7 @@ class S3:
         )
 
         self.bucket_name = AWS_S3_BUCKET
-        self.session_file = f"SESSION_{USERNAME}.json"
+        self.session_file = f"{USERNAME}/SESSION_{USERNAME}.json"
 
     # ----------------------------
     # Bucket helpers
@@ -93,10 +93,13 @@ class S3:
 
     def create_session(self, app_name, user_with):
         try:
+            now = datetime.now().isoformat()
             session_entry = {
                 "app_name": app_name,
                 "user_with": user_with,
-                "timestamp": datetime.now().isoformat(),
+                "start_timestamp": now,
+                "end_timestamp": None,
+                "status": "active"
             }
 
             try:
@@ -129,11 +132,6 @@ class S3:
 
     def update_session(self, session_id):
         try:
-            session_entry = {
-                "session_id": session_id,
-                "timestamp": datetime.now().isoformat(),
-            }
-
             try:
                 response = self.client.get_object(
                     Bucket=self.bucket_name,
@@ -147,7 +145,12 @@ class S3:
             except self.client.exceptions.NoSuchKey:
                 existing_data = []
 
-            existing_data.append(session_entry)
+            # Update the most recent active session with new timestamp
+            if existing_data:
+                for session in reversed(existing_data):
+                    if session.get("status") == "active":
+                        session["end_timestamp"] = datetime.now().isoformat()
+                        break
 
             self.client.put_object(
                 Bucket=self.bucket_name,
@@ -189,16 +192,34 @@ class S3:
         except Exception as e:
             print(f"Error getting latest session: {e}")
             return None
+
+    def get_all_sessions(self):
+        """
+        Get all sessions from the session file.
+        """
+        try:
+            response = self.client.get_object(
+                Bucket=self.bucket_name,
+                Key=self.session_file,
+            )
+
+            session_data = json.loads(
+                response["Body"].read().decode("utf-8")
+            )
+
+            if not session_data:
+                return []
+
+            return session_data
+
+        except self.client.exceptions.NoSuchKey:
+            return []
+        except Exception as e:
+            print(f"Error getting all sessions: {e}")
+            return []
+    
     def end_session(self):
         try:
-            # Create an end session marker
-            session_entry = {
-                "app_name": None,
-                "user_with": None,
-                "timestamp": datetime.now().isoformat(),
-                "status": "ended"
-            }
-
             try:
                 response = self.client.get_object(
                     Bucket=self.bucket_name,
@@ -212,7 +233,13 @@ class S3:
             except self.client.exceptions.NoSuchKey:
                 existing_data = []
 
-            existing_data.append(session_entry)
+            # Mark the most recent active session as ended
+            if existing_data:
+                for session in reversed(existing_data):
+                    if session.get("status") == "active":
+                        session["end_timestamp"] = datetime.now().isoformat()
+                        session["status"] = "ended"
+                        break
 
             self.client.put_object(
                 Bucket=self.bucket_name,

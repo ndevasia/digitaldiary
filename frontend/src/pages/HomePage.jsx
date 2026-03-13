@@ -68,30 +68,27 @@ function HomePage() {
     const fetchGameSessions = async () => {
         try {
             setLoadingTimeline(true);
-            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
-            const mediaData = await response.json();
+            const response = await fetch('/api/sessions/list');
+            const sessions = await response.json();
 
-            // Group media by session_id and get the latest timestamp for each session
-            const gameSessions = mediaData.reduce((acc, item) => {
-                if (!item.session_id) return acc;
-
-                const sessionId = item.session_id;
-                const timestamp = new Date(item.timestamp);
-
-                if (!acc[sessionId] || timestamp > acc[sessionId].timestamp) {
-                    acc[sessionId] = {
-                        title: `Session ${sessionId}`,
-                        date: timestamp.toLocaleDateString(),
-                        timestamp: timestamp
-                    };
-                }
-
-                return acc;
-            }, {});
-
-            // Convert to array and sort by timestamp
-            const timeline = Object.values(gameSessions)
-                .sort((a, b) => b.timestamp - a.timestamp);
+            // Format sessions for timeline display
+            const timeline = sessions.map((session, index) => {
+                const startDate = new Date(session.start_timestamp);
+                const userDisplay = session.user_with === '0' || !session.user_with ? 'myself' : session.user_with;
+                return {
+                    id: index,
+                    title: `Played ${session.app_name || 'Session'} with ${userDisplay}`,
+                    date: startDate.toLocaleDateString(),
+                    timestamp: startDate,
+                    app_name: session.app_name,
+                    user_with: session.user_with,
+                    status: session.status,
+                    start_timestamp: session.start_timestamp,
+                    end_timestamp: session.end_timestamp
+                };
+            })
+            // Sort by start_timestamp descending (newest first)
+            .sort((a, b) => b.timestamp - a.timestamp);
 
             setGameEvents(timeline);
         } catch (error) {
@@ -153,14 +150,22 @@ function HomePage() {
             setActiveSession({
                 app_name: appName,
                 user_with: userWith,
-                timestamp: new Date().toISOString()
+                start_timestamp: new Date().toISOString(),
+                status: 'active'
             });
 
+            // Clear form fields before closing modal
+            setAppName('');
+            setUserWith('');
+            
             // Close modal
             setShowSessionModal(false);
 
+            // Refresh sessions list
+            fetchGameSessions();
+
             // Show success message
-            alert(activeSession ? 'Session updated successfully!' : 'Session started successfully!');
+            alert('Session started successfully!');
         } catch (error) {
             console.error('Error creating session:', error);
             alert('Error: ' + error.message);
@@ -181,14 +186,16 @@ function HomePage() {
             const response = await fetch('/api/session/latest');
             const data = await response.json();
             
-            // If session has app_name or user_with, it's an active session
-            if (data.app_name || data.user_with) {
+            // Check if session status is active
+            if (data.status === 'active') {
                 setActiveSession(data);
                 // Pre-fill the form with current session data
                 setAppName(data.app_name || '');
                 setUserWith(data.user_with || '');
             } else {
                 setActiveSession(null);
+                setAppName('');
+                setUserWith('');
             }
         } catch (error) {
             console.error('Error fetching active session:', error);
@@ -214,6 +221,11 @@ function HomePage() {
                 setActiveSession(null);
                 setAppName('');
                 setUserWith('');
+                setShowSessionModal(false);
+                
+                // Refresh sessions list
+                fetchGameSessions();
+                
                 alert('Session ended');
             } catch (error) {
                 console.error('Error ending session:', error);
@@ -223,6 +235,11 @@ function HomePage() {
     };
 
     const handleChangeSession = () => {
+        // Pre-fill with current session data
+        if (activeSession) {
+            setAppName(activeSession.app_name || '');
+            setUserWith(activeSession.user_with || '');
+        }
         setShowSessionModal(true);
     };
 
@@ -498,7 +515,7 @@ function HomePage() {
                         className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-3 rounded-full flex items-center transition-colors"
                     >
                         <Plus size={20} className="mr-2" />
-                        New Memory
+                        Start Session
                     </button>
                 )}
             </header>

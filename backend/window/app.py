@@ -16,11 +16,10 @@ import random
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
+
 # Fix path to import from sibling directory
-print("USERNAME from env:", os.getenv("USERNAME"))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-print("Path being added to sys.path:", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-print("Current sys.path:", sys.path)
+
 try:
     # Import RecorderThread
     from lib.recording import RecorderThread
@@ -41,7 +40,7 @@ except ImportError as e:
             return self
 
         def get_presigned_url(self, file_path):
-            object_name = f"{os.getenv('USERNAME')}/{os.path.basename(file_path)}"
+            object_name = f"{os.path.basename(file_path)}"
             url = self.client.generate_presigned_url(
                 'put_object',
                 Params={'Bucket': self.bucket_name, 'Key': object_name},
@@ -68,9 +67,29 @@ def log_message(message):
     with open(os.path.join(log_dir, 'app.log'), 'a') as f:
         f.write(f"{message}\n")
 
-# Use the log_message function for important debug info
-log_message("Path being added to sys.path: " + str(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-log_message("Current sys.path: " + str(sys.path))
+
+def get_default_username():
+    """Get the default username (user 0) from user.json"""
+    try:
+        user_json_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'model', 'user.json'
+        )
+        
+        if os.path.exists(user_json_path):
+            with open(user_json_path, 'r') as f:
+                data = json.load(f)
+            users = data.get('users', [])
+            # Find user with user_id = 0
+            for user in users:
+                if user.get('user_id') == 0:
+                    return user.get('username')
+        
+        # Fallback if no user 0 found
+        return os.getenv('USERNAME', 'User')
+    except Exception as e:
+        log_message(f"Error getting default username: {e}")
+        return os.getenv('USERNAME', 'User')
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS to allow React app to communicate with Flask
@@ -98,10 +117,13 @@ def get_user_id_from_username(username):
     return None
 
 
-def ensure_user_json_exists():
+def ensure_user_json_exists(username=None):
     """Create user.json from configured USERNAME if it doesn't exist, and ensure default is present."""
+    if not username:
+        username = get_default_username()
+    
     try:
-        if not USERNAME:
+        if not username:
             # No configured username; nothing to ensure
             return
 
@@ -110,7 +132,7 @@ def ensure_user_json_exists():
 
         if not os.path.exists(path):
             # Create default owner with user_id 0
-            default_user = {"user_id": 0, "username": USERNAME}
+            default_user = {"user_id": 0, "username": username}
             tmp_path = path + '.tmp'
             with open(tmp_path, 'w') as f:
                 json.dump({"users": [default_user]}, f, indent=4)
@@ -123,13 +145,13 @@ def ensure_user_json_exists():
 
         users = data.get('users', [])
         # Check if USERNAME exists with any user_id
-        username_exists = any(str(u.get('username')) == str(USERNAME) for u in users)
+        username_exists = any(str(u.get('username')) == str(username) for u in users)
         
         if not username_exists:
             # Find highest user_id and add new user with next ID
             max_id = max([u.get('user_id', 0) for u in users if isinstance(u.get('user_id'), int)], default=-1)
             new_id = max(max_id + 1, 1)  # Next ID, but not 0 (reserved for owner)
-            users.append({"user_id": new_id, "username": USERNAME})
+            users.append({"user_id": new_id, "username": username})
             data['users'] = users
             tmp_path = path + '.tmp'
             with open(tmp_path, 'w') as f:
@@ -141,7 +163,6 @@ def ensure_user_json_exists():
 # S3 Setup
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
-USERNAME = os.getenv("USERNAME")
 s3_client = boto3.client('s3', region_name=AWS_REGION)
 
 # Get the base directory (similar to how overlay.py gets to "recordings")
@@ -212,9 +233,10 @@ def test_endpoint():
 @app.route('/api/media_aws', methods=['GET'])
 def get_media_aws():
     try:
+        username = get_default_username()
         # Support optional single 'username' query param so callers can request another user's media
         req_username = request.args.get('username')
-        prefix_username = req_username if req_username else USERNAME
+        prefix_username = req_username if req_username else username
         # List objects in the specified user's directory in S3
         prefix = f"{prefix_username}/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
@@ -307,8 +329,9 @@ def generate_presigned_url():
 def latest_screenshot():
     """Returns the URL for the latest screenshot"""
     try:
+        username = get_default_username()
         # List all objects under USERNAME prefix to find any screenshots
-        prefix = USERNAME + "/"
+        prefix = username + "/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
 
         if 'Contents' in response:
@@ -380,6 +403,7 @@ def get_screenshot(filename):
 @app.route('/api/screenshot', methods=['POST'])
 def take_screenshot():
     try:
+        username = get_default_username()
         data = request.json or {}
         app_name = data.get('app_name')
         user_with = data.get('user_with')
@@ -395,7 +419,7 @@ def take_screenshot():
         # Store as: username/session_id/screenshot_{timestamp}.png
         # where session_id incorporates the app info
         session_id = app_name if app_name else 'default'
-        object_name = f"{USERNAME}/{session_id}/screenshot_{now}.png"
+        object_name = f"{username}/{session_id}/screenshot_{now}.png"
         url = s3_client.generate_presigned_url(
             'put_object',
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -576,6 +600,7 @@ def start_audio_recording():
 def stop_audio_recording():
     try:
         global audio_recorder
+        username = get_default_username()
         if audio_recorder and audio_recorder['recording']:
             # Get app_name before stopping
             app_name = audio_recorder.get('app_name')
@@ -602,7 +627,7 @@ def stop_audio_recording():
             try:
                 # Use app_name as session_id in S3 path
                 session_id = app_name if app_name else 'default'
-                object_name = f"{USERNAME}/{session_id}/{os.path.basename(audio_path)}"
+                object_name = f"{username}/{session_id}/{os.path.basename(audio_path)}"
                 url = s3_client.generate_presigned_url(
                     'put_object',
                     Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -796,7 +821,8 @@ def delete_media():
 def get_users():
     try:
         # Ensure user.json exists and has the default configured USERNAME
-        ensure_user_json_exists()
+        username = get_default_username()
+        ensure_user_json_exists(username)
 
         # Read the JSON file
         user_json_path = get_user_json_path()
@@ -811,6 +837,7 @@ def get_users():
 @app.route('/api/upload-profile-pic', methods=['POST'])
 def upload_profile_pic():
     try:
+        username = get_default_username()
         if 'file' not in request.files:
             return jsonify({"error": "No file part"}), 400
         
@@ -824,7 +851,7 @@ def upload_profile_pic():
         
         _, ext = os.path.splitext(file.filename) 
         ext = ext.lower()
-        object_name = f"{USERNAME}/profile{ext}"
+        object_name = f"{username}/profile{ext}"
 
         content_types = {
             '.png': 'image/png',
@@ -846,7 +873,7 @@ def upload_profile_pic():
         )
 
         # Clean up old/different extensions
-        existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{USERNAME}/profile")
+        existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/profile")
 
         if 'Contents' in existing_files:
         # Filter out the file we JUST uploaded so we don't delete it
@@ -872,10 +899,11 @@ def upload_profile_pic():
 @app.route('/api/profile-pic', methods=['GET'])
 def get_profile_pic():
     try:
+        username = get_default_username()
         # List objects with the prefix for profile pictures
         response = s3_client.list_objects_v2(
             Bucket=BUCKET_NAME, 
-            Prefix=f"{USERNAME}/profile"
+            Prefix=f"{username}/profile"
         )
 
         # Check if any files were actually found
@@ -908,7 +936,8 @@ def add_user():
         if not username:
             return jsonify({"error": "username is required"}), 400
 
-        ensure_user_json_exists()
+        default_username = get_default_username()
+        ensure_user_json_exists(default_username)
         user_json_path = get_user_json_path()
 
         with open(user_json_path, 'r') as f:
@@ -969,7 +998,7 @@ def check_user_exists_aws():
 @app.route('/api/current_user', methods=['GET'])
 def get_current_user():
     try:
-        username = USERNAME
+        username = get_default_username()
         if not username:
             user_json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
             with open(user_json_path, 'r') as f:
@@ -984,7 +1013,7 @@ def get_current_user():
 def index_page():
     try:
         screenshot_url = None
-        username = USERNAME
+        username = get_default_username()
         if not username:
             user_json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
             with open(user_json_path, 'r') as f:
@@ -999,7 +1028,7 @@ def index_page():
 @app.route('/files')
 def files_page():
     try:
-        username = USERNAME
+        username = get_default_username()
         if not username:
             user_json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
             with open(user_json_path, 'r') as f:
@@ -1014,5 +1043,5 @@ def files_page():
 
 if __name__ == '__main__':
     # Ensure user.json is present for the configured USERNAME when the app starts
-    ensure_user_json_exists()
+    ensure_user_json_exists(get_default_username())
     app.run(debug=True, port=5001, host='0.0.0.0')

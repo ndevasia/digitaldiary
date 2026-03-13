@@ -139,9 +139,8 @@ function FilesPage() {
                 throw new Error('Failed to fetch users');
             }
             const data = await response.json();
-            // Only take the first two users plus 'all' option
-            const limitedUsers = data.slice(0, 2);
-            setUsers([{ user_id: -1, username: 'All Users' }, ...limitedUsers]);
+            // Include all users from the response
+            setUsers([{ user_id: -1, username: 'All Users' }, ...data]);
         } catch (error) {
             console.error('Error fetching users:', error);
             setError(error.message);

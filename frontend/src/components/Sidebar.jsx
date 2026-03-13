@@ -8,6 +8,9 @@ function Sidebar() {
     const location = useLocation();
     
     const isActive = (path) => {
+        if (path === '/scrapbook') {
+            return location.pathname === '/scrapbook' || location.pathname.startsWith('/scrapbook/');
+        }
         return location.pathname === path;
     };
 
@@ -44,6 +47,15 @@ function Sidebar() {
                 >
                     <FolderOpen size={20} className="mr-3" />
                     Files
+                </Link>
+                <Link
+                    to="/scrapbook"
+                    className={`flex items-center px-6 py-4 ${
+                        isActive('/scrapbook') ? 'bg-teal-500 text-white' : 'text-teal-500 hover:bg-gray-100'
+                    }`}
+                >
+                    <Edit size={20} className="mr-3" />
+                    Scrapbook
                 </Link>
                 <Link
                     to="/stats"

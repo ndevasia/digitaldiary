@@ -8,6 +8,8 @@ import FilesPage from './pages/FilesPage.jsx';
 import GamesPage from './pages/GamesPage';
 import StatsPage from './pages/StatsPage';
 import SettingsPage from './pages/SettingsPage.jsx';
+import ScrapbookPage from './pages/ScrapbookPage.jsx';
+import ScrapbookEditorPage from './pages/ScrapbookEditorPage.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import { UserContext } from './context/UserContext.jsx';
 
@@ -44,6 +46,8 @@ function MainApp() {
             <Route path="/" element={<HomePage />} />
             <Route path="/files" element={<FilesPage />} />
             <Route path="/games" element={<GamesPage />} />
+            <Route path="/scrapbook" element={<ScrapbookPage />} />
+            <Route path="/scrapbook/:scrapbookId" element={<ScrapbookEditorPage />} />
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/journals" element={<HomePage />} /> {/* Placeholder */}
             <Route path="/settings" element={<SettingsPage />} />

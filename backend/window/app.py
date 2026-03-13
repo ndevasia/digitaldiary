@@ -250,6 +250,7 @@ def get_media_aws():
             # Transform into media data type format
             media_item = {
                 "media_id": idx,
+                "s3_key": item['Key'],
                 "type": media_type,
                 "media_url": media_url,
                 "timestamp": item['LastModified'].isoformat(),

@@ -10,6 +10,9 @@ function GamesPage() {
   const [selectedGame, setSelectedGame] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState('');
+  const [editingItemKey, setEditingItemKey] = useState(null);
+  const [editingField, setEditingField] = useState(null);
+  const [editValue, setEditValue] = useState('');
   const currentUsername = useContext(UserContext).username || 'User';
 
   useEffect(() => {
@@ -79,6 +82,110 @@ function GamesPage() {
   const closeModal = () => {
     setShowModal(false);
   };
+
+  const startEditing = (s3Key, field, currentValue) => {
+    setEditingItemKey(s3Key);
+    setEditingField(field);
+    setEditValue(currentValue || '');
+  };
+
+  const cancelEditing = () => {
+    setEditingItemKey(null);
+    setEditingField(null);
+    setEditValue('');
+  };
+
+  const saveEditing = async (item) => {
+    if (!editValue.trim()) {
+      cancelEditing();
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/media/update-metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          s3_key: item.s3_key,
+          metadata: { [editingField]: editValue }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update metadata');
+      }
+
+      // Update local media data
+      const updatedData = mediaData.map(media => {
+        if (media.s3_key === item.s3_key) {
+          return { ...media, [editingField]: editValue };
+        }
+        return media;
+      });
+      setMediaData(updatedData);
+
+      // Update selectedGame if it's currently being viewed
+      if (selectedGame) {
+        const updatedGame = {
+          ...selectedGame,
+          media: selectedGame.media.map(m => 
+            m.s3_key === item.s3_key ? { ...m, [editingField]: editValue } : m
+          )
+        };
+        setSelectedGame(updatedGame);
+      }
+
+      cancelEditing();
+    } catch (error) {
+      console.error('Error saving metadata:', error);
+      alert('Error: ' + error.message);
+    }
+  };
+
+  const renderEditableField = (label, value, item, field) => {
+    const isEditing = editingItemKey === item.s3_key && editingField === field;
+
+    if (isEditing) {
+      return (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveEditing(item);
+              if (e.key === 'Escape') cancelEditing();
+            }}
+            autoFocus
+            className="flex-1 px-2 py-1 border border-teal-500 rounded"
+          />
+          <button
+            onClick={() => saveEditing(item)}
+            className="px-2 py-1 bg-teal-500 text-white rounded text-sm hover:bg-teal-600"
+          >
+            Save
+          </button>
+          <button
+            onClick={cancelEditing}
+            className="px-2 py-1 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400"
+          >
+            Cancel
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        onDoubleClick={() => startEditing(item.s3_key, field, value)}
+        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+        title="Double-click to edit"
+      >
+        <span className="font-medium">{label}:</span> {value || 'Not set'}
+      </div>
+    );
+  };
+
 
   // Get unique games
   const games = extractUniqueGames();
@@ -255,8 +362,8 @@ function GamesPage() {
                       onClick={() => enlargeImage(item.media_url)}
                     />
                     <div className="mt-2">
-                      <div className="font-medium text-gray-700">{item.app_name}</div>
-                      <div className="text-xs text-gray-500">{date}</div>
+                      {renderEditableField('App', item.app_name, item, 'app_name')}
+                      <div className="text-xs text-gray-500 mt-1">{date}</div>
                     </div>
                   </div>
                   <button
@@ -277,8 +384,8 @@ function GamesPage() {
                   <div className="p-4">
                     <VideoPlayer src={item.media_url} />
                     <div className="mt-2">
-                      <div className="font-medium text-gray-700">{item.app_name}</div>
-                      <div className="text-xs text-gray-500">{date}</div>
+                      {renderEditableField('App', item.app_name, item, 'app_name')}
+                      <div className="text-xs text-gray-500 mt-1">{date}</div>
                     </div>
                   </div>
                   <button
@@ -302,8 +409,8 @@ function GamesPage() {
                       Your browser does not support the audio tag.
                     </audio>
                     <div className="mt-2">
-                      <div className="font-medium text-gray-700">{item.app_name}</div>
-                      <div className="text-xs text-gray-500">{date}</div>
+                      {renderEditableField('App', item.app_name, item, 'app_name')}
+                      <div className="text-xs text-gray-500 mt-1">{date}</div>
                     </div>
                   </div>
                   <button

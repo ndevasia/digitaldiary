@@ -11,6 +11,11 @@ function FilesPage() {
     const [showDropdown, setShowDropdown] = useState(false);
     const [showUsersDropdown, setShowUsersDropdown] = useState(false);
     const [showGamesDropdown, setShowGamesDropdown] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [modalImage, setModalImage] = useState('');
+    const [editingItemKey, setEditingItemKey] = useState(null);
+    const [editingField, setEditingField] = useState(null);
+    const [editValue, setEditValue] = useState('');
     const mediaDropdownRef = useRef(null);
     const usersDropdownRef = useRef(null);
     const gamesDropdownRef = useRef(null);
@@ -290,6 +295,107 @@ function FilesPage() {
         }
     };
 
+    const enlargeImage = (imageUrl) => {
+        setModalImage(imageUrl);
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+    };
+
+    const startEditing = (s3Key, field, currentValue) => {
+        setEditingItemKey(s3Key);
+        setEditingField(field);
+        setEditValue(currentValue || '');
+    };
+
+    const cancelEditing = () => {
+        setEditingItemKey(null);
+        setEditingField(null);
+        setEditValue('');
+    };
+
+    const saveEditing = async (item) => {
+        if (!editValue.trim()) {
+            cancelEditing();
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/media/update-metadata', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    s3_key: item.s3_key,
+                    metadata: { [editingField]: editValue }
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to update metadata');
+            }
+
+            // Update local media data
+            const updatedList = mediaList.map(media => {
+                if (media.s3_key === item.s3_key) {
+                    return { ...media, [editingField]: editValue };
+                }
+                return media;
+            });
+            setMediaList(updatedList);
+
+            cancelEditing();
+        } catch (error) {
+            console.error('Error saving metadata:', error);
+            alert('Error: ' + error.message);
+        }
+    };
+
+    const renderEditableField = (label, value, item, field) => {
+        const isEditing = editingItemKey === item.s3_key && editingField === field;
+
+        if (isEditing) {
+            return (
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveEditing(item);
+                            if (e.key === 'Escape') cancelEditing();
+                        }}
+                        autoFocus
+                        className="flex-1 px-2 py-1 border border-teal-500 rounded text-sm"
+                    />
+                    <button
+                        onClick={() => saveEditing(item)}
+                        className="px-2 py-1 bg-teal-500 text-white rounded text-xs hover:bg-teal-600"
+                    >
+                        Save
+                    </button>
+                    <button
+                        onClick={cancelEditing}
+                        className="px-2 py-1 bg-gray-300 text-gray-700 rounded text-xs hover:bg-gray-400"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            );
+        }
+
+        return (
+            <div
+                onDoubleClick={() => startEditing(item.s3_key, field, value)}
+                className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+                title="Double-click to edit"
+            >
+                <span className="font-medium text-gray-700">{label}:</span> {value || 'Not set'}
+            </div>
+        );
+    };
+
     const renderMediaItem = (item) => {
         // Format the timestamp
         const formatDate = (timestamp) => {
@@ -326,8 +432,8 @@ function FilesPage() {
                             <VideoPlayer src={item.media_url} />
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.app_name}</div>
-                            <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
+                            {renderEditableField('App', item.app_name, item, 'app_name')}
+                            <div className="text-xs text-gray-500 mt-1">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
                 );
@@ -341,8 +447,8 @@ function FilesPage() {
                             </audio>
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.app_name}</div>
-                            <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
+                            {renderEditableField('App', item.app_name, item, 'app_name')}
+                            <div className="text-xs text-gray-500 mt-1">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
                 );
@@ -350,11 +456,16 @@ function FilesPage() {
                 return (
                     <div className="h-full flex flex-col">
                         <div className={`${mediaClass} rounded overflow-hidden shadow-sm p-4 flex-grow flex justify-center items-center`}>
-                            <img src={item.media_url} alt="Screenshot" className="w-full rounded" />
+                            <img 
+                                src={item.media_url} 
+                                alt="Screenshot" 
+                                className="w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => enlargeImage(item.media_url)}
+                            />
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.app_name}</div>
-                            <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
+                            {renderEditableField('App', item.app_name, item, 'app_name')}
+                            <div className="text-xs text-gray-500 mt-1">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
                 );
@@ -362,7 +473,33 @@ function FilesPage() {
                 return null;
         }
     };
+    const renderImageModal = () => {
+        if (!showModal) return null;
 
+        return (
+            <div
+                className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50"
+                onClick={closeModal}
+            >
+                <div
+                    className="relative max-w-4xl max-h-[90vh]"
+                    onClick={e => e.stopPropagation()}
+                >
+                    <button
+                        className="absolute -top-10 -right-10 text-white text-3xl font-bold w-8 h-8 flex items-center justify-center"
+                        onClick={closeModal}
+                    >
+                        &times;
+                    </button>
+                    <img
+                        src={modalImage}
+                        alt="Enlarged screenshot"
+                        className="max-w-full max-h-[90vh] object-contain"
+                    />
+                </div>
+            </div>
+        );
+    };
     return (
         <div className="h-screen flex flex-col">
             <div className="flex-1 p-8 overflow-y-auto">
@@ -641,6 +778,8 @@ function FilesPage() {
                     </div>
                 </div>
             )}
+            {/* Image Modal */}
+            {renderImageModal()}
         </div>
     );
 }

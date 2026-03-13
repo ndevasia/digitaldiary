@@ -244,8 +244,22 @@ def get_media_aws():
         if 'Contents' not in response:
             return jsonify([])
 
+        # Load metadata overrides for this user
+        try:
+            metadata_response = s3_client.get_object(
+                Bucket=BUCKET_NAME,
+                Key=f"{prefix_username}/metadata.json"
+            )
+            metadata_overrides = json.loads(metadata_response["Body"].read().decode("utf-8"))
+        except s3_client.exceptions.NoSuchKey:
+            metadata_overrides = {}
+
         media_list = []
         for idx, item in enumerate(response['Contents'], 1):
+            # Skip metadata.json files
+            if item['Key'].endswith('metadata.json'):
+                continue
+
             # Extract filename and extension
             filename = os.path.basename(item['Key'])
             file_extension = os.path.splitext(filename)[1][1:].lower()
@@ -290,6 +304,10 @@ def get_media_aws():
                 "app_name": session_id if session_id else "app1",  # Use session_id if available, else fallback
                 "s3_key": item['Key']  # Add the actual S3 key for deletion
             }
+
+            # Apply metadata overrides if they exist
+            if item['Key'] in metadata_overrides:
+                media_item.update(metadata_overrides[item['Key']])
 
             media_list.append(media_item)
 
@@ -816,6 +834,30 @@ def delete_media():
         
     except Exception as e:
         print(f"Error deleting media: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/media/update-metadata', methods=['POST'])
+def update_media_metadata():
+    try:
+        data = request.json
+        s3_key = data.get('s3_key')
+        metadata = data.get('metadata', {})
+        
+        if not s3_key:
+            return jsonify({"error": "s3_key is required"}), 400
+        
+        # Import aws.py's S3 class and update metadata
+        from server.aws import S3
+        s3 = S3()
+        success = s3.update_media_metadata(s3_key, metadata)
+        
+        if not success:
+            return jsonify({"error": "Failed to update media metadata"}), 500
+        
+        return jsonify({"status": "success"})
+        
+    except Exception as e:
+        print(f"Error updating media metadata: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/users', methods=['GET'])

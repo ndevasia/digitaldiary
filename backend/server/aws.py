@@ -294,3 +294,49 @@ class S3:
         except Exception as e:
             print(f"Error deleting file from S3: {e}")
             return False
+
+    def get_media_metadata(self):
+        """
+        Get all media metadata for this user. Returns a dict mapping s3_key -> metadata overrides.
+        """
+        try:
+            metadata_file = f"{self.username}/metadata.json"
+            response = self.client.get_object(
+                Bucket=self.bucket_name,
+                Key=metadata_file,
+            )
+            data = json.loads(response["Body"].read().decode("utf-8"))
+            return data if isinstance(data, dict) else {}
+        except self.client.exceptions.NoSuchKey:
+            return {}
+        except Exception as e:
+            print(f"Error getting media metadata: {e}")
+            return {}
+
+    def update_media_metadata(self, s3_key, metadata):
+        """
+        Update metadata for a specific media file. Metadata is stored in a per-user metadata.json file.
+        
+        Args:
+            s3_key: The S3 key of the media file (e.g., "username/session123/video_timestamp.mp4")
+            metadata: Dict of metadata to update (e.g., {"app_name": "Discord"})
+        """
+        try:
+            # Get existing metadata
+            all_metadata = self.get_media_metadata()
+            
+            # Update metadata for this file
+            all_metadata[s3_key] = metadata
+            
+            # Save back to S3
+            metadata_file = f"{self.username}/metadata.json"
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=metadata_file,
+                Body=json.dumps(all_metadata),
+                ContentType="application/json",
+            )
+            return True
+        except Exception as e:
+            print(f"Error updating media metadata: {e}")
+            return False

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
+import AudioPlayer from '../components/AudioPlayer.jsx';
 
 function GamesPage() {
   const [mediaData, setMediaData] = useState([]);
@@ -235,10 +236,7 @@ function GamesPage() {
                   className={`${mediaClass} rounded overflow-hidden shadow-sm`}
                 >
                   <div className="p-4">
-                    <audio controls className="w-full mb-2">
-                      <source src={item.media_url} type="audio/mpeg" />
-                      Your browser does not support the audio tag.
-                    </audio>
+                    <AudioPlayer src={item.media_url} />
                     <div className="mt-2">
                       <div className="font-medium text-gray-700">{item.game}</div>
                       <div className="text-xs text-gray-500">{date}</div>

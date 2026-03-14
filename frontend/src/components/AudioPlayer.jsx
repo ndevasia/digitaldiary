@@ -139,7 +139,7 @@ export default function AudioPlayer({ src }) {
                     
                     <button 
                         onClick={cycleSpeed}
-                        className="text-xs font-semibold text-gray-600 hover:text-teal-600 w-8 text-right transition-colors"
+                        className="text-s font-semibold text-gray-600 hover:text-teal-600 w-8 text-right transition-colors"
                     >
                         {playbackRate}x
                     </button>

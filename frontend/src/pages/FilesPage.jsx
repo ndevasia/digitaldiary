@@ -2,6 +2,7 @@ import { useState, useEffect, useContext, useRef } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
+import AudioPlayer from '../components/AudioPlayer.jsx';
 
 function FilesPage() {
     const [mediaList, setMediaList] = useState([]);
@@ -291,10 +292,7 @@ function FilesPage() {
                 return (
                     <div className="h-full flex flex-col">
                         <div className={`${mediaClass} rounded overflow-hidden shadow-sm p-4 flex-grow flex justify-center items-center`}>
-                            <audio controls className="w-full">
-                                <source src={item.media_url} type="audio/mpeg" />
-                                Your browser does not support the audio tag.
-                            </audio>
+                            <AudioPlayer src={item.media_url} />
                         </div>
                         <div className="mt-2">
                             <div className="font-medium text-gray-700">{item.game}</div>

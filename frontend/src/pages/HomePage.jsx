@@ -23,6 +23,7 @@ function HomePage() {
     const [creatingSession, setCreatingSession] = useState(false);
     const [activeSession, setActiveSession] = useState(null);
     const [loadingSession, setLoadingSession] = useState(true);
+    const [modalKey, setModalKey] = useState(0);
     const navigate = useNavigate();
     const currentUsername = useContext(UserContext).username || 'User';
 
@@ -38,6 +39,16 @@ function HomePage() {
         // Fetch active session
         fetchActiveSession();
     }, []);
+
+    // Reset form state whenever modal opens
+    useEffect(() => {
+        if (showSessionModal) {
+            // Increment key to force form remount
+            setModalKey(prev => prev + 1);
+            // Force a complete reset of form state when modal opens
+            setCreatingSession(false);
+        }
+    }, [showSessionModal]);
 
     const fetchLatestScreenshot = async () => {
         try {
@@ -116,13 +127,19 @@ function HomePage() {
     };
 
     const handleNewMemory = () => {
+        // Reset all form and loading state to ensure clean modal opening
+        setAppName('');
+        setUserWith('');
+        setCreatingSession(false);
+        setLoadingSession(false);
         setShowSessionModal(true);
     };
 
     const handleSessionSubmit = async (e) => {
         e.preventDefault();
         
-        if (!appName.trim()) {
+        const trimmedAppName = appName.trim();
+        if (!trimmedAppName) {
             alert('Please enter an app name');
             return;
         }
@@ -151,21 +168,21 @@ function HomePage() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    appName: appName,
-                    userWith: userWith
+                    appName: trimmedAppName,
+                    userWith: userWith.trim()
                 })
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to create session');
+                throw new Error(data.error || `Server error: ${response.status}`);
             }
 
             // Update active session state
             setActiveSession({
-                app_name: appName,
-                user_with: userWith,
+                app_name: trimmedAppName,
+                user_with: userWith.trim(),
                 start_timestamp: new Date().toISOString(),
                 status: 'active'
             });
@@ -194,6 +211,39 @@ function HomePage() {
         setAppName('');
         setUserWith('');
         setShowSessionModal(false);
+    };
+
+    const handleDeleteTimelineEvent = async (event) => {
+        const userDisplay = event.user_with === '0' || !event.user_with ? 'myself' : event.user_with;
+        if (!window.confirm(`Delete session "${event.app_name}" with ${userDisplay}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/session/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    start_timestamp: event.start_timestamp
+                })
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to delete session');
+            }
+
+            // Remove the event from the timeline
+            const updatedEvents = gameEvents.filter(e => e.start_timestamp !== event.start_timestamp);
+            setGameEvents(updatedEvents);
+            
+            alert('Session deleted');
+        } catch (error) {
+            console.error('Error deleting session:', error);
+            alert('Error: ' + error.message);
+        }
     };
 
     const fetchActiveSession = async () => {
@@ -237,26 +287,24 @@ function HomePage() {
                 setActiveSession(null);
                 setAppName('');
                 setUserWith('');
-                setShowSessionModal(false);
-                
-                // Refresh sessions list
-                fetchGameSessions();
-                
                 alert('Session ended');
             } catch (error) {
                 console.error('Error ending session:', error);
                 alert('Error ending session: ' + error.message);
-            }
+            } 
         }
     };
 
     const handleChangeSession = () => {
+        // Reset form state to ensure inputs are fully interactive
+        setCreatingSession(false);
+        setShowSessionModal(true);
+        
         // Pre-fill with current session data
         if (activeSession) {
             setAppName(activeSession.app_name || '');
             setUserWith(activeSession.user_with || '');
         }
-        setShowSessionModal(true);
     };
 
     const handleHeroImageChange = (newImageUrl) => {
@@ -436,8 +484,13 @@ function HomePage() {
 
         return (
             <div
+                key="session-modal"
                 className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-                onClick={(e) => e.currentTarget === e.target && handleCloseSessionModal()}
+                onClick={(e) => {
+                    if (e.currentTarget === e.target) {
+                        handleCloseSessionModal();
+                    }
+                }}
             >
                 <div
                     className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4"
@@ -453,7 +506,7 @@ function HomePage() {
                     </div>
 
                     <div className="px-6 py-6">
-                        <form onSubmit={handleSessionSubmit}>
+                        <form key={`form-${modalKey}`} onSubmit={handleSessionSubmit}>
                             <div className="mb-5">
                                 <label htmlFor="appName" className="block text-sm font-semibold text-gray-700 mb-2">
                                     What app are you using?
@@ -466,6 +519,7 @@ function HomePage() {
                                     placeholder="e.g., Discord, Steam, Minecraft"
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                                     required
+                                    autoFocus
                                 />
                             </div>
 
@@ -575,7 +629,7 @@ function HomePage() {
                         </div>
                     </div>
                 ) : (
-                    <Timeline events={gameEvents} />
+                    <Timeline events={gameEvents} onDeleteEvent={handleDeleteTimelineEvent} />
                 )}
             </div>
         </div>

@@ -808,6 +808,29 @@ def list_sessions():
         print(f"Error listing sessions: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/session/delete', methods=['POST'])
+def delete_session():
+    try:
+        data = request.json
+        start_timestamp = data.get('start_timestamp')
+        
+        if not start_timestamp:
+            return jsonify({"error": "start_timestamp is required"}), 400
+        
+        # Import aws.py's S3 class and delete the session
+        from server.aws import S3
+        s3 = S3()
+        success = s3.delete_session(start_timestamp)
+        
+        if not success:
+            return jsonify({"error": "Session not found or could not be deleted"}), 404
+        
+        return jsonify({"status": "success"})
+        
+    except Exception as e:
+        print(f"Error deleting session: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/media/delete', methods=['DELETE', 'POST'])
 def delete_media():
     try:

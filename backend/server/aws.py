@@ -281,6 +281,47 @@ class S3:
             print(f"Error ending session: {e}")
             return False
 
+    def delete_session(self, start_timestamp):
+        """
+        Delete a session by start_timestamp from the session file.
+        """
+        try:
+            try:
+                response = self.client.get_object(
+                    Bucket=self.bucket_name,
+                    Key=self.session_file,
+                )
+                existing_data = json.loads(
+                    response["Body"].read().decode("utf-8")
+                )
+                if not isinstance(existing_data, list):
+                    existing_data = []
+            except self.client.exceptions.NoSuchKey:
+                existing_data = []
+
+            # Remove the session with matching start_timestamp
+            original_length = len(existing_data)
+            existing_data = [
+                session for session in existing_data 
+                if session.get("start_timestamp") != start_timestamp
+            ]
+
+            # Only update S3 if something was actually deleted
+            if len(existing_data) < original_length:
+                self.client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=self.session_file,
+                    Body=json.dumps(existing_data),
+                    ContentType="application/json",
+                )
+                return True
+            else:
+                return False
+
+        except Exception as e:
+            print(f"Error deleting session: {e}")
+            return False
+
     def delete_file(self, file_key):
         """
         Delete a file from S3 by its key.

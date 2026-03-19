@@ -3,7 +3,6 @@ import requests
 import os
 import json
 from datetime import datetime
-from globals import USERNAME
 
 # ----------------------------
 # Environment configuration
@@ -24,9 +23,12 @@ if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
 
 
 class S3:
-    def __init__(self):
+    def __init__(self, username=None):
         """
         Initialize an S3 client using credentials from environment variables.
+        
+        Args:
+            username: Optional username for session file naming. If not provided, defaults to generic session naming.
         """
 
         self.client = boto3.client(
@@ -37,7 +39,8 @@ class S3:
         )
 
         self.bucket_name = AWS_S3_BUCKET
-        self.session_file = f"SESSION_{USERNAME}.json"
+        self.username = username
+        self.session_file = f"SESSION_{username}.json" if username else "SESSION_default.json"
 
     # ----------------------------
     # Bucket helpers
@@ -76,7 +79,7 @@ class S3:
 
         payload = {
             "file_name": os.path.basename(file_path),
-            "username": USERNAME,
+            "username": self.username,
         }
 
         if game_id:
@@ -147,3 +150,22 @@ class S3:
         except Exception as e:
             print(f"Error getting latest session: {e}")
             return None
+
+    # ----------------------------
+    # User helpers
+    # ----------------------------
+
+    def user_exists(self, username):
+        """
+        Check if a user exists in S3 by checking for their session file.
+        Returns True if the user has any data in S3, False otherwise.
+        """
+        try:
+            session_key = f"SESSION_{username}.json"
+            self.client.head_object(Bucket=self.bucket_name, Key=session_key)
+            return True
+        except self.client.exceptions.NoSuchKey:
+            return False
+        except Exception as e:
+            print(f"Error checking if user exists: {e}")
+            return False

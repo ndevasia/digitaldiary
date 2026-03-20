@@ -202,8 +202,8 @@ function HomePage() {
                 }
             }
 
-            // Join selected friends with commas
-            const selectedFriendsString = Array.from(selectedFriends).join(', ');
+            // Join selected friends with pluses
+            const selectedFriendsString = Array.from(selectedFriends).join(' + ');
 
             // Now create the new session
             const response = await fetch('/api/session/create', {
@@ -296,10 +296,10 @@ function HomePage() {
         if (activeSession) {
             setAppName(activeSession.app_name || '');
             
-            // Parse user_with (comma-separated friends) into selectedFriends Set
+            // Parse user_with (plus-separated friends) into selectedFriends Set
             if (activeSession.user_with) {
                 const friendList = activeSession.user_with
-                    .split(',')
+                    .split('+')
                     .map(f => f.trim())
                     .filter(f => f.length > 0);
                 setSelectedFriends(new Set(friendList));
@@ -676,7 +676,7 @@ function HomePage() {
                                 </div>
                                 {selectedFriends.size > 0 && (
                                     <div className="mt-2 text-sm text-gray-700">
-                                        Selected: <span className="font-semibold">{Array.from(selectedFriends).join(', ')}</span>
+                                        Selected: <span className="font-semibold">{Array.from(selectedFriends).join(' + ')}</span>
                                     </div>
                                 )}
                             </div>

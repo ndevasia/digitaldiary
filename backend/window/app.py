@@ -724,12 +724,12 @@ def create_session():
                     user_data = json.load(f)
                 friends = [u.get('username') for u in user_data.get('users', []) if u.get('user_id', 0) > 0]
                 
-                # Parse comma-separated friends and validate
-                provided_friends = [f.strip() for f in user_with.split(',') if f.strip()]
+                # Parse plus-separated friends and validate
+                provided_friends = [f.strip() for f in user_with.split('+') if f.strip()]
                 invalid_friends = [f for f in provided_friends if f not in friends]
                 
                 if invalid_friends:
-                    return jsonify({"error": f"Invalid friends: {', '.join(invalid_friends)}"}), 400
+                    return jsonify({"error": f"Invalid friends: {'/'.join(invalid_friends)}"}), 400
             except Exception as e:
                 log_message(f"Warning: Could not validate friends: {e}")
                 # Don't fail the session creation if validation fails, just log it

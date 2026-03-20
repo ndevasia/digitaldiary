@@ -50,9 +50,12 @@ if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
 
 
 class S3:
-    def __init__(self):
+    def __init__(self, username=None):
         """
         Initialize an S3 client using credentials from environment variables.
+        
+        Args:
+            username: Optional username for session file naming. If not provided, defaults to generic session naming.
         """
 
         self.client = boto3.client(
@@ -368,4 +371,22 @@ class S3:
             return True
         except Exception as e:
             print(f"Error updating media metadata: {e}")
+            return False
+    # ----------------------------
+    # User helpers
+    # ----------------------------
+
+    def user_exists(self, username):
+        """
+        Check if a user exists in S3 by checking for their session file.
+        Returns True if the user has any data in S3, False otherwise.
+        """
+        try:
+            session_key = f"SESSION_{username}.json"
+            self.client.head_object(Bucket=self.bucket_name, Key=session_key)
+            return True
+        except self.client.exceptions.NoSuchKey:
+            return False
+        except Exception as e:
+            print(f"Error checking if user exists: {e}")
             return False

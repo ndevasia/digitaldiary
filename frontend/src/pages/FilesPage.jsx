@@ -155,8 +155,7 @@ function FilesPage() {
                 throw new Error('Failed to fetch users');
             }
             const data = await response.json();
-            // Include all users from the response
-            setUsers([{ user_id: -1, username: 'All Users' }, ...data]);
+            setUsers([{ user_id: 'all', username: 'All Users' }, ...data]);
         } catch (error) {
             console.error('Error fetching users:', error);
             setError(error.message);

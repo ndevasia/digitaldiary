@@ -6,6 +6,7 @@ import App from './App.jsx';
 import HomePage from './pages/HomePage.jsx';
 import FilesPage from './pages/FilesPage.jsx';
 import GamesPage from './pages/GamesPage';
+import FriendsPage from './pages/FriendsPage.jsx';
 import StatsPage from './pages/StatsPage';
 import SettingsPage from './pages/SettingsPage.jsx';
 import Sidebar from './components/Sidebar.jsx';
@@ -44,6 +45,7 @@ function MainApp() {
             <Route path="/" element={<HomePage />} />
             <Route path="/files" element={<FilesPage />} />
             <Route path="/games" element={<GamesPage />} />
+            <Route path="/friends" element={<FriendsPage />} />
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/journals" element={<HomePage />} /> {/* Placeholder */}
             <Route path="/settings" element={<SettingsPage />} />

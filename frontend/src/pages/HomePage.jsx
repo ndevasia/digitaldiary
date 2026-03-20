@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, ChevronLeft } from 'lucide-react';
 import HeroImage from '../components/HeroImage';
@@ -19,7 +19,6 @@ function HomePage() {
     const [loadingTimeline, setLoadingTimeline] = useState(true);
     const [showSessionModal, setShowSessionModal] = useState(false);
     const [appName, setAppName] = useState('');
-    const [userWith, setUserWith] = useState('');
     const [selectedFriends, setSelectedFriends] = useState(new Set());
     const [friends, setFriends] = useState([]);
     const [creatingSession, setCreatingSession] = useState(false);
@@ -30,6 +29,7 @@ function HomePage() {
     const [deleteConfirmation, setDeleteConfirmation] = useState({ visible: false, event: null });
     const navigate = useNavigate();
     const currentUsername = useContext(UserContext).username || 'User';
+    const notificationTimeoutRef = useRef(null);
 
     useEffect(() => {
         // Fetch the latest screenshot when component mounts
@@ -58,6 +58,15 @@ function HomePage() {
             setSelectedFriends(new Set());
         }
     }, [showSessionModal]);
+
+    // Cleanup notification timeout on unmount to prevent memory leaks
+    useEffect(() => {
+        return () => {
+            if (notificationTimeoutRef.current) {
+                clearTimeout(notificationTimeoutRef.current);
+            }
+        };
+    }, []);
 
     const fetchLatestScreenshot = async () => {
         try {
@@ -136,9 +145,15 @@ function HomePage() {
     };
 
     const showNotification = (message, type = 'info') => {
+        // Clear previous timeout if exists
+        if (notificationTimeoutRef.current) {
+            clearTimeout(notificationTimeoutRef.current);
+        }
+        
         setNotification({ message, type, visible: true });
-        setTimeout(() => {
+        notificationTimeoutRef.current = setTimeout(() => {
             setNotification({ message: '', type: '', visible: false });
+            notificationTimeoutRef.current = null;
         }, 3000);
     };
 
@@ -146,6 +161,7 @@ function HomePage() {
         try {
             const response = await fetch('/api/friends');
             const data = await response.json();
+            // Use functional update to avoid closure issues
             setFriends(data.friends || []);
         } catch (error) {
             console.error('Error fetching friends:', error);
@@ -153,11 +169,10 @@ function HomePage() {
     };
 
     const handleNewMemory = () => {
-        // Reset all form and loading state to ensure clean modal opening
+        // Reset all form state to ensure clean modal opening
         setAppName('');
         setSelectedFriends(new Set());
         setCreatingSession(false);
-        setLoadingSession(false);
         setShowSessionModal(true);
     };
 
@@ -258,11 +273,9 @@ function HomePage() {
                 setActiveSession(data);
                 // Pre-fill the form with current session data
                 setAppName(data.app_name || '');
-                setUserWith(data.user_with || '');
             } else {
                 setActiveSession(null);
                 setAppName('');
-                setUserWith('');
             }
         } catch (error) {
             console.error('Error fetching active session:', error);
@@ -278,13 +291,24 @@ function HomePage() {
     const handleChangeSession = () => {
         // Reset form state to ensure inputs are fully interactive
         setCreatingSession(false);
-        setShowSessionModal(true);
         
         // Pre-fill with current session data
         if (activeSession) {
             setAppName(activeSession.app_name || '');
-            setUserWith(activeSession.user_with || '');
+            
+            // Parse user_with (comma-separated friends) into selectedFriends Set
+            if (activeSession.user_with) {
+                const friendList = activeSession.user_with
+                    .split(',')
+                    .map(f => f.trim())
+                    .filter(f => f.length > 0);
+                setSelectedFriends(new Set(friendList));
+            } else {
+                setSelectedFriends(new Set());
+            }
         }
+        
+        setShowSessionModal(true);
     };
 
     const handleHeroImageChange = (newImageUrl) => {

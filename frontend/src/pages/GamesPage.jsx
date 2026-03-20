@@ -278,11 +278,6 @@ function GamesPage() {
     );
   };
 
-  const extractS3Key = (item) => {
-    // DEPRECATED: S3 key is now passed directly from backend via s3_key field
-    return item.s3_key || null;
-  };
-
   const handleDeleteMedia = async (item) => {
     if (!window.confirm(`Delete this ${item.type}?`)) return;
 

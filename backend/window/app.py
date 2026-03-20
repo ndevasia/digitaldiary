@@ -710,10 +710,29 @@ def create_session():
     try:
         data = request.json
         app_name = data.get('appName')
-        user_with = data.get('userWith') or '0'  # Default to user_id 0 if empty
+        user_with = data.get('userWith') or ''  # Can be empty string if no friends selected
         
         if not app_name:
             return jsonify({"error": "appName is required"}), 400
+        
+        # Validate that user_with contains only actual friends
+        if user_with:
+            try:
+                ensure_user_json_exists()
+                user_json_path = get_user_json_path()
+                with open(user_json_path, 'r') as f:
+                    user_data = json.load(f)
+                friends = [u.get('username') for u in user_data.get('users', []) if u.get('user_id', 0) > 0]
+                
+                # Parse comma-separated friends and validate
+                provided_friends = [f.strip() for f in user_with.split(',') if f.strip()]
+                invalid_friends = [f for f in provided_friends if f not in friends]
+                
+                if invalid_friends:
+                    return jsonify({"error": f"Invalid friends: {', '.join(invalid_friends)}"}), 400
+            except Exception as e:
+                log_message(f"Warning: Could not validate friends: {e}")
+                # Don't fail the session creation if validation fails, just log it
         
         # Import aws.py's S3 class and call create_session
         from server.aws import S3
@@ -841,7 +860,12 @@ def delete_session():
 @app.route('/api/media/delete', methods=['DELETE', 'POST'])
 def delete_media():
     try:
-        data = request.json
+        # Support both JSON body (for DELETE) and form data (for POST for backwards compatibility)
+        if request.method == 'DELETE':
+            data = request.get_json() or {}
+        else:
+            data = request.get_json() or request.form.to_dict()
+        
         file_key = data.get('file_key')
         
         if not file_key:

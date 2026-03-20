@@ -155,7 +155,7 @@ function FilesPage() {
                 throw new Error('Failed to fetch users');
             }
             const data = await response.json();
-            setUsers([{ user_id: 'all', username: 'All Users' }, ...data]);
+            setUsers([{ user_id: -1, username: 'All Users' }, ...data]);
         } catch (error) {
             console.error('Error fetching users:', error);
             setError(error.message);
@@ -260,11 +260,6 @@ function FilesPage() {
         }
     };
 
-    const extractS3Key = (item) => {
-        // DEPRECATED: S3 key is now passed directly from backend via s3_key field
-        return item.s3_key || null;
-    };
-
     const handleDeleteMedia = async (item) => {
         if (!window.confirm(`Delete this ${item.type}?`)) return;
 
@@ -279,7 +274,7 @@ function FilesPage() {
 
             console.log('Deleting file with key:', s3Key);
             const response = await fetch('/api/media/delete', {
-                method: 'POST',
+                method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ file_key: s3Key })
             });

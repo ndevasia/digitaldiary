@@ -19,8 +19,8 @@ function StatsPage() {
     useEffect(() => {
         if (currentUsername !== 'User') {
             fetchMediaStats();
-            fetchGameSessions();
         }
+        fetchGameSessions();
     }, [currentUsername]); 
 
     const fetchMediaStats = async () => {
@@ -47,28 +47,27 @@ function StatsPage() {
     const fetchGameSessions = async () => {
         try {
             setLoadingTimeline(true);
-            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
-            const mediaData = await response.json();
+            const response = await fetch('/api/sessions/list');
+            const sessions = await response.json();
 
-            const gameSessions = mediaData.reduce((acc, item) => {
-                if (!item.session_id) return acc;
-
-                const sessionId = item.session_id;
-                const timestamp = new Date(item.timestamp);
-
-                if (!acc[sessionId] || timestamp > acc[sessionId].timestamp) {
-                    acc[sessionId] = {
-                        title: `Session ${sessionId}`,
-                        date: timestamp.toLocaleDateString(),
-                        timestamp: timestamp
-                    };
-                }
-
-                return acc;
-            }, {});
-
-            const timeline = Object.values(gameSessions)
-                .sort((a, b) => b.timestamp - a.timestamp);
+            // Format sessions for timeline display
+            const timeline = sessions.map((session, index) => {
+                const startDate = new Date(session.start_timestamp);
+                const userDisplay = session.user_with === '0' || !session.user_with ? 'myself' : session.user_with;
+                return {
+                    id: index,
+                    title: `Played ${session.app_name || 'Session'} with ${userDisplay}`,
+                    date: startDate.toLocaleDateString(),
+                    timestamp: startDate,
+                    app_name: session.app_name,
+                    user_with: session.user_with,
+                    status: session.status,
+                    start_timestamp: session.start_timestamp,
+                    end_timestamp: session.end_timestamp
+                };
+            })
+            // Sort by start_timestamp descending (newest first)
+            .sort((a, b) => b.timestamp - a.timestamp);
 
             setGameEvents(timeline);
         } catch (error) {

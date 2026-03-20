@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import { UserContext } from '../context/UserContext.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 
 function FriendsPage() {
@@ -11,7 +10,6 @@ function FriendsPage() {
   const [selectedFriend, setSelectedFriend] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState('');
-  const currentUsername = useContext(UserContext).username || 'User';
 
   useEffect(() => {
     fetchFriends();
@@ -27,20 +25,31 @@ function FriendsPage() {
       const data = await response.json();
       setFriends(data.friends || []);
       
-      // Fetch media for each friend
+      // Fetch media for all friends in parallel using Promise.all
+      const friendsList = data.friends || [];
+      const mediaPromises = friendsList.map(friendUsername =>
+        fetch(`/api/media_aws?username=${encodeURIComponent(friendUsername)}`)
+          .then(response => {
+            if (response.ok) {
+              return response.json().then(mediaArray => ({
+                friendUsername,
+                media: mediaArray
+              }));
+            }
+            return { friendUsername, media: [] };
+          })
+          .catch(err => {
+            console.error(`Error fetching media for ${friendUsername}:`, err);
+            return { friendUsername, media: [] };
+          })
+      );
+      
+      const resultsArray = await Promise.all(mediaPromises);
       const mediaData = {};
-      for (const friendUsername of (data.friends || [])) {
-        try {
-          const mediaResponse = await fetch(`/api/media_aws?username=${encodeURIComponent(friendUsername)}`);
-          if (mediaResponse.ok) {
-            const mediaArray = await mediaResponse.json();
-            mediaData[friendUsername] = mediaArray;
-          }
-        } catch (err) {
-          console.error(`Error fetching media for ${friendUsername}:`, err);
-          mediaData[friendUsername] = [];
-        }
-      }
+      resultsArray.forEach(({ friendUsername, media }) => {
+        mediaData[friendUsername] = media;
+      });
+      
       setFriendsMediaData(mediaData);
       setLoading(false);
     } catch (error) {

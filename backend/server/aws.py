@@ -145,7 +145,13 @@ class S3:
             except self.client.exceptions.NoSuchKey:
                 existing_data = []
 
+            print(f"[SESSION DEBUG] Creating session: app_name='{app_name}', user_with='{user_with}', timestamp={now}")
+            print(f"[SESSION DEBUG] Session list before append: {len(existing_data)} sessions")
+            
             existing_data.append(session_entry)
+            
+            print(f"[SESSION DEBUG] Session list after append: {len(existing_data)} sessions")
+            print(f"[SESSION DEBUG] Full session file content: {json.dumps(existing_data, indent=2)}")
 
             self.client.put_object(
                 Bucket=self.bucket_name,
@@ -153,6 +159,8 @@ class S3:
                 Body=json.dumps(existing_data),
                 ContentType="application/json",
             )
+            
+            print(f"[SESSION DEBUG] Session created and saved to S3")
 
             return True
 
@@ -206,18 +214,26 @@ class S3:
                 response["Body"].read().decode("utf-8")
             )
 
+            print(f"[SESSION DEBUG] get_latest_session: read {len(session_data) if session_data else 0} sessions from file")
+
             if not session_data:
+                print(f"[SESSION DEBUG] get_latest_session: session_data is empty")
                 return None
 
             # Return the latest active session (skip ended sessions)
-            for session in reversed(session_data):
-                if session.get("status") != "ended":
+            for idx, session in enumerate(reversed(session_data)):
+                status = session.get("status")
+                print(f"[SESSION DEBUG] get_latest_session: checking session {idx} - status='{status}', app_name='{session.get('app_name')}'")
+                if status != "ended":
+                    print(f"[SESSION DEBUG] get_latest_session: RETURNING session with app_name='{session.get('app_name')}', user_with='{session.get('user_with')}'")
                     return session
             
             # If all sessions are ended, return an empty session
+            print(f"[SESSION DEBUG] get_latest_session: all sessions are ended, returning empty session")
             return {"app_name": None, "user_with": None}
 
         except self.client.exceptions.NoSuchKey:
+            print(f"[SESSION DEBUG] get_latest_session: session file not found")
             return None
         except Exception as e:
             print(f"Error getting latest session: {e}")
@@ -263,14 +279,21 @@ class S3:
             except self.client.exceptions.NoSuchKey:
                 existing_data = []
 
+            print(f"[SESSION DEBUG] end_session: found {len(existing_data)} sessions")
+            
             # Mark the most recent active session as ended
             if existing_data:
-                for session in reversed(existing_data):
+                for idx, session in enumerate(reversed(existing_data)):
                     if session.get("status") == "active":
+                        print(f"[SESSION DEBUG] end_session: marking session {idx} as ended (app_name='{session.get('app_name')}')")  
                         session["end_timestamp"] = datetime.now().isoformat()
                         session["status"] = "ended"
                         break
+            else:
+                print(f"[SESSION DEBUG] end_session: no sessions to end")
 
+            print(f"[SESSION DEBUG] end_session: saving session list with {len(existing_data)} entries to S3")
+            
             self.client.put_object(
                 Bucket=self.bucket_name,
                 Key=self.session_file,
@@ -278,6 +301,7 @@ class S3:
                 ContentType="application/json",
             )
 
+            print(f"[SESSION DEBUG] end_session: complete")
             return True
 
         except Exception as e:

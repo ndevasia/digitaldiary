@@ -51,14 +51,14 @@ function StatsPage() {
             const mediaData = await response.json();
 
             const gameSessions = mediaData.reduce((acc, item) => {
-                if (!item.game_id) return acc;
+                if (!item.session_id) return acc;
 
-                const gameId = item.game_id;
+                const sessionId = item.session_id;
                 const timestamp = new Date(item.timestamp);
 
-                if (!acc[gameId] || timestamp > acc[gameId].timestamp) {
-                    acc[gameId] = {
-                        title: `Game ${gameId}`,
+                if (!acc[sessionId] || timestamp > acc[sessionId].timestamp) {
+                    acc[sessionId] = {
+                        title: `Session ${sessionId}`,
                         date: timestamp.toLocaleDateString(),
                         timestamp: timestamp
                     };

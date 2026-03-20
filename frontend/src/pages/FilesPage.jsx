@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext, useRef } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
@@ -12,6 +12,11 @@ function FilesPage() {
     const [showDropdown, setShowDropdown] = useState(false);
     const [showUsersDropdown, setShowUsersDropdown] = useState(false);
     const [showGamesDropdown, setShowGamesDropdown] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [modalImage, setModalImage] = useState('');
+    const [editingItemKey, setEditingItemKey] = useState(null);
+    const [editingField, setEditingField] = useState(null);
+    const [editValue, setEditValue] = useState('');
     const mediaDropdownRef = useRef(null);
     const usersDropdownRef = useRef(null);
     const gamesDropdownRef = useRef(null);
@@ -32,6 +37,16 @@ function FilesPage() {
     useEffect(() => {
         fetchUsers();
         // initial media load will be handled by users/userFilter effect
+
+        // Refetch data when page becomes visible (user navigates back)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchMedia();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, []);
 
     // Close dropdowns when clicking outside
@@ -70,7 +85,7 @@ function FilesPage() {
         }
 
         if (gameFilter.size > 0) {
-            filtered = filtered.filter(item => gameFilter.has(item.game));
+            filtered = filtered.filter(item => gameFilter.has(item.app_name));
         }
 
         // apply date range filter
@@ -140,9 +155,8 @@ function FilesPage() {
                 throw new Error('Failed to fetch users');
             }
             const data = await response.json();
-            // Only take the first two users plus 'all' option
-            const limitedUsers = data.slice(0, 2);
-            setUsers([{ user_id: 'all', username: 'All Users' }, ...limitedUsers]);
+            // Include all users from the response
+            setUsers([{ user_id: -1, username: 'All Users' }, ...data]);
         } catch (error) {
             console.error('Error fetching users:', error);
             setError(error.message);
@@ -166,7 +180,7 @@ function FilesPage() {
 
         if (isAllSelected) {
             const userList = users
-                .filter(u => String(u.user_id) !== 'all')
+                .filter(u => u.user_id !== -1)
                 .map(u => u.username);
 
             if (userList.length === 0) {
@@ -176,7 +190,7 @@ function FilesPage() {
                 const sorted = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 setMediaList(sorted);
                 const uniqueGames = Array.from(
-                  new Set(sorted.map(item => item.game).filter(Boolean))
+                  new Set(sorted.map(item => item.app_name).filter(Boolean))
                 );
                 setGames(uniqueGames);
                 setGameFilter(new Set()); // Clear game filter when switching users
@@ -192,7 +206,7 @@ function FilesPage() {
             const merged = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             setMediaList(merged);
             const uniqueGames = Array.from(
-              new Set(merged.map(item => item.game).filter(Boolean))
+              new Set(merged.map(item => item.app_name).filter(Boolean))
             );
             setGames(uniqueGames);
             setGameFilter(new Set()); // Clear game filter when switching users
@@ -213,7 +227,7 @@ function FilesPage() {
         const data = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         setMediaList(data);
         const uniqueGames = Array.from(
-          new Set(data.map(item => item.game).filter(Boolean))
+          new Set(data.map(item => item.app_name).filter(Boolean))
         );
         setGames(uniqueGames);
         setGameFilter(new Set()); // Clear game filter when switching users
@@ -247,6 +261,157 @@ function FilesPage() {
         }
     };
 
+    const extractS3Key = (item) => {
+        // DEPRECATED: S3 key is now passed directly from backend via s3_key field
+        return item.s3_key || null;
+    };
+
+    const handleDeleteMedia = async (item) => {
+        if (!window.confirm(`Delete this ${item.type}?`)) return;
+
+        try {
+            // Use the s3_key directly from the item
+            const s3Key = item.s3_key;
+            if (!s3Key) {
+                alert('Could not determine file location');
+                console.error('No s3_key found in item:', item);
+                return;
+            }
+
+            console.log('Deleting file with key:', s3Key);
+            const response = await fetch('/api/media/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_key: s3Key })
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || `Server error: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('Delete response:', result);
+
+            // Remove using media_url as the unique identifier
+            const updatedFiltered = filteredMedia.filter(m => m.media_url !== item.media_url);
+            const updatedList = mediaList.filter(m => m.media_url !== item.media_url);
+
+            setFilteredMedia(updatedFiltered);
+            setMediaList(updatedList);
+            alert('File deleted successfully');
+        } catch (error) {
+            console.error('Error deleting media:', error);
+            alert('Error deleting file: ' + error.message);
+        }
+    };
+
+    const enlargeImage = (imageUrl) => {
+        setModalImage(imageUrl);
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+    };
+
+    const startEditing = (s3Key, field, currentValue) => {
+        setEditingItemKey(s3Key);
+        setEditingField(field);
+        setEditValue(currentValue || '');
+    };
+
+    const cancelEditing = () => {
+        setEditingItemKey(null);
+        setEditingField(null);
+        setEditValue('');
+    };
+
+    const saveEditing = async (item) => {
+        if (!editValue.trim()) {
+            cancelEditing();
+            return;
+        }
+
+        try {
+            const trimmedValue = editValue.trim();
+            const response = await fetch('/api/media/update-metadata', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    s3_key: item.s3_key,
+                    metadata: { [editingField]: trimmedValue }
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to update metadata');
+            }
+
+            // Update local media data
+            const updatedList = mediaList.map(media => {
+                if (media.s3_key === item.s3_key) {
+                    return { ...media, [editingField]: trimmedValue };
+                }
+                return media;
+            });
+            setMediaList(updatedList);
+
+            cancelEditing();
+        } catch (error) {
+            console.error('Error saving metadata:', error);
+            alert('Error: ' + error.message);
+        }
+    };
+
+    const renderEditableField = (label, value, item, field, isEditable = true) => {
+        const isEditing = editingItemKey === item.s3_key && editingField === field;
+
+        if (isEditing) {
+            return (
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveEditing(item);
+                            if (e.key === 'Escape') cancelEditing();
+                        }}
+                        autoFocus
+                        className="flex-1 px-2 py-1 border border-teal-500 rounded text-sm"
+                    />
+                    <button
+                        onClick={() => saveEditing(item)}
+                        className="px-2 py-1 bg-teal-500 text-white rounded text-xs hover:bg-teal-600"
+                    >
+                        Save
+                    </button>
+                    <button
+                        onClick={cancelEditing}
+                        className="px-2 py-1 bg-gray-300 text-gray-700 rounded text-xs hover:bg-gray-400"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            );
+        }
+
+        return (
+            <div
+                onDoubleClick={() => isEditable && startEditing(item.s3_key, field, value)}
+                className={`px-2 py-1 rounded transition-colors ${
+                    isEditable
+                        ? 'cursor-pointer hover:bg-gray-100'
+                        : 'cursor-not-allowed opacity-60'
+                }`}
+                title={isEditable ? 'Double-click to edit' : 'You do not have permission to edit this file'}
+            >
+                <span className="font-medium text-gray-700">{label}:</span> {value || 'Not set'}
+            </div>
+        );
+    };
+
     const renderMediaItem = (item) => {
         // Format the timestamp
         const formatDate = (timestamp) => {
@@ -275,6 +440,8 @@ function FilesPage() {
                 mediaClass = 'bg-blue-100';
         }
 
+        const isOwned = item.owner_user_id === 0;
+
         switch (item.type) {
             case 'video':
                 return (
@@ -283,8 +450,8 @@ function FilesPage() {
                             <VideoPlayer src={item.media_url} />
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.game}</div>
-                            <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
+                            {renderEditableField('App', item.app_name, item, 'app_name', isOwned)}
+                            <div className="text-xs text-gray-500 mt-1">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
                 );
@@ -295,8 +462,8 @@ function FilesPage() {
                             <AudioPlayer src={item.media_url} />
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.game}</div>
-                            <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
+                            {renderEditableField('App', item.app_name, item, 'app_name', isOwned)}
+                            <div className="text-xs text-gray-500 mt-1">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
                 );
@@ -304,11 +471,16 @@ function FilesPage() {
                 return (
                     <div className="h-full flex flex-col">
                         <div className={`${mediaClass} rounded overflow-hidden shadow-sm p-4 flex-grow flex justify-center items-center`}>
-                            <img src={item.media_url} alt="Screenshot" className="w-full rounded" />
+                            <img 
+                                src={item.media_url} 
+                                alt="Screenshot" 
+                                className="w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => enlargeImage(item.media_url)}
+                            />
                         </div>
                         <div className="mt-2">
-                            <div className="font-medium text-gray-700">{item.game}</div>
-                            <div className="text-xs text-gray-500">{formatDate(item.timestamp)}</div>
+                            {renderEditableField('App', item.app_name, item, 'app_name', isOwned)}
+                            <div className="text-xs text-gray-500 mt-1">{formatDate(item.timestamp)}</div>
                         </div>
                     </div>
                 );
@@ -316,9 +488,35 @@ function FilesPage() {
                 return null;
         }
     };
+    const renderImageModal = () => {
+        if (!showModal) return null;
 
+        return (
+            <div
+                className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50"
+                onClick={closeModal}
+            >
+                <div
+                    className="relative max-w-4xl max-h-[90vh]"
+                    onClick={e => e.stopPropagation()}
+                >
+                    <button
+                        className="absolute -top-10 -right-10 text-white text-3xl font-bold w-8 h-8 flex items-center justify-center"
+                        onClick={closeModal}
+                    >
+                        &times;
+                    </button>
+                    <img
+                        src={modalImage}
+                        alt="Enlarged screenshot"
+                        className="max-w-full max-h-[90vh] object-contain"
+                    />
+                </div>
+            </div>
+        );
+    };
     return (
-        <div>
+        <div className="h-screen flex flex-col">
             <div className="flex-1 p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
@@ -333,8 +531,9 @@ function FilesPage() {
                         <div className="flex flex-wrap gap-2 mb-6">
                             {users.map((user) => (
                                   <button
+                                      key={user.user_id}
                                       onClick={() => {
-                                        if (user.user_id === 'all') {
+                                        if (user.user_id === -1) {
                                             setUserFilter(new Set()); // Clearing the set represents "All"
                                         } else {
                                             const newSet = new Set(userFilter);
@@ -346,7 +545,7 @@ function FilesPage() {
                                         }
                                     }}
                                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                                          (user.user_id === 'all' && userFilter.size === 0) || userFilter.has(String(user.user_id))
+                                          (user.user_id === -1 && userFilter.size === 0) || userFilter.has(String(user.user_id))
                                               ? 'bg-teal-500 text-white'
                                               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                       }`}
@@ -474,11 +673,31 @@ function FilesPage() {
                             <div className="text-gray-600">No media found.</div>
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-4">
-                                {filteredMedia.map(item => (
-                                    <div key={item.id || item.media_id || item.media_url} className="bg-white rounded-lg border border-gray-100 p-4 h-64 flex flex-col">
-                                        {renderMediaItem(item)}
-                                    </div>
-                                ))}
+                                {filteredMedia.map(item => {
+                                    const isOwned = item.owner_user_id === 0;
+                                    return (
+                                        <div key={item.s3_key} className="relative group bg-white rounded-lg border border-gray-100 p-4 h-64 flex flex-col">
+                                            {renderMediaItem(item)}
+                                            {!isOwned && (
+                                                <div className="absolute top-2 left-2 bg-gray-400 text-white p-1 rounded" title="Read-only: owned by another user">
+                                                    🔒
+                                                </div>
+                                            )}
+                                            <button
+                                                onClick={() => handleDeleteMedia(item)}
+                                                disabled={!isOwned}
+                                                className={`absolute top-2 right-2 p-1 rounded transition-opacity ${
+                                                    isOwned
+                                                        ? 'bg-red-500 hover:bg-red-600 text-white opacity-0 group-hover:opacity-100 cursor-pointer'
+                                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50'
+                                                }`}
+                                                title={isOwned ? 'Delete this file' : 'You do not have permission to delete this file'}
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
@@ -588,6 +807,8 @@ function FilesPage() {
                     </div>
                 </div>
             )}
+            {/* Image Modal */}
+            {renderImageModal()}
         </div>
     );
 }

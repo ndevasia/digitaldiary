@@ -470,7 +470,7 @@ class FFMpeg {
                     throw new Error('No audio capture device found for Mac');
                 }
                 const selectedAudioIndex = audioDevices.findIndex(d => d.name.includes(audioDeviceName));
-                if (selectedAudioIndex === -1) {
+                if (selectedAudioIndex === -1 && audioDeviceName) {
                     throw new Error(`Audio device "${audioDeviceName}" not found on Mac`);
                 }
                 args.push('-f', 'avfoundation', '-i', `none:${selectedAudioIndex || "0"}`);

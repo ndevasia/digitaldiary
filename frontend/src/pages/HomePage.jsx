@@ -24,6 +24,8 @@ function HomePage() {
     const [activeSession, setActiveSession] = useState(null);
     const [loadingSession, setLoadingSession] = useState(true);
     const [modalKey, setModalKey] = useState(0);
+    const [notification, setNotification] = useState({ message: '', type: '', visible: false });
+    const [deleteConfirmation, setDeleteConfirmation] = useState({ visible: false, event: null });
     const navigate = useNavigate();
     const currentUsername = useContext(UserContext).username || 'User';
 
@@ -126,6 +128,13 @@ function HomePage() {
         setShowModal(false);
     };
 
+    const showNotification = (message, type = 'info') => {
+        setNotification({ message, type, visible: true });
+        setTimeout(() => {
+            setNotification({ message: '', type: '', visible: false });
+        }, 3000);
+    };
+
     const handleNewMemory = () => {
         // Reset all form and loading state to ensure clean modal opening
         setAppName('');
@@ -140,7 +149,7 @@ function HomePage() {
         
         const trimmedAppName = appName.trim();
         if (!trimmedAppName) {
-            alert('Please enter an app name');
+            showNotification('Please enter an app name', 'error');
             return;
         }
 
@@ -198,10 +207,10 @@ function HomePage() {
             fetchGameSessions();
 
             // Show success message
-            alert('Session started successfully!');
+            showNotification('Session started successfully!', 'success');
         } catch (error) {
             console.error('Error creating session:', error);
-            alert('Error: ' + error.message);
+            showNotification('Error: ' + error.message, 'error');
         } finally {
             setCreatingSession(false);
         }
@@ -213,37 +222,9 @@ function HomePage() {
         setShowSessionModal(false);
     };
 
-    const handleDeleteTimelineEvent = async (event) => {
+    const handleDeleteTimelineEvent = (event) => {
         const userDisplay = event.user_with === '0' || !event.user_with ? 'myself' : event.user_with;
-        if (!window.confirm(`Delete session "${event.app_name}" with ${userDisplay}?`)) {
-            return;
-        }
-
-        try {
-            const response = await fetch('/api/session/delete', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    start_timestamp: event.start_timestamp
-                })
-            });
-
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Failed to delete session');
-            }
-
-            // Remove the event from the timeline
-            const updatedEvents = gameEvents.filter(e => e.start_timestamp !== event.start_timestamp);
-            setGameEvents(updatedEvents);
-            
-            alert('Session deleted');
-        } catch (error) {
-            console.error('Error deleting session:', error);
-            alert('Error: ' + error.message);
-        }
+        setDeleteConfirmation({ visible: true, event, actionType: 'delete', userDisplay });
     };
 
     const fetchActiveSession = async () => {
@@ -270,29 +251,8 @@ function HomePage() {
         }
     };
 
-    const handleEndSession = async () => {
-        if (window.confirm('Are you sure you want to end this session?')) {
-            try {
-                const response = await fetch('/api/session/end', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to end session');
-                }
-
-                setActiveSession(null);
-                setAppName('');
-                setUserWith('');
-                alert('Session ended');
-            } catch (error) {
-                console.error('Error ending session:', error);
-                alert('Error ending session: ' + error.message);
-            } 
-        }
+    const handleEndSession = () => {
+        setDeleteConfirmation({ visible: true, event: activeSession, actionType: 'end', userDisplay: '' });
     };
 
     const handleChangeSession = () => {
@@ -478,6 +438,122 @@ function HomePage() {
         );
     };
 
+    // Notification Toast Component
+    const renderNotification = () => {
+        if (!notification.visible) return null;
+
+        const bgColor = {
+            'success': 'bg-green-500',
+            'error': 'bg-red-500',
+            'info': 'bg-blue-500'
+        }[notification.type] || 'bg-blue-500';
+
+        return (
+            <div className={`fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-40 max-w-md`}>
+                {notification.message}
+            </div>
+        );
+    };
+
+    // Confirmation Modal
+    const renderConfirmationModal = () => {
+        if (!deleteConfirmation.visible) return null;
+
+        const handleConfirm = async () => {
+            setDeleteConfirmation({ visible: false, event: null });
+            
+            if (deleteConfirmation.actionType === 'delete') {
+                try {
+                    const response = await fetch('/api/session/delete', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            start_timestamp: deleteConfirmation.event.start_timestamp
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const data = await response.json();
+                        throw new Error(data.error || 'Failed to delete session');
+                    }
+
+                    const updatedEvents = gameEvents.filter(e => e.start_timestamp !== deleteConfirmation.event.start_timestamp);
+                    setGameEvents(updatedEvents);
+                    showNotification('Session deleted', 'success');
+                } catch (error) {
+                    console.error('Error deleting session:', error);
+                    showNotification('Error: ' + error.message, 'error');
+                }
+            } else if (deleteConfirmation.actionType === 'end') {
+                try {
+                    const response = await fetch('/api/session/end', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to end session');
+                    }
+
+                    await Promise.all([fetchGameSessions(), fetchActiveSession()]);
+                    setShowSessionModal(false);
+                    showNotification('Session ended', 'success');
+                } catch (error) {
+                    console.error('Error ending session:', error);
+                    showNotification('Error ending session: ' + error.message, 'error');
+                }
+            }
+        };
+
+        const handleCancel = () => {
+            setDeleteConfirmation({ visible: false, event: null });
+        };
+
+        const isEndAction = deleteConfirmation.actionType === 'end';
+        const title = isEndAction ? 'End Session' : 'Delete Session';
+        const message = isEndAction 
+            ? 'Are you sure you want to end this session?'
+            : `Delete session "${deleteConfirmation.event?.app_name}" with ${deleteConfirmation.userDisplay}?`;
+
+        return (
+            <div
+                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+                onClick={handleCancel}
+            >
+                <div
+                    className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="bg-red-500 text-white px-6 py-4 rounded-t-lg">
+                        <h2 className="text-xl font-semibold">{title}</h2>
+                    </div>
+
+                    <div className="px-6 py-6">
+                        <p className="text-gray-700 mb-6">{message}</p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={handleCancel}
+                                className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirm}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+                            >
+                                {isEndAction ? 'End' : 'Delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     // Session Modal
     const renderSessionModal = () => {
         if (!showSessionModal) return null;
@@ -616,6 +692,12 @@ function HomePage() {
 
             {/* Session Modal */}
             {renderSessionModal()}
+
+            {/* Confirmation Modal */}
+            {renderConfirmationModal()}
+
+            {/* Notification Toast */}
+            {renderNotification()}
 
             {/* Timeline Section */}
             <div className="max-w-7xl mx-auto px-4 py-8">

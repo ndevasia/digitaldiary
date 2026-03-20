@@ -184,6 +184,9 @@ audio_recorder = None
 # to manage multiple recordings and ensure 
 # we can stop the correct one on exit
 recording_processes = {}
+
+# recording_metadata will store app_name and user_with for each active recording
+recording_metadata = {}
 # Define a cleanup function to run when the app closes
 def graceful_exit(signum, frame):
     print("Received stop signal. Cleaning up...")
@@ -422,6 +425,10 @@ def upload_screenshot():
         return jsonify({'error': 'Invalid file type'}), 400
     
     try:
+        # Get metadata from form data
+        app_name = request.form.get('app_name', '')
+        user_with = request.form.get('user_with', '')
+        
         # Generate presigned URL for upload
         current_username = get_default_username()
         object_name = f"{current_username}/{file.filename}"
@@ -435,11 +442,26 @@ def upload_screenshot():
         response = requests.put(url, data=file)
         if response.status_code != 200:
             raise Exception("Failed to upload screenshot")
-        else:
-            return jsonify({
-                'status': 'success',
-                'url': url
-            })
+        
+        # Tag the object with metadata
+        try:
+            s3_client.put_object_tagging(
+                Bucket=BUCKET_NAME,
+                Key=object_name,
+                Tagging={
+                    'TagSet': [
+                        {'Key': 'app_name', 'Value': app_name},
+                        {'Key': 'user_with', 'Value': user_with}
+                    ]
+                }
+            )
+        except Exception as e:
+            log_message(f"Warning: Could not tag screenshot object: {e}")
+        
+        return jsonify({
+            'status': 'success',
+            'url': url
+        })
     except Exception as e:
         print(f'Screenshot error: {str(e)}')
         return jsonify({'error': str(e)}), 500
@@ -448,6 +470,12 @@ def upload_screenshot():
 def start_screen_recording():
     try:
         global recording_processes
+        global recording_metadata
+
+        # Extract metadata from request body
+        data = request.json or {}
+        app_name = data.get('app_name', '')
+        user_with = data.get('user_with', '')
 
         port = random.randint(40000, 50000)
         url = f"srt://127.0.0.1:{port}"
@@ -474,6 +502,11 @@ def start_screen_recording():
             stdin=subprocess.PIPE
         )
         recording_processes[file_uid] = ffmpeg_process
+        # Store metadata for this recording
+        recording_metadata[file_uid] = {
+            'app_name': app_name,
+            'user_with': user_with
+        }
 
         log_message(f"Started ffmpeg with PID {ffmpeg_process.pid} for screen recording.")
         
@@ -482,6 +515,7 @@ def start_screen_recording():
             ffmpeg_process.wait(timeout=0.5)
             # Process ended immediately - something went wrong
             del recording_processes[file_uid]
+            del recording_metadata[file_uid]
             return jsonify({'error': f'FFmpeg failed to start'}), 500
         except subprocess.TimeoutExpired:
             # Process is still running - good!
@@ -511,6 +545,7 @@ def recording_status(file_uid):
 def stop_screen_recording(file_uid):
     try:
         global recording_processes
+        global recording_metadata
 
         # Check if recording is in progress
         if file_uid not in recording_processes:
@@ -552,6 +587,30 @@ def stop_screen_recording(file_uid):
                 ExpiresIn=3600
             )
             log_message("Recording uploaded successfully.")
+            
+            # Tag the object with metadata
+            try:
+                metadata = recording_metadata.get(file_uid, {})
+                app_name = metadata.get('app_name', '')
+                user_with = metadata.get('user_with', '')
+                
+                s3_client.put_object_tagging(
+                    Bucket=BUCKET_NAME,
+                    Key=object_name,
+                    Tagging={
+                        'TagSet': [
+                            {'Key': 'app_name', 'Value': app_name},
+                            {'Key': 'user_with', 'Value': user_with}
+                        ]
+                    }
+                )
+                log_message(f"Tagged recording with app_name={app_name}, user_with={user_with}")
+            except Exception as e:
+                log_message(f"Warning: Could not tag recording object: {e}")
+            
+            # Clean up metadata
+            if file_uid in recording_metadata:
+                del recording_metadata[file_uid]
         except Exception as e:
             log_message(f"Error uploading recording: {e}")
             return jsonify({'error': f"Failed to upload recording: {str(e)}"}), 500
@@ -577,6 +636,10 @@ def upload_audio_recording():
         return jsonify({'error': 'Invalid file type'}), 400
     
     try:
+        # Get metadata from form data
+        app_name = request.form.get('app_name', '')
+        user_with = request.form.get('user_with', '')
+        
         # Generate presigned URL for upload
         object_name = f"{get_default_username()}/recordings/{file.filename}"
         url = s3_client.generate_presigned_url(
@@ -589,11 +652,26 @@ def upload_audio_recording():
         response = requests.put(url, data=file)
         if response.status_code != 200:
             raise Exception("Failed to upload audio recording")
-        else:
-            return jsonify({
-                'status': 'success',
-                'url': url
-            })
+        
+        # Tag the object with metadata
+        try:
+            s3_client.put_object_tagging(
+                Bucket=BUCKET_NAME,
+                Key=object_name,
+                Tagging={
+                    'TagSet': [
+                        {'Key': 'app_name', 'Value': app_name},
+                        {'Key': 'user_with', 'Value': user_with}
+                    ]
+                }
+            )
+        except Exception as e:
+            log_message(f"Warning: Could not tag audio object: {e}")
+        
+        return jsonify({
+            'status': 'success',
+            'url': url
+        })
     except Exception as e:
         print(f'Audio upload error: {str(e)}')
         return jsonify({'error': str(e)}), 500

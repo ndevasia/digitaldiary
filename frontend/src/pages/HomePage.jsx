@@ -20,6 +20,8 @@ function HomePage() {
     const [showSessionModal, setShowSessionModal] = useState(false);
     const [appName, setAppName] = useState('');
     const [userWith, setUserWith] = useState('');
+    const [selectedFriends, setSelectedFriends] = useState(new Set());
+    const [friends, setFriends] = useState([]);
     const [creatingSession, setCreatingSession] = useState(false);
     const [activeSession, setActiveSession] = useState(null);
     const [loadingSession, setLoadingSession] = useState(true);
@@ -42,13 +44,18 @@ function HomePage() {
         fetchActiveSession();
     }, []);
 
-    // Reset form state whenever modal opens
+    // Reset form state whenever modal opens and fetch friends
     useEffect(() => {
         if (showSessionModal) {
             // Increment key to force form remount
             setModalKey(prev => prev + 1);
             // Force a complete reset of form state when modal opens
             setCreatingSession(false);
+            // Fetch friends list
+            fetchFriends();
+        } else {
+            // Clear selected friends when modal closes
+            setSelectedFriends(new Set());
         }
     }, [showSessionModal]);
 
@@ -135,10 +142,20 @@ function HomePage() {
         }, 3000);
     };
 
+    const fetchFriends = async () => {
+        try {
+            const response = await fetch('/api/friends');
+            const data = await response.json();
+            setFriends(data.friends || []);
+        } catch (error) {
+            console.error('Error fetching friends:', error);
+        }
+    };
+
     const handleNewMemory = () => {
         // Reset all form and loading state to ensure clean modal opening
         setAppName('');
-        setUserWith('');
+        setSelectedFriends(new Set());
         setCreatingSession(false);
         setLoadingSession(false);
         setShowSessionModal(true);
@@ -170,6 +187,9 @@ function HomePage() {
                 }
             }
 
+            // Join selected friends with commas
+            const selectedFriendsString = Array.from(selectedFriends).join(', ');
+
             // Now create the new session
             const response = await fetch('/api/session/create', {
                 method: 'POST',
@@ -178,7 +198,7 @@ function HomePage() {
                 },
                 body: JSON.stringify({
                     appName: trimmedAppName,
-                    userWith: userWith.trim()
+                    userWith: selectedFriendsString
                 })
             });
 
@@ -191,14 +211,14 @@ function HomePage() {
             // Update active session state
             setActiveSession({
                 app_name: trimmedAppName,
-                user_with: userWith.trim(),
+                user_with: selectedFriendsString,
                 start_timestamp: new Date().toISOString(),
                 status: 'active'
             });
 
             // Clear form fields before closing modal
             setAppName('');
-            setUserWith('');
+            setSelectedFriends(new Set());
             
             // Close modal
             setShowSessionModal(false);
@@ -218,7 +238,7 @@ function HomePage() {
 
     const handleCloseSessionModal = () => {
         setAppName('');
-        setUserWith('');
+        setSelectedFriends(new Set());
         setShowSessionModal(false);
     };
 
@@ -600,17 +620,41 @@ function HomePage() {
                             </div>
 
                             <div className="mb-6">
-                                <label htmlFor="userWith" className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
                                     Who are you using it with? <span className="text-gray-500 font-normal">(optional)</span>
                                 </label>
-                                <input
-                                    type="text"
-                                    id="userWith"
-                                    value={userWith}
-                                    onChange={(e) => setUserWith(e.target.value)}
-                                    placeholder="Leave empty if using it alone, or enter name/Group"
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                />
+                                <div className="border border-gray-300 rounded-lg bg-white p-3 max-h-48 overflow-y-auto">
+                                    {friends.length === 0 ? (
+                                        <p className="text-gray-500 text-sm">No friends added yet</p>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {friends.map(friend => (
+                                                <label key={friend} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedFriends.has(friend)}
+                                                        onChange={(e) => {
+                                                            const newSelected = new Set(selectedFriends);
+                                                            if (e.target.checked) {
+                                                                newSelected.add(friend);
+                                                            } else {
+                                                                newSelected.delete(friend);
+                                                            }
+                                                            setSelectedFriends(newSelected);
+                                                        }}
+                                                        className="w-4 h-4 text-teal-500 rounded focus:ring-teal-500"
+                                                    />
+                                                    <span className="text-gray-700">{friend}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                {selectedFriends.size > 0 && (
+                                    <div className="mt-2 text-sm text-gray-700">
+                                        Selected: <span className="font-semibold">{Array.from(selectedFriends).join(', ')}</span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex gap-3 justify-end">

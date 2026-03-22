@@ -238,7 +238,7 @@ function FriendsPage() {
                   className={`${mediaClass} rounded overflow-hidden shadow-sm`}
                 >
                   <div className="h-40 overflow-hidden bg-pink-50">
-                    <VideoPlayer url={item.media_url} />
+                    <VideoPlayer src={item.media_url} />
                   </div>
                   <div className="p-4">
                     <div className="text-sm text-gray-700 font-medium mb-1">Video</div>

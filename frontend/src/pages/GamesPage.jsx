@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, X } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
@@ -11,10 +11,23 @@ function GamesPage() {
   const [selectedGame, setSelectedGame] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState('');
+  const [editingItemKey, setEditingItemKey] = useState(null);
+  const [editingField, setEditingField] = useState(null);
+  const [editValue, setEditValue] = useState('');
   const currentUsername = useContext(UserContext).username || 'User';
 
   useEffect(() => {
     fetchMediaData();
+
+    // Refetch data when page becomes visible (user navigates back)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchMediaData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   const fetchMediaData = async () => {
@@ -26,6 +39,13 @@ function GamesPage() {
       }
       const data = await response.json();
       setMediaData(data);
+      
+      // Log all media with their app_names
+      console.log('Raw media data from API:');
+      data.forEach((item, index) => {
+        console.log(`  [${index}] s3_key="${item.s3_key}" app_name="${item.app_name}"`);
+      });
+      
       setLoading(false);
     } catch (error) {
       console.error('Error fetching media data:', error);
@@ -40,28 +60,33 @@ function GamesPage() {
     
     // Process each media item
     mediaData.forEach(item => {
-      if (item.game) {
-        // Create a slug (URL-friendly ID) from the game name
-        const gameSlug = item.game.replace(/\s+/g, '-').toLowerCase();
+      if (item.app_name) {
+        // Create a slug (URL-friendly ID) from the app name
+        const gameSlug = item.app_name.replace(/\s+/g, '-').toLowerCase();
         
-        // If this game isn't in our map yet, add it
+        console.log(`Processing media: app_name="${item.app_name}" (slug="${gameSlug}")`);
+        
+        // If this app isn't in our map yet, add it
         if (!gamesMap.has(gameSlug)) {
           gamesMap.set(gameSlug, {
-            name: item.game,
+            name: item.app_name,
             slug: gameSlug,
             media: []
           });
         }
         
-        // Add this media to the game's media array
+        // Add this media to the app's media array
         gamesMap.get(gameSlug).media.push(item);
       }
     });
     
-    // Convert map to array and sort by game name
-    return Array.from(gamesMap.values()).sort((a, b) => 
+    const games = Array.from(gamesMap.values()).sort((a, b) => 
       a.name.localeCompare(b.name)
     );
+    
+    console.log('Unique games found:', games.map(g => ({ name: g.name, count: g.media.length })));
+    
+    return games;
   };
 
   const handleGameClick = (game) => {
@@ -80,6 +105,111 @@ function GamesPage() {
   const closeModal = () => {
     setShowModal(false);
   };
+
+  const startEditing = (s3Key, field, currentValue) => {
+    setEditingItemKey(s3Key);
+    setEditingField(field);
+    setEditValue(currentValue || '');
+  };
+
+  const cancelEditing = () => {
+    setEditingItemKey(null);
+    setEditingField(null);
+    setEditValue('');
+  };
+
+  const saveEditing = async (item) => {
+    if (!editValue.trim()) {
+      cancelEditing();
+      return;
+    }
+
+    try {
+      const trimmedValue = editValue.trim();
+      const response = await fetch('/api/media/update-metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          s3_key: item.s3_key,
+          metadata: { [editingField]: trimmedValue }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update metadata');
+      }
+
+      // Update local media data
+      const updatedData = mediaData.map(media => {
+        if (media.s3_key === item.s3_key) {
+          return { ...media, [editingField]: trimmedValue };
+        }
+        return media;
+      });
+      setMediaData(updatedData);
+
+      // Update selectedGame if it's currently being viewed
+      if (selectedGame) {
+        const updatedGame = {
+          ...selectedGame,
+          media: selectedGame.media.map(m => 
+            m.s3_key === item.s3_key ? { ...m, [editingField]: trimmedValue } : m
+          )
+        };
+        setSelectedGame(updatedGame);
+      }
+
+      cancelEditing();
+    } catch (error) {
+      console.error('Error saving metadata:', error);
+      alert('Error: ' + error.message);
+    }
+  };
+
+  const renderEditableField = (label, value, item, field) => {
+    const isEditing = editingItemKey === item.s3_key && editingField === field;
+
+    if (isEditing) {
+      return (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveEditing(item);
+              if (e.key === 'Escape') cancelEditing();
+            }}
+            autoFocus
+            className="flex-1 px-2 py-1 border border-teal-500 rounded"
+          />
+          <button
+            onClick={() => saveEditing(item)}
+            className="px-2 py-1 bg-teal-500 text-white rounded text-sm hover:bg-teal-600"
+          >
+            Save
+          </button>
+          <button
+            onClick={cancelEditing}
+            className="px-2 py-1 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400"
+          >
+            Cancel
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        onDoubleClick={() => startEditing(item.s3_key, field, value)}
+        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+        title="Double-click to edit"
+      >
+        <span className="font-medium">{label}:</span> {value || 'Not set'}
+      </div>
+    );
+  };
+
 
   // Get unique games
   const games = extractUniqueGames();
@@ -148,6 +278,49 @@ function GamesPage() {
     );
   };
 
+  const handleDeleteMedia = async (item) => {
+    if (!window.confirm(`Delete this ${item.type}?`)) return;
+
+    try {
+      // Use the s3_key directly from the item
+      const s3Key = item.s3_key;
+      if (!s3Key) {
+        alert('Could not determine file location');
+        console.error('No s3_key found in item:', item);
+        return;
+      }
+
+      console.log('Deleting file with key:', s3Key);
+      const response = await fetch('/api/media/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_key: s3Key })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || `Server error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Delete response:', result);
+
+      // Remove using media_url as the unique identifier
+      const updatedMedia = selectedGame.media.filter(m => m.media_url !== item.media_url);
+      const updatedGame = { ...selectedGame, media: updatedMedia };
+      setSelectedGame(updatedGame);
+
+      // Also update full media data
+      const updatedData = mediaData.filter(m => m.media_url !== item.media_url);
+      setMediaData(updatedData);
+      
+      alert('File deleted successfully');
+    } catch (error) {
+      console.error('Error deleting media:', error);
+      alert('Error deleting file: ' + error.message);
+    }
+  };
+
   // Render the game detail view
   const renderGameDetail = () => {
     if (!selectedGame) return null;
@@ -197,8 +370,8 @@ function GamesPage() {
             if (item.type === 'screenshot') {
               return (
                 <div 
-                  key={item.media_id} 
-                  className={`${mediaClass} rounded overflow-hidden shadow-sm`}
+                  key={item.s3_key} 
+                  className={`${mediaClass} rounded overflow-hidden shadow-sm relative group`}
                 >
                   <div className="p-4">
                     <img 
@@ -208,40 +381,61 @@ function GamesPage() {
                       onClick={() => enlargeImage(item.media_url)}
                     />
                     <div className="mt-2">
-                      <div className="font-medium text-gray-700">{item.game}</div>
-                      <div className="text-xs text-gray-500">{date}</div>
+                      {renderEditableField('App', item.app_name, item, 'app_name')}
+                      <div className="text-xs text-gray-500 mt-1">{date}</div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleDeleteMedia(item)}
+                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete this file"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
               );
             } else if (item.type === 'video') {
               return (
                 <div 
-                  key={item.media_id} 
-                  className={`${mediaClass} rounded overflow-hidden shadow-sm`}
+                  key={item.s3_key} 
+                  className={`${mediaClass} rounded overflow-hidden shadow-sm relative group`}
                 >
                   <div className="p-4">
                     <VideoPlayer src={item.media_url} />
                     <div className="mt-2">
-                      <div className="font-medium text-gray-700">{item.game}</div>
-                      <div className="text-xs text-gray-500">{date}</div>
+                      {renderEditableField('App', item.app_name, item, 'app_name')}
+                      <div className="text-xs text-gray-500 mt-1">{date}</div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleDeleteMedia(item)}
+                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete this file"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
               );
             } else if (item.type === 'audio') {
               return (
                 <div 
-                  key={item.media_id} 
-                  className={`${mediaClass} rounded overflow-hidden shadow-sm`}
+                  key={item.s3_key} 
+                  className={`${mediaClass} rounded overflow-hidden shadow-sm relative group`}
                 >
                   <div className="p-4">
                     <AudioPlayer src={item.media_url} />
                     <div className="mt-2">
-                      <div className="font-medium text-gray-700">{item.game}</div>
-                      <div className="text-xs text-gray-500">{date}</div>
+                      {renderEditableField('App', item.app_name, item, 'app_name')}
+                      <div className="text-xs text-gray-500 mt-1">{date}</div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleDeleteMedia(item)}
+                    className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete this file"
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
               );
             }
@@ -282,7 +476,7 @@ function GamesPage() {
   };
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <div className="flex-1 p-8 overflow-y-auto">
         <header className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>

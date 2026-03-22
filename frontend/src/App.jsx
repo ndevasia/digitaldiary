@@ -93,11 +93,29 @@ function App() {
 
     const handleScreenshot = async () => {
         setScreenshotState(LOADING);
+        // Fetch current session metadata
+        let sessionMetadata = {};
+        try {
+            const sessionResponse = await fetch('/api/session/latest');
+            if (sessionResponse.ok) {
+                const sessionData = await sessionResponse.json();
+                sessionMetadata = {
+                    app_name: sessionData.app_name || '',
+                    user_with: sessionData.user_with || ''
+                };
+                console.log('Fetched session metadata:', sessionMetadata);
+            }
+        } catch (err) {
+            console.log('Could not fetch session metadata:', err);
+        }
+
         FFMpeg.takeScreenshot().then(async (screenshot) => {
             setScreenshotState(INACTIVE);
             const formData = new FormData();
             formData.append('enctype', 'multipart/form-data');
             formData.append('file', screenshot);
+            formData.append('app_name', sessionMetadata.app_name || '');
+            formData.append('user_with', sessionMetadata.user_with || '');
 
             await fetch('/api/screenshot', {
                 method: 'POST',
@@ -105,9 +123,12 @@ function App() {
             }).then((response) => {
                 if (response.ok) {
                     console.log('Screenshot uploaded successfully');
+                } else {
+                    console.error('Screenshot upload failed');
                 }
             }).catch((err) => {
                 console.error('Screenshot upload error:', err);
+                setScreenshotState(INACTIVE);
             });
         }).catch((err) => {
             console.error('Screenshot error:', err);
@@ -119,26 +140,51 @@ function App() {
         try {
             setScreenRecordingState(LOADING);
             if (screenRecordingState === INACTIVE) {
-                fetch('/api/recording/start', { method: 'POST' }).then(async (response) => {
-                    if (!response.ok) {
-                        throw new Error('Failed to start recording on backend');
-                    }
-                    const data = await response.json();
-                    screenRecordingUID.current = data.uid;
-                    const streamDestination = data.url;
-                    const withAudio = localStorage.getItem('recordAudioWithScreen') === "true";
-                    const audioDeviceName = localStorage.getItem('audioDeviceName');
-                    FFMpeg.startVideoStream(streamDestination, withAudio, audioDeviceName).then(() => {
-                        console.log('Screen recording started');
-                        setScreenRecordingState(ACTIVE);
+                // Fetch current session metadata
+                fetch('/api/session/latest')
+                    .then((sessionResponse) => {
+                        if (sessionResponse.ok) {
+                            return sessionResponse.json();
+                        }
+                        return {};
+                    })
+                    .catch((err) => {
+                        console.log('Could not fetch session metadata:', err);
+                        return {};
+                    })
+                    .then((sessionData) => {
+                        const sessionMetadata = {
+                            app_name: sessionData.app_name || '',
+                            user_with: sessionData.user_with || ''
+                        };
+                        console.log('Fetched session metadata:', sessionMetadata);
+                        
+                        return fetch('/api/recording/start', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(sessionMetadata)
+                        });
+                    })
+                    .then(async (response) => {
+                        if (!response.ok) {
+                            throw new Error('Failed to start recording on backend');
+                        }
+                        const data = await response.json();
+                        screenRecordingUID.current = data.uid;
+                        const streamDestination = data.url;
+                        const withAudio = localStorage.getItem('recordAudioWithScreen') === "true";
+                        const audioDeviceName = localStorage.getItem('audioDeviceName');
+                        FFMpeg.startVideoStream(streamDestination, withAudio, audioDeviceName).then(() => {
+                            console.log('Screen recording started');
+                            setScreenRecordingState(ACTIVE);
+                        }).catch((err) => {
+                            console.error('Screen recording error:', err);
+                            setScreenRecordingState(INACTIVE);
+                        });
                     }).catch((err) => {
-                        console.error('Screen recording error:', err);
+                        console.error('Recording start error:', err);
                         setScreenRecordingState(INACTIVE);
                     });
-                }).catch((err) => {
-                    console.error('Recording start error:', err);
-                    setScreenRecordingState(INACTIVE);
-                });
             } else if (screenRecordingState === ACTIVE) {
                 fetch(`/api/recording/stop/${screenRecordingUID.current}`, { method: 'POST' }).then(() => {
                     console.log('Notified backend of recording stop');
@@ -160,10 +206,28 @@ function App() {
         }
     };
 
+    const audioSessionMetadata = useRef({});
+
     const handleAudioRecording = async () => {
         try {
             setAudioRecordingState(LOADING);
             if (audioRecordingState === INACTIVE) {
+                // Fetch current session metadata
+                try {
+                    const sessionResponse = await fetch('/api/session/latest');
+                    if (sessionResponse.ok) {
+                        const sessionData = await sessionResponse.json();
+                        audioSessionMetadata.current = {
+                            app_name: sessionData.app_name || '',
+                            user_with: sessionData.user_with || ''
+                        };
+                        console.log('Fetched session metadata:', audioSessionMetadata.current);
+                    }
+                } catch (err) {
+                    console.log('Could not fetch session metadata:', err);
+                    audioSessionMetadata.current = {};
+                }
+
                 const audioDeviceName = localStorage.getItem('audioDeviceName');
                 console.log('Using audio device:', audioDeviceName);
                 FFMpeg.startAudioRecording(audioDeviceName).then(() => {
@@ -179,6 +243,8 @@ function App() {
                     const formData = new FormData();
                     formData.append('enctype', 'multipart/form-data');
                     formData.append('file', audio_file);
+                    formData.append('app_name', audioSessionMetadata.current.app_name || '');
+                    formData.append('user_with', audioSessionMetadata.current.user_with || '');
                     fetch('/api/audio/upload', {
                         method: 'POST',
                         body: formData,

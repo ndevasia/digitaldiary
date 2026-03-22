@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Gamepad2, FolderOpen, Edit, BarChart2 } from 'lucide-react';
+import { Home, Gamepad2, FolderOpen, Edit, BarChart2, Users } from 'lucide-react';
 import ProfilePicture from './ProfilePicture';
 const { ipcRenderer } = window.require('electron');
 
@@ -35,6 +35,15 @@ function Sidebar() {
                 >
                     <Gamepad2 size={20} className="mr-3" />
                     Apps
+                </Link>
+                <Link
+                    to="/friends"
+                    className={`flex items-center px-6 py-4 ${
+                        isActive('/friends') ? 'bg-teal-500 text-white' : 'text-teal-500 hover:bg-gray-100'
+                    }`}
+                >
+                    <Users size={20} className="mr-3" />
+                    Friends
                 </Link>
                 <Link
                     to="/files"

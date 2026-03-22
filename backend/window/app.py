@@ -1034,7 +1034,7 @@ def add_user():
             return jsonify({"error": "username is required"}), 400
 
         default_username = get_default_username()
-        ensure_user_json_exists(default_username)
+        ensure_user_json_exists()
         user_json_path = get_user_json_path()
 
         with open(user_json_path, 'r') as f:

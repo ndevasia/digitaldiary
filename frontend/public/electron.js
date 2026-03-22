@@ -292,7 +292,7 @@ app.on('before-quit', async (event) => {
         await BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(`
             (async () => {
                 try {
-                await fetch('api/session/end', { method: 'POST' })
+                await fetch('/api/session/end', { method: 'POST' })
                 } catch (e) {};
                 return 0;
             })()

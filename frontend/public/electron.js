@@ -254,7 +254,11 @@ function setupIPC() {
 
 
 app.whenReady().then(() => {
-    startPythonBackend();
+    // As long as you start the app with `npm run start` in the root dir
+    // the python backend will still be running. If we start the python
+    // backend here, then it is not easy for us to end any sessions
+    // on app shutdown.
+    // startPythonBackend();
     createOverlayWindow();
     createMainWindow();
     setupIPC();
@@ -274,4 +278,33 @@ app.on('activate', () => {
         createOverlayWindow();
         createMainWindow();
     }
+});
+
+app.on('before-quit', async (event) => {
+    event.preventDefault();
+
+    console.log("App is quitting, attempting to end sessions...");
+
+    // End any sessions open
+    // This is done in the rendering process so
+    // we don't need to figure out the API URL here in the main process
+    if (BrowserWindow.getAllWindows().length > 0) {
+        await BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(`
+            (async () => {
+                try {
+                await fetch('/api/session/end', { method: 'POST' })
+                } catch (e) {};
+                return 0;
+            })()
+        `);
+    } else {
+        // we're just gonna hardcode the server if there are no windows open
+        try {
+            await fetch('http://127.0.0.1:5001/api/session/end', { method: 'POST' });
+        } catch (e) {
+            console.error("Error ending session on quit:", e);
+        }
+    }
+
+    app.exit();
 });

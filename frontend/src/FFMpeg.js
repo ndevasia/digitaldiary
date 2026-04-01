@@ -58,13 +58,13 @@ if (isDev && window.location.href.includes('overlay')) {
                 output = spawnSync(
                     'powershell', 
                     ['-File', path.join(rootPath, '../bin', 'install_win64.ps1')], 
-                    { stdio: ['ignore', 'pipe', 'pipe'] }
+                    { stdio: ['ignore', 'pipe', 'pipe'], shell: true }
                 );
             } else if (platform === 'mac') {
                 output = spawnSync(
                     'bash', 
                     [path.join(rootPath, '../bin', 'install_mac64.sh')],
-                    { stdio: ['ignore', 'pipe', 'pipe'] }
+                    { stdio: ['ignore', 'pipe', 'pipe'], shell: true }
                 );
             }
             console.log(output.stdout.toString());
@@ -193,7 +193,7 @@ class FFMpeg {
                 args.push('-ar', '44100', '-ac', '2', '-c:a', 'aac', '-b:a', '128k');
             } else {
                 // Video only
-                //args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
+                args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
             }
             
             // Output format and destination
@@ -243,7 +243,7 @@ class FFMpeg {
      * Stop the server receiving the stream first!
      * @returns {Promise<void>} Resolves when recording stops.
      */
-    async stopVideoStream() {
+    async stopVideoStream(force = false) {
         return new Promise((resolve, reject) => {
             if (this.screenProcess) {
                 // Set a timeout to force kill if not exiting in time
@@ -269,7 +269,13 @@ class FFMpeg {
                 });
 
                 // Send 'q' to gracefully stop recording
-                this.screenProcess.stdin.write('q\n');
+                if (!force) {
+                    this.screenProcess.stdin.write('q\n');
+                } else {
+                    this.screenProcess.kill('SIGKILL');
+                    this.screenProcess = null;
+                    resolve();
+                }
             } else {
                 reject(new Error('FFMpeg is not recording or screen process is not available'));
             }
@@ -292,7 +298,7 @@ class FFMpeg {
                 return;
             }
 
-            this.currentRecordingName = `audio_recording_${Date.now()}`;
+            this.currentAudioRecordingName = `audio_recording_${Date.now()}`;
             this.audioProcess = spawn(
                 this.path, 
                 [...this.getAudioRecordingArgs(device), path.join(this.audioRecordingPath, this.currentAudioRecordingName + '.mp3')], 
@@ -302,7 +308,6 @@ class FFMpeg {
             this.audioProcess.on('spawn', () => {
                 if (VERBOSE)
                     console.log('FFMpeg audio recording process started');
-                resolve();
             });
 
             this.audioProcess.on('error', (err) => {
@@ -313,6 +318,9 @@ class FFMpeg {
             this.audioProcess.stderr.on('data', (data) => {
                 if (VERBOSE)
                     console.log(`FFMpeg stderr: ${data}`);
+                if (data.toString().includes('size=')) {
+                    resolve();
+                }
             });
         });
     }
@@ -462,7 +470,7 @@ class FFMpeg {
                     throw new Error('No audio capture device found for Mac');
                 }
                 const selectedAudioIndex = audioDevices.findIndex(d => d.name.includes(audioDeviceName));
-                if (selectedAudioIndex === -1) {
+                if (selectedAudioIndex === -1 && audioDeviceName) {
                     throw new Error(`Audio device "${audioDeviceName}" not found on Mac`);
                 }
                 args.push('-f', 'avfoundation', '-i', `none:${selectedAudioIndex || "0"}`);

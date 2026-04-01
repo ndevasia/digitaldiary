@@ -1,12 +1,16 @@
 {
     "users": [
         {
-            "user_id": "sophia",
+            "user_id": 0,
             "username": "sophia"
         },
         {
-            "user_id": "ndevasia",
+            "user_id": 1,
             "username": "ndevasia"
+        },
+        {
+            "user_id": 2,
+            "username": "Kaung"
         }
     ]
 }

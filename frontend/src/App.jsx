@@ -1,19 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Video, Camera, X, Minus, Maximize, Minimize, BarChart2 } from 'lucide-react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import FFMpeg from './FFMpeg';
 const { ipcRenderer } = window.require('electron');
 
-const API_URL = 'http://localhost:5173/api';
+const INACTIVE = "inactive";
+const ACTIVE = "active";
+const LOADING = "loading";
 
-const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
+const IconButton = ({ icon: Icon, onClick, isLoading, isActive, tooltip }) => (
   <div className="relative group">
     <button
       onClick={onClick}
       className={`aspect-square p-4 rounded-lg flex items-center justify-center transition-all duration-200 ${
-        isActive
-          ? 'bg-blue-500 text-zinc-50 '
-          : 'bg-zinc-100 hover:bg-zinc-200 border border-zinc-200/50'
+        isLoading
+          ? 'cursor-not-allowed bg-zinc-300'
+          : isActive
+            ? 'bg-blue-500 text-zinc-50 '
+            : 'bg-zinc-100 hover:bg-zinc-200 border border-zinc-200/50'
       }`}
     >
       <Icon
@@ -29,8 +33,10 @@ const IconButton = ({ icon: Icon, onClick, isActive, tooltip }) => (
 );
 
 function App() {
-    const [isAudioRecording, setIsAudioRecording] = useState(false);
-    const [isScreenRecording, setIsScreenRecording] = useState(false);
+    const [screenshotState, setScreenshotState] = useState(INACTIVE);
+    const [audioRecordingState, setAudioRecordingState] = useState(INACTIVE);
+    const [screenRecordingState, setScreenRecordingState] = useState(INACTIVE);
+    const screenRecordingUID = useRef(null);
     const [isMaximized, setIsMaximized] = useState(false);
 
     // Add effect to listen for main window open/close events
@@ -86,11 +92,30 @@ function App() {
     };
 
     const handleScreenshot = async () => {
+        setScreenshotState(LOADING);
+        // Fetch current session metadata
+        let sessionMetadata = {};
         try {
-            const screenshot = await FFMpeg.takeScreenshot();
+            const sessionResponse = await fetch('/api/session/latest');
+            if (sessionResponse.ok) {
+                const sessionData = await sessionResponse.json();
+                sessionMetadata = {
+                    app_name: sessionData.app_name || '',
+                    user_with: sessionData.user_with || ''
+                };
+                console.log('Fetched session metadata:', sessionMetadata);
+            }
+        } catch (err) {
+            console.log('Could not fetch session metadata:', err);
+        }
+
+        FFMpeg.takeScreenshot().then(async (screenshot) => {
+            setScreenshotState(INACTIVE);
             const formData = new FormData();
             formData.append('enctype', 'multipart/form-data');
             formData.append('file', screenshot);
+            formData.append('app_name', sessionMetadata.app_name || '');
+            formData.append('user_with', sessionMetadata.user_with || '');
 
             await fetch('/api/screenshot', {
                 method: 'POST',
@@ -98,85 +123,144 @@ function App() {
             }).then((response) => {
                 if (response.ok) {
                     console.log('Screenshot uploaded successfully');
+                } else {
+                    console.error('Screenshot upload failed');
                 }
             }).catch((err) => {
                 console.error('Screenshot upload error:', err);
+                setScreenshotState(INACTIVE);
             });
-        } catch (error) {
-            console.error('Screenshot error:', error);
-        }
+        }).catch((err) => {
+            console.error('Screenshot error:', err);
+            setScreenshotState(INACTIVE);
+        });
     };
 
-    const handleScreenRecording = async () => {
+    const handleScreenRecording = () => {
         try {
-            if (!isScreenRecording) {
-                fetch('/api/recording/start', { method: 'POST' }).then(async (response) => {
-                    if (!response.ok) {
-                        throw new Error('Failed to start recording on backend');
-                    }
-                    const withAudio = localStorage.getItem('recordAudioWithScreen') === "true";
-                    const streamDestination = (await response.json()).url;
-                    FFMpeg.startVideoStream(streamDestination, withAudio).then(() => {
-                        console.log('Screen recording started');
-                        setIsScreenRecording(true);
+            setScreenRecordingState(LOADING);
+            if (screenRecordingState === INACTIVE) {
+                // Fetch current session metadata
+                fetch('/api/session/latest')
+                    .then((sessionResponse) => {
+                        if (sessionResponse.ok) {
+                            return sessionResponse.json();
+                        }
+                        return {};
+                    })
+                    .catch((err) => {
+                        console.log('Could not fetch session metadata:', err);
+                        return {};
+                    })
+                    .then((sessionData) => {
+                        const sessionMetadata = {
+                            app_name: sessionData.app_name || '',
+                            user_with: sessionData.user_with || ''
+                        };
+                        console.log('Fetched session metadata:', sessionMetadata);
+                        
+                        return fetch('/api/recording/start', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(sessionMetadata)
+                        });
+                    })
+                    .then(async (response) => {
+                        if (!response.ok) {
+                            throw new Error('Failed to start recording on backend');
+                        }
+                        const data = await response.json();
+                        screenRecordingUID.current = data.uid;
+                        const streamDestination = data.url;
+                        const withAudio = localStorage.getItem('recordAudioWithScreen') === "true";
+                        const audioDeviceName = localStorage.getItem('audioDeviceName');
+                        FFMpeg.startVideoStream(streamDestination, withAudio, audioDeviceName).then(() => {
+                            console.log('Screen recording started');
+                            setScreenRecordingState(ACTIVE);
+                        }).catch((err) => {
+                            console.error('Screen recording error:', err);
+                            setScreenRecordingState(INACTIVE);
+                        });
                     }).catch((err) => {
-                        console.error('Screen recording error:', err);
+                        console.error('Recording start error:', err);
+                        setScreenRecordingState(INACTIVE);
                     });
-                }).catch((err) => {
-                    console.error('Recording start error:', err);
-                });
-            } else {
-                fetch('/api/recording/stop', { method: 'POST' }).then(() => {
+            } else if (screenRecordingState === ACTIVE) {
+                fetch(`/api/recording/stop/${screenRecordingUID.current}`, { method: 'POST' }).then(() => {
                     console.log('Notified backend of recording stop');
-                    FFMpeg.stopVideoStream().then(() => {
+                    FFMpeg.stopVideoStream(true).then(() => {
                         console.log('Screen recording stopped');
-                        setIsScreenRecording(false);
+                        setScreenRecordingState(INACTIVE);
                     }).catch((err) => {
                         console.error('Screen recording error:', err);
-                        setIsScreenRecording(false);
+                        setScreenRecordingState(INACTIVE);
                     });
                 }).catch((err) => {
-                    fetch('/api/recording/stop', { method: 'POST' });
                     console.error('Screen recording error:', err);
-                    setIsScreenRecording(false);
+                    setScreenRecordingState(INACTIVE);
                 });
             }
         } catch (error) {
             console.error('Recording error:', error);
+            setScreenRecordingState(INACTIVE);
         }
     };
 
+    const audioSessionMetadata = useRef({});
+
     const handleAudioRecording = async () => {
         try {
-            if (!isAudioRecording) {
+            setAudioRecordingState(LOADING);
+            if (audioRecordingState === INACTIVE) {
+                // Fetch current session metadata
+                try {
+                    const sessionResponse = await fetch('/api/session/latest');
+                    if (sessionResponse.ok) {
+                        const sessionData = await sessionResponse.json();
+                        audioSessionMetadata.current = {
+                            app_name: sessionData.app_name || '',
+                            user_with: sessionData.user_with || ''
+                        };
+                        console.log('Fetched session metadata:', audioSessionMetadata.current);
+                    }
+                } catch (err) {
+                    console.log('Could not fetch session metadata:', err);
+                    audioSessionMetadata.current = {};
+                }
+
                 const audioDeviceName = localStorage.getItem('audioDeviceName');
                 console.log('Using audio device:', audioDeviceName);
                 FFMpeg.startAudioRecording(audioDeviceName).then(() => {
                     console.log('Audio recording started');
-                    setIsAudioRecording(true);
+                    setAudioRecordingState(ACTIVE);
                 }).catch((err) => {
                     console.error('Audio recording error:', err);
+                    setAudioRecordingState(INACTIVE);
                 });
-            } else {
+            } else if (audioRecordingState === ACTIVE) {
                 FFMpeg.stopAudioRecording().then((audio_file) => {
                     console.log('Audio recording stopped');
                     const formData = new FormData();
                     formData.append('enctype', 'multipart/form-data');
                     formData.append('file', audio_file);
+                    formData.append('app_name', audioSessionMetadata.current.app_name || '');
+                    formData.append('user_with', audioSessionMetadata.current.user_with || '');
                     fetch('/api/audio/upload', {
                         method: 'POST',
                         body: formData,
                     }).then((response) => {
                         if (response.ok) {
                             console.log('Audio file uploaded successfully');
+                        } else {
+                            console.error('Audio file upload failed');
                         }
                     }).catch((err) => {
                         console.error('Audio file upload error:', err);
                     });
-                    setIsAudioRecording(false);
+                    setAudioRecordingState(INACTIVE);
                 }).catch((err) => {
                     console.error('Audio recording error:', err);
-                    setIsAudioRecording(false);
+                    setAudioRecordingState(INACTIVE);
                 });
             }
         } catch (error) {
@@ -230,18 +314,21 @@ function App() {
                             <IconButton
                                 icon={Camera}
                                 onClick={handleScreenshot}
+                                isLoading={screenshotState == LOADING}
                                 // tooltip="Take Screenshot"
                             />
                             <IconButton
                                 icon={Video}
                                 onClick={handleScreenRecording}
-                                isActive={isScreenRecording}
+                                isLoading={screenRecordingState == LOADING}
+                                isActive={screenRecordingState == ACTIVE}
                                 // tooltip="Record Screen"
                             />
                             <IconButton
                                 icon={Mic}
                                 onClick={handleAudioRecording}
-                                isActive={isAudioRecording}
+                                isLoading={audioRecordingState == LOADING}
+                                isActive={audioRecordingState == ACTIVE}
                                 // tooltip="Record Audio"
                             />
                             <Link to="/">

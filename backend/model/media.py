@@ -9,13 +9,15 @@ class Media:
     media_url: str
     timestamp: datetime
     owner_user_id: str
-    game: str
+    app_name: Optional[str] = None  # e.g., 'Discord', 'Steam'
+    user_with: Optional[str] = None  # e.g., 'Friend Name' or multiple names
+    session_id: Optional[str] = None  # Session identifier
 
 @dataclass
-class Game:
-    game_id: int
-    game_name: str
-    game_url: str
+class App:
+    app_id: int
+    app_name: str
+    app_url: str
     timestamp: datetime
     owner_user_id: int
 

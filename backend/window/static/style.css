@@ -148,8 +148,126 @@ header {
   background-color: #f0f0f0;
 }
 
+/* Modal Styles */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+}
 
-/* Adjust the layout for smaller screens */
+.modal.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 0;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 500px;
+}
+
+.modal-header {
+  background-color: #3da37a;
+  color: white;
+  padding: 20px;
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.5em;
+}
+
+.close {
+  color: white;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.close:hover,
+.close:focus {
+  color: #e6eef5;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-weight: bold;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1em;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #3da37a;
+  box-shadow: 0 0 5px rgba(61, 163, 122, 0.3);
+}
+
+.form-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: bold;
+}
+
+.btn-primary {
+  background-color: #3da37a;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #62c2a0;
+}
+
+.btn-secondary {
+  background-color: #ccc;
+  color: #333;
+}
+
+.btn-secondary:hover {
+  background-color: #999;
+}
+
+
 @media (max-width: 768px) {
   .screenshot-image {
     max-width: 200px; /* Make it even smaller on small devices */

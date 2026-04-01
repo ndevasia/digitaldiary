@@ -43,5 +43,33 @@
             </section>
         </div>
     </div>
+
+    <!-- New Session Modal -->
+    <div id="sessionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Start New Session</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="sessionForm">
+                    <div class="form-group">
+                        <label for="appName">What app are you using?</label>
+                        <input type="text" id="appName" name="appName" placeholder="e.g., Discord, Steam, Minecraft" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="userWith">Who are you using it with?</label>
+                        <input type="text" id="userWith" name="userWith" placeholder="e.g., Friend Name, Solo, Group">
+                    </div>
+                    <div class="form-buttons">
+                        <button type="submit" class="btn btn-primary">Start Session</button>
+                        <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='index.js') }}"></script>
 </body>
 </html>

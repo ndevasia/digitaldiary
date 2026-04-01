@@ -6,6 +6,7 @@ import App from './App.jsx';
 import HomePage from './pages/HomePage.jsx';
 import FilesPage from './pages/FilesPage.jsx';
 import GamesPage from './pages/GamesPage';
+import FriendsPage from './pages/FriendsPage.jsx';
 import StatsPage from './pages/StatsPage';
 import SettingsPage from './pages/SettingsPage.jsx';
 import ScrapbookPage from './pages/ScrapbookPage.jsx';
@@ -48,6 +49,7 @@ function MainApp() {
             <Route path="/games" element={<GamesPage />} />
             <Route path="/scrapbook" element={<ScrapbookPage />} />
             <Route path="/scrapbook/:scrapbookId" element={<ScrapbookEditorPage />} />
+            <Route path="/friends" element={<FriendsPage />} />
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/journals" element={<HomePage />} /> {/* Placeholder */}
             <Route path="/settings" element={<SettingsPage />} />

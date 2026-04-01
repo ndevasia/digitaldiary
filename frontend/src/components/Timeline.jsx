@@ -1,7 +1,7 @@
 import React from 'react';
-import { Gamepad2 } from 'lucide-react';
+import { Gamepad2, Trash2 } from 'lucide-react';
 
-function Timeline({ events }) {
+function Timeline({ events, onDeleteEvent }) {
     return (
         <div className="w-full max-w-4xl mx-auto p-6">
             <div className="relative">
@@ -20,8 +20,19 @@ function Timeline({ events }) {
                         <div className="ml-12">
                             <div className="bg-white rounded-lg shadow-sm border border-teal-100 p-4">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-gray-600">Played {event.title}</span>
-                                    <span className="text-sm text-gray-500">{event.date}</span>
+                                    <span className="text-gray-600"> {event.title}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-gray-500">{event.date}</span>
+                                        {onDeleteEvent && (
+                                            <button
+                                                onClick={() => onDeleteEvent(event)}
+                                                className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-colors"
+                                                title="Delete event"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

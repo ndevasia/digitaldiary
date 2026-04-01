@@ -8,6 +8,89 @@
       const selectedType = this.value;
       displayMedia(selectedType);
     });
+
+    // Initialize modal event listeners
+    initializeModal();
+  }
+
+  // Modal functionality
+  function initializeModal() {
+    const modal = id('sessionModal');
+    const newSessionBtn = document.querySelector('.new-session');
+    const closeBtn = qs('.close');
+    const cancelBtn = id('cancelBtn');
+    const sessionForm = id('sessionForm');
+
+    if (newSessionBtn) {
+      newSessionBtn.addEventListener('click', function() {
+        modal.classList.add('active');
+      });
+    }
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        modal.classList.remove('active');
+      });
+    }
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function() {
+        modal.classList.remove('active');
+      });
+    }
+
+    // Close modal when clicking outside of it
+    window.addEventListener('click', function(event) {
+      if (event.target === modal) {
+        modal.classList.remove('active');
+      }
+    });
+
+    if (sessionForm) {
+      sessionForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const appName = id('appName').value.trim();
+        const userWith = id('userWith').value.trim();
+
+        if (!appName || !userWith) {
+          alert('Please fill in both fields');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/session/create', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              appName: appName,
+              userWith: userWith
+            })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to create session');
+          }
+
+          // Clear form and close modal
+          sessionForm.reset();
+          modal.classList.remove('active');
+
+          // Show success message
+          alert('Session started successfully!');
+
+          // Optionally refresh the media list
+          fetchAllMedia();
+        } catch (error) {
+          console.error('Error creating session:', error);
+          alert('Error starting session: ' + error.message);
+        }
+      });
+    }
   }
   document.addEventListener('DOMContentLoaded', function () {
     fetchAllMedia();
@@ -56,10 +139,24 @@
 
       mediaElement.appendChild(mediaDisplay);
 
-      // Display the media name
+      // Display the app name
       const nameElement = document.createElement('p');
-      nameElement.textContent = `Name: ${item.game}`;
+      nameElement.textContent = `App: ${item.app_name}`;
       mediaElement.appendChild(nameElement);
+
+      // Display app name if available
+      if (item.app_name) {
+        const appElement = document.createElement('p');
+        appElement.textContent = `App: ${item.app_name}`;
+        mediaElement.appendChild(appElement);
+      }
+
+      // Display user info if available
+      if (item.user_with) {
+        const userElement = document.createElement('p');
+        userElement.textContent = `With: ${item.user_with}`;
+        mediaElement.appendChild(userElement);
+      }
 
       mediaList.appendChild(mediaElement);
     });

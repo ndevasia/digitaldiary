@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { ChevronLeft, Trash2, Pencil, Check, X, Type, ImageIcon, Plus, MousePointer2, Upload } from 'lucide-react';
+import { ChevronLeft, Trash2, Pencil, Check, X, Type, ImageIcon, Plus, MousePointer2, Upload, Download } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 
 const SCRAPBOOKS_KEY = 'digitaldiary.scrapbooks';
@@ -97,6 +97,30 @@ function createBoardItem(mediaItem, canvasRect, pointerPosition) {
     x,
     y
   };
+}
+
+function loadImage(src, s3Key) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      let useSrc = src;
+
+      // For S3-hosted images, fetch through our backend proxy to avoid CORS / canvas tainting
+      if (s3Key) {
+        const resp = await fetch(`/api/proxy-image?key=${encodeURIComponent(s3Key)}`);
+        if (resp.ok) {
+          const blob = await resp.blob();
+          useSrc = URL.createObjectURL(blob);
+        }
+      }
+
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = (err) => reject(err);
+      img.src = useSrc;
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
 function readFileAsDataUrl(file) {
@@ -703,6 +727,7 @@ function ScrapbookEditorPage() {
           {items.map((item) => (
             <div
               key={item.id}
+              data-item-id={item.id}
               className={`absolute cursor-grab active:cursor-grabbing group/item ${
                 selectedItemId === item.id ? 'ring-2 ring-teal-400 rounded-xl' : ''
               }`}
@@ -863,6 +888,68 @@ function ScrapbookEditorPage() {
             </div>
           </aside>
         )}
+
+        {/* Save / Export button */}
+        <button
+          type="button"
+          onClick={async () => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const offscreen = document.createElement('canvas');
+            offscreen.width = rect.width;
+            offscreen.height = rect.height;
+            const ctx = offscreen.getContext('2d');
+
+            ctx.fillStyle = scrapbook.backgroundColor || '#ffffff';
+            ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+
+            for (const item of items) {
+              if (item.type === 'text') {
+                ctx.font = `${item.fontSize || 16}px sans-serif`;
+                ctx.fillStyle = item.color || '#374151';
+                const lines = (item.text || '').split('\n');
+                const lineHeight = (item.fontSize || 16) * 1.3;
+                lines.forEach((line, i) => {
+                  ctx.fillText(line, item.x + 8, item.y + (item.fontSize || 16) + i * lineHeight);
+                });
+              } else if (item.type === 'sticker') {
+                const size = Math.max(32, Math.min(item.width, item.height) * 0.72);
+                ctx.font = `${size}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(item.sticker, item.x + item.width / 2, item.y + item.height / 2);
+                ctx.textAlign = 'start';
+                ctx.textBaseline = 'alphabetic';
+              } else if (item.type === 'image' && item.url) {
+                try {
+                  const img = await loadImage(item.url, item.s3Key);
+                  ctx.drawImage(img, item.x, item.y, item.width, item.height);
+                } catch {
+                  // skip images that fail to load
+                }
+              } else if (item.type === 'video' && item.url) {
+                ctx.fillStyle = '#1a1a2e';
+                ctx.fillRect(item.x, item.y, item.width, item.height);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('\u25b6 Video', item.x + item.width / 2, item.y + item.height / 2);
+                ctx.textAlign = 'start';
+              }
+            }
+
+            const link = document.createElement('a');
+            link.download = `${scrapbook.name || 'scrapbook'}.png`;
+            link.href = offscreen.toDataURL('image/png');
+            link.click();
+            showNotice('Scrapbook exported as image!');
+          }}
+          className="absolute bottom-6 right-6 z-30 px-5 py-3 rounded-2xl bg-teal-500 text-sm font-medium text-white hover:bg-teal-600 flex items-center gap-2 shadow-lg transition"
+        >
+          <Download size={16} />
+          Save
+        </button>
       </div>
     </div>
   );

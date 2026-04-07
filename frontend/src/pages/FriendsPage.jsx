@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer.jsx';
+import { UserContext } from '../context/UserContext.jsx';
 
 function FriendsPage() {
+  const currentUsername = useContext(UserContext).username || 'User';
+  const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
   const [friends, setFriends] = useState([]);
   const [friendsMediaData, setFriendsMediaData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -18,7 +21,7 @@ function FriendsPage() {
   const fetchFriends = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/friends');
+      const response = await fetch(`${apiBasePath}/friends`);
       if (!response.ok) {
         throw new Error('Failed to fetch friends');
       }
@@ -28,7 +31,7 @@ function FriendsPage() {
       // Fetch media for all friends in parallel using Promise.all
       const friendsList = data.friends || [];
       const mediaPromises = friendsList.map(friendUsername =>
-        fetch(`/api/media_aws?username=${encodeURIComponent(friendUsername)}`)
+        fetch(`/api/${encodeURIComponent(friendUsername)}/media_aws`)
           .then(response => {
             if (response.ok) {
               return response.json().then(mediaArray => ({

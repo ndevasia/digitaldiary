@@ -32,6 +32,7 @@ function FilesPage() {
     const [addUserLoading, setAddUserLoading] = useState(false);
     const [addUserError, setAddUserError] = useState(null);
     const currentUsername = useContext(UserContext).username || 'User';
+    const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
     const abortControllerRef = useRef(null);
 
     useEffect(() => {
@@ -150,7 +151,7 @@ function FilesPage() {
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch('/api/users');
+            const response = await fetch(`${apiBasePath}/users`);
             if (!response.ok) {
                 throw new Error('Failed to fetch users');
             }
@@ -183,7 +184,7 @@ function FilesPage() {
                 .map(u => u.username);
 
             if (userList.length === 0) {
-                const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`, { signal });
+                const resp = await fetch(`${apiBasePath}/media_aws`, { signal });
                 if (!resp.ok) throw new Error('Failed to fetch media');
                 const data = await resp.json();
                 const sorted = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -197,7 +198,7 @@ function FilesPage() {
             }
 
             const promises = userList.map(async (u) => {
-                const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(u)}`, { signal });
+                const resp = await fetch(`/api/${encodeURIComponent(u)}/media_aws`, { signal });
                 return resp.ok ? resp.json() : [];
             });
 
@@ -217,7 +218,7 @@ function FilesPage() {
             .filter(u => userFilter.has(String(u.user_id)))
             .map(u => u.username || u.user_id);
         const promises = usernames.map(async (username) => {
-            const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(username)}`, { signal });
+            const resp = await fetch(`/api/${encodeURIComponent(username)}/media_aws`, { signal });
             if (!resp.ok) return [];
             return resp.json();
         });
@@ -273,7 +274,7 @@ function FilesPage() {
             }
 
             console.log('Deleting file with key:', s3Key);
-            const response = await fetch('/api/media/delete', {
+            const response = await fetch(`${apiBasePath}/media/delete`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ file_key: s3Key })
@@ -329,7 +330,7 @@ function FilesPage() {
 
         try {
             const trimmedValue = editValue.trim();
-            const response = await fetch('/api/media/update-metadata', {
+            const response = await fetch(`${apiBasePath}/media/update-metadata`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -738,8 +739,10 @@ function FilesPage() {
                                         setAddUserLoading(true);
                                         setAddUserError(null);
 
+                                        // TODO: i removed this endpoint
+
                                         // 1) Check S3 for the username
-                                        const resp = await fetch(`/api/users_aws/check?username=${encodeURIComponent(usernameToCheck)}`);
+                                        const resp = await fetch(`${apiBasePath}/users_aws/check?username=${encodeURIComponent(usernameToCheck)}`);
                                         if (!resp.ok) {
                                             const err = await resp.json();
                                             throw new Error(err.error || 'Error checking username');
@@ -751,7 +754,7 @@ function FilesPage() {
                                         }
 
                                         // 2) Persist the username to user.json on the backend
-                                        const addResp = await fetch('/api/users', {
+                                        const addResp = await fetch(`${apiBasePath}/users`, {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({ username: usernameToCheck })
@@ -764,7 +767,7 @@ function FilesPage() {
 
                                         if (addResp.status === 200) {
                                             // Already exists: fetch canonical user object from server so we have the integer id
-                                            const usersResp = await fetch('/api/users');
+                                            const usersResp = await fetch(`${apiBasePath}/users`);
                                             if (usersResp.ok) {
                                                 const allUsers = await usersResp.json();
                                                 const found = allUsers.find(u => u.username === usernameToCheck);

@@ -6,6 +6,7 @@ import { UserContext } from '../context/UserContext.jsx';
 function StatsPage() {
     const user = useContext(UserContext);
     const currentUsername = user?.username || 'User';
+    const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
 
     const [mediaStats, setMediaStats] = useState({
         screenshots: 0,
@@ -26,7 +27,7 @@ function StatsPage() {
     const fetchMediaStats = async () => {
         try {
             setLoadingStats(true);
-            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
+            const response = await fetch(`${apiBasePath}/media_aws`);
             const mediaData = await response.json();
 
             const stats = mediaData.reduce((acc, item) => {
@@ -47,7 +48,7 @@ function StatsPage() {
     const fetchGameSessions = async () => {
         try {
             setLoadingTimeline(true);
-            const response = await fetch('/api/sessions/list');
+            const response = await fetch(`${apiBasePath}/sessions/list`);
             const sessions = await response.json();
 
             // Format sessions for timeline display

@@ -12,28 +12,52 @@ import SettingsPage from './pages/SettingsPage.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import { UserContext } from './context/UserContext.jsx';
 
+const AUTH_USERNAME = import.meta.env.VITE_USERNAME;
+const AUTH_SECRET = import.meta.env.VITE_USER_SECRET;
+
+if (typeof window !== 'undefined' && !window.__digitalDiaryFetchAuthPatched) {
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = (input, init = {}) => {
+    const rawUrl = typeof input === 'string' ? input : input?.url;
+
+    try {
+      const resolvedUrl = new URL(rawUrl, window.location.origin);
+      if (resolvedUrl.pathname.startsWith('/api/')) {
+        const headers = new Headers(init.headers);
+        headers.set('X-Username', AUTH_USERNAME || '');
+        headers.set('X-User-Secret', AUTH_SECRET || '');
+        return originalFetch(input, { ...init, headers });
+      }
+    } catch (_) {
+      // Fall through to original fetch if URL parsing fails.
+    }
+
+    return originalFetch(input, init);
+  };
+
+  window.__digitalDiaryFetchAuthPatched = true;
+}
+
 // Create a component to handle different render modes
 function MainApp() {
   // Check if we should render the overlay tool or the full app
   const isOverlay = new URLSearchParams(window.location.search).has('overlay');
-  const [currentUsername, setCurrentUsername] = useState('User');
+  const [currentUsername, setCurrentUsername] = useState(import.meta.env.VITE_USERNAME);
+
+  useEffect(() => {
+    if (currentUsername) {
+      localStorage.setItem('username', currentUsername);
+    }
+    localStorage.setItem('userSecret', AUTH_SECRET || '');
+  }, [currentUsername]);
 
   if (isOverlay) {
-    return <App />;
-  } else {
-    useEffect(() => {
-        const fetchCurrentUser = async () => {
-            try {
-                const res = await fetch('/api/current_user');
-                if (!res.ok) return;
-                const data = await res.json();
-                if (data.username) setCurrentUsername(data.username);
-            } catch (err) {
-                console.error('Error fetching current user:', err);
-            }
-        };
-        fetchCurrentUser();
-    }, []);
+    return (
+      <UserContext.Provider value={{ username: currentUsername }}>
+        <App />
+      </UserContext.Provider>
+    );
   }
 
   return (

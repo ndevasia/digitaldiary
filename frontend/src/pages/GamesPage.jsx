@@ -15,6 +15,7 @@ function GamesPage() {
   const [editingField, setEditingField] = useState(null);
   const [editValue, setEditValue] = useState('');
   const currentUsername = useContext(UserContext).username || 'User';
+  const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
 
   useEffect(() => {
     fetchMediaData();
@@ -33,7 +34,7 @@ function GamesPage() {
   const fetchMediaData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
+      const response = await fetch(`${apiBasePath}/media_aws`);
       if (!response.ok) {
         throw new Error('Failed to fetch media');
       }
@@ -126,7 +127,7 @@ function GamesPage() {
 
     try {
       const trimmedValue = editValue.trim();
-      const response = await fetch('/api/media/update-metadata', {
+      const response = await fetch(`${apiBasePath}/media/update-metadata`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -291,7 +292,7 @@ function GamesPage() {
       }
 
       console.log('Deleting file with key:', s3Key);
-      const response = await fetch('/api/media/delete', {
+      const response = await fetch(`${apiBasePath}/media/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ file_key: s3Key })

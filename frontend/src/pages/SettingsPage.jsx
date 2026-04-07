@@ -1,8 +1,11 @@
 import FFMpeg from "../FFMpeg";
-import { useEffect, useState } from "react"
+import { useContext, useEffect, useState } from "react"
 import Sidebar from "../components/Sidebar";
+import { UserContext } from '../context/UserContext.jsx';
 
 function SettingsPage() {
+    const currentUsername = useContext(UserContext).username || 'User';
+    const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
 
     let [audioDevices, setAudioDevices] = useState(null);
     let [selectedAudioDevice, setSelectedAudioDevice] = useState("none");
@@ -48,7 +51,7 @@ function SettingsPage() {
 
     const fetchFriends = async () => {
         try {
-            const response = await fetch('/api/friends');
+            const response = await fetch(`${apiBasePath}/friends`);
             const data = await response.json();
             if (response.ok) {
                 setFriends(data.friends || []);
@@ -73,7 +76,7 @@ function SettingsPage() {
             setFriendError("");
             setFriendMessage("");
 
-            const response = await fetch('/api/friends/add', {
+            const response = await fetch(`${apiBasePath}/friends/add`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import { Mic, Video, Camera, X, Minus, Maximize, Minimize, BarChart2 } from 'lucide-react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import FFMpeg from './FFMpeg';
+import { UserContext } from './context/UserContext.jsx';
 const { ipcRenderer } = window.require('electron');
 
 const INACTIVE = "inactive";
@@ -33,6 +34,8 @@ const IconButton = ({ icon: Icon, onClick, isLoading, isActive, tooltip }) => (
 );
 
 function App() {
+    const currentUsername = useContext(UserContext).username || 'User';
+    const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
     const [screenshotState, setScreenshotState] = useState(INACTIVE);
     const [audioRecordingState, setAudioRecordingState] = useState(INACTIVE);
     const [screenRecordingState, setScreenRecordingState] = useState(INACTIVE);
@@ -96,7 +99,7 @@ function App() {
         // Fetch current session metadata
         let sessionMetadata = {};
         try {
-            const sessionResponse = await fetch('/api/session/latest');
+            const sessionResponse = await fetch(`${apiBasePath}/session/latest`);
             if (sessionResponse.ok) {
                 const sessionData = await sessionResponse.json();
                 sessionMetadata = {
@@ -117,7 +120,7 @@ function App() {
             formData.append('app_name', sessionMetadata.app_name || '');
             formData.append('user_with', sessionMetadata.user_with || '');
 
-            await fetch('/api/screenshot', {
+            await fetch(`${apiBasePath}/screenshot`, {
                 method: 'POST',
                 body: formData,
             }).then((response) => {
@@ -141,7 +144,7 @@ function App() {
             setScreenRecordingState(LOADING);
             if (screenRecordingState === INACTIVE) {
                 // Fetch current session metadata
-                fetch('/api/session/latest')
+                fetch(`${apiBasePath}/session/latest`)
                     .then((sessionResponse) => {
                         if (sessionResponse.ok) {
                             return sessionResponse.json();
@@ -159,7 +162,7 @@ function App() {
                         };
                         console.log('Fetched session metadata:', sessionMetadata);
                         
-                        return fetch('/api/recording/start', {
+                        return fetch(`${apiBasePath}/recording/start`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(sessionMetadata)
@@ -186,7 +189,7 @@ function App() {
                         setScreenRecordingState(INACTIVE);
                     });
             } else if (screenRecordingState === ACTIVE) {
-                fetch(`/api/recording/stop/${screenRecordingUID.current}`, { method: 'POST' }).then(() => {
+                fetch(`${apiBasePath}/recording/stop/${screenRecordingUID.current}`, { method: 'POST' }).then(() => {
                     console.log('Notified backend of recording stop');
                     FFMpeg.stopVideoStream(true).then(() => {
                         console.log('Screen recording stopped');
@@ -214,7 +217,7 @@ function App() {
             if (audioRecordingState === INACTIVE) {
                 // Fetch current session metadata
                 try {
-                    const sessionResponse = await fetch('/api/session/latest');
+                    const sessionResponse = await fetch(`${apiBasePath}/session/latest`);
                     if (sessionResponse.ok) {
                         const sessionData = await sessionResponse.json();
                         audioSessionMetadata.current = {
@@ -245,7 +248,7 @@ function App() {
                     formData.append('file', audio_file);
                     formData.append('app_name', audioSessionMetadata.current.app_name || '');
                     formData.append('user_with', audioSessionMetadata.current.user_with || '');
-                    fetch('/api/audio/upload', {
+                    fetch(`${apiBasePath}/audio/upload`, {
                         method: 'POST',
                         body: formData,
                     }).then((response) => {

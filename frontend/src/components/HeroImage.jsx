@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Upload, X, Image, Camera } from 'lucide-react';
+import { UserContext } from '../context/UserContext.jsx';
 
 function HeroImage({ onImageChange }) {
+    const currentUsername = useContext(UserContext).username || 'User';
+    const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
     const [heroImage, setHeroImage] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [showHeroEditOptions, setShowHeroEditOptions] = useState(false);
@@ -19,7 +22,7 @@ function HeroImage({ onImageChange }) {
     const fetchHeroImage = async () => {
         try {
             console.log('Fetching hero image from backend...');
-            const response = await fetch('/api/hero-image');
+            const response = await fetch(`${apiBasePath}/hero-image`);
             if (!response.ok) {
                 throw new Error('Failed to fetch hero image');
             }
@@ -49,7 +52,7 @@ function HeroImage({ onImageChange }) {
         try {
             setLoadingAllScreenshots(true);
             console.log('Fetching all screenshots...');
-            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
+            const response = await fetch(`${apiBasePath}/media_aws`);
             if (!response.ok) {
                 throw new Error('Failed to fetch screenshots');
             }

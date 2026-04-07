@@ -4,33 +4,6 @@ import os
 import json
 from datetime import datetime
 
-
-def get_default_username():
-    """Get the default username (user 0) from user.json"""
-    try:
-        # Find user.json in the model directory
-        model_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            'backend', 'model'
-        )
-        user_json_path = os.path.join(model_dir, 'user.json')
-        
-        if os.path.exists(user_json_path):
-            with open(user_json_path, 'r') as f:
-                data = json.load(f)
-            users = data.get('users', [])
-            # Find user with user_id = 0
-            for user in users:
-                if user.get('user_id') == 0:
-                    return user.get('username')
-        
-        # Fallback if no user 0 found
-        return os.getenv('USERNAME', 'User')
-    except Exception as e:
-        print(f"Error getting default username: {e}")
-        return os.getenv('USERNAME', 'User')
-
-
 # ----------------------------
 # Environment configuration
 # ----------------------------
@@ -50,7 +23,7 @@ if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
 
 
 class S3:
-    def __init__(self, username=None):
+    def __init__(self, username):
         """
         Initialize an S3 client using credentials from environment variables.
         
@@ -66,7 +39,7 @@ class S3:
         )
 
         self.bucket_name = AWS_S3_BUCKET
-        self.username = get_default_username()
+        self.username = username
         self.session_file = f"{self.username}/SESSION_{self.username}.json"
 
     # ----------------------------

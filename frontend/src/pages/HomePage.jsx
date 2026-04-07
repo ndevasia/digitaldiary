@@ -29,6 +29,7 @@ function HomePage() {
     const [deleteConfirmation, setDeleteConfirmation] = useState({ visible: false, event: null });
     const navigate = useNavigate();
     const currentUsername = useContext(UserContext).username || 'User';
+    const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
     const notificationTimeoutRef = useRef(null);
 
     useEffect(() => {
@@ -71,7 +72,7 @@ function HomePage() {
     const fetchLatestScreenshot = async () => {
         try {
             setLoading(true);
-            const response = await fetch('/api/latest-screenshot');
+            const response = await fetch(`${apiBasePath}/latest-screenshot`);
             const data = await response.json();
             setScreenshotUrl(data.screenshot_url);
         } catch (error) {
@@ -84,7 +85,7 @@ function HomePage() {
     const fetchScreenshotByDays = async (days, setScreenshotUrl, setLoading) => {
         try {
             setLoading(true);
-            const response = await fetch(`/api/random-screenshot-by-days/${days}`);
+            const response = await fetch(`${apiBasePath}/random-screenshot-by-days/${days}`);
             const data = await response.json();
             setScreenshotUrl(data.screenshot_url);
         } catch (error) {
@@ -97,7 +98,7 @@ function HomePage() {
     const fetchGameSessions = async () => {
         try {
             setLoadingTimeline(true);
-            const response = await fetch('/api/sessions/list');
+            const response = await fetch(`${apiBasePath}/sessions/list`);
             const sessions = await response.json();
 
             // Format sessions for timeline display
@@ -159,7 +160,7 @@ function HomePage() {
 
     const fetchFriends = async () => {
         try {
-            const response = await fetch('/api/friends');
+            const response = await fetch(`${apiBasePath}/friends`);
             const data = await response.json();
             // Use functional update to avoid closure issues
             setFriends(data.friends || []);
@@ -190,7 +191,7 @@ function HomePage() {
 
             // If there's an active session, end it first
             if (activeSession && activeSession.status === 'active') {
-                const endResponse = await fetch('/api/session/end', {
+                const endResponse = await fetch(`${apiBasePath}/session/end`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -206,7 +207,7 @@ function HomePage() {
             const selectedFriendsString = Array.from(selectedFriends).join(' + ');
 
             // Now create the new session
-            const response = await fetch('/api/session/create', {
+            const response = await fetch(`${apiBasePath}/session/create`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -265,7 +266,7 @@ function HomePage() {
     const fetchActiveSession = async () => {
         try {
             setLoadingSession(true);
-            const response = await fetch('/api/session/latest');
+            const response = await fetch(`${apiBasePath}/session/latest`);
             const data = await response.json();
             
             // Check if session status is active
@@ -508,7 +509,7 @@ function HomePage() {
             
             if (deleteConfirmation.actionType === 'delete') {
                 try {
-                    const response = await fetch('/api/session/delete', {
+                    const response = await fetch(`${apiBasePath}/session/delete`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -532,7 +533,7 @@ function HomePage() {
                 }
             } else if (deleteConfirmation.actionType === 'end') {
                 try {
-                    const response = await fetch('/api/session/end', {
+                    const response = await fetch(`${apiBasePath}/session/end`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

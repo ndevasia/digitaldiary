@@ -292,7 +292,15 @@ app.on('before-quit', async (event) => {
         await BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(`
             (async () => {
                 try {
-                await fetch('/api/session/end', { method: 'POST' })
+                const username = localStorage.getItem('username') || 'User';
+                const userSecret = localStorage.getItem('userSecret') || '';
+                await fetch('/api/' + encodeURIComponent(username) + '/session/end', {
+                    method: 'POST',
+                    headers: {
+                        'X-Username': username,
+                        'X-User-Secret': userSecret
+                    }
+                })
                 } catch (e) {};
                 return 0;
             })()
@@ -300,7 +308,15 @@ app.on('before-quit', async (event) => {
     } else {
         // we're just gonna hardcode the server if there are no windows open
         try {
-            await fetch('http://127.0.0.1:5001/api/session/end', { method: 'POST' });
+            const username = process.env.VITE_USERNAME || 'User';
+            const userSecret = process.env.VITE_USER_SECRET || '';
+            await fetch(`http://127.0.0.1:5001/api/${encodeURIComponent(username)}/session/end`, {
+                method: 'POST',
+                headers: {
+                    'X-Username': username,
+                    'X-User-Secret': userSecret
+                }
+            });
         } catch (e) {
             console.error("Error ending session on quit:", e);
         }

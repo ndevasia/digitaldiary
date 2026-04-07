@@ -1,16 +1,12 @@
 {
-    "users": [
-        {
-            "user_id": 0,
-            "username": "sophia"
-        },
-        {
+    "users": {
+        "jbko6": {
+            "secret": "supersecretpassword",
             "user_id": 1,
-            "username": "ndevasia"
-        },
-        {
-            "user_id": 2,
-            "username": "Kaung"
+            "friends": [
+                "sophia",
+                "ndevasia"
+            ]
         }
-    ]
+    }
 }

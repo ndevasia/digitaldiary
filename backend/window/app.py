@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_from_directory, render_template, Response
+from flask import Flask, jsonify, request, Response
 import os
 import boto3
 import json
@@ -8,11 +8,7 @@ from flask_cors import CORS  # You'll need to install flask-cors
 import subprocess
 import platform
 from datetime import datetime, timedelta, timezone
-import numpy as np
 import requests
-import sounddevice as sd  # Used in AudioRecorderThread
-import soundfile as sf    # Used in AudioRecorderThread
-from PyQt5.QtCore import QDateTime  # For consistent date formatting
 import random
 from dotenv import load_dotenv
 

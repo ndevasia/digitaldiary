@@ -7,12 +7,16 @@ import signal
 from flask_cors import CORS  # You'll need to install flask-cors
 import subprocess
 import platform
+import socket
 from datetime import datetime, timedelta, timezone
 import requests
 import random
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
+
+# Resolve project root for both local runs and container runs.
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Fix path to import from sibling directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -45,18 +49,18 @@ except ImportError as e:
 if sys.stdin is None:
     sys.stdin = open(os.devnull)
 if sys.stdout is None:
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+    log_dir = os.path.join(PROJECT_ROOT, 'logs')
     os.makedirs(log_dir, exist_ok=True)
     sys.stdout = open(os.path.join(log_dir, 'app.log'), 'w')
 if sys.stderr is None:
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+    log_dir = os.path.join(PROJECT_ROOT, 'logs')
     os.makedirs(log_dir, exist_ok=True)
     sys.stderr = open(os.path.join(log_dir, 'error.log'), 'w')
 
 # Add a function to log to both console and file
 def log_message(message):
     print(message)
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+    log_dir = os.path.join(PROJECT_ROOT, 'logs')
     os.makedirs(log_dir, exist_ok=True)
     with open(os.path.join(log_dir, 'app.log'), 'a') as f:
         f.write(f"{message}\n")
@@ -138,9 +142,9 @@ AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 s3_client = boto3.client('s3', region_name=AWS_REGION)
 
-# Get the base directory (similar to how overlay.py gets to "recordings")
-# This ensures we save to the project's root recordings directory
-base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Get the base directory for recordings/bin/etc.
+# In container this resolves to /app when running /app/window/app.py.
+base_dir = PROJECT_ROOT
 RECORDINGS_DIR = os.path.join(base_dir, "recordings")
 SCREENSHOTS_DIR = os.path.join(base_dir, "screenshots")
 AUDIO_DIR = os.path.join(base_dir, "audio")
@@ -167,6 +171,55 @@ FFMPEG_PATH = os.path.join(
     platform_arch,
     'ffmpeg' + ('.exe' if platform_os == 'win' else '')
 )
+
+# SRT settings for container/network deployments.
+SRT_PORT_MIN = int(os.getenv('SRT_PORT_MIN', '40000'))
+SRT_PORT_MAX = int(os.getenv('SRT_PORT_MAX', '40100'))
+if SRT_PORT_MIN > SRT_PORT_MAX:
+    SRT_PORT_MIN, SRT_PORT_MAX = SRT_PORT_MAX, SRT_PORT_MIN
+SRT_BIND_HOST = os.getenv('SRT_BIND_HOST', '0.0.0.0')
+SRT_PUBLIC_HOST = os.getenv('SRT_PUBLIC_HOST', 'auto')
+
+log_message(f"base_dir: {base_dir}")
+log_message(f"FFMPEG_PATH: {FFMPEG_PATH}")
+log_message(f"FFMPEG exists: {os.path.exists(FFMPEG_PATH)}")
+log_message(f"SRT settings -> bind: {SRT_BIND_HOST}, public: {SRT_PUBLIC_HOST}, range: {SRT_PORT_MIN}-{SRT_PORT_MAX}")
+
+
+def resolve_srt_public_host():
+    """Resolve the host clients should use to reach SRT listener."""
+    configured_host = (SRT_PUBLIC_HOST or '').strip()
+    if configured_host and configured_host.lower() != 'auto':
+        return configured_host
+
+    def get_interface_ip():
+        try:
+            # Standard trick to discover the outbound interface IP without sending traffic.
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(('8.8.8.8', 80))
+                return s.getsockname()[0]
+        except Exception:
+            return None
+
+    forwarded_host = (request.headers.get('X-Forwarded-Host') or '').split(',')[0].strip()
+    if forwarded_host:
+        host = forwarded_host.split(':')[0]
+        if host not in ('localhost', '127.0.0.1'):
+            return host
+
+    host_header = (request.headers.get('Host') or '').strip()
+    if host_header:
+        host = host_header.split(':')[0]
+        if host not in ('localhost', '127.0.0.1'):
+            return host
+
+    # In local WSL dev, localhost returned to a Windows client often fails for UDP/SRT.
+    # Prefer a routable Linux interface IP when running in auto mode.
+    interface_ip = get_interface_ip()
+    if interface_ip:
+        return interface_ip
+
+    return '127.0.0.1'
 
 # Create directories (same as in overlay.py)
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
@@ -445,7 +498,7 @@ def upload_screenshot(username):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/<username>/recording/start', methods=['POST'])
-def start_screen_recording(_username):
+def start_screen_recording(username):
     try:
         global recording_processes
         global recording_metadata
@@ -455,8 +508,14 @@ def start_screen_recording(_username):
         app_name = data.get('app_name', '')
         user_with = data.get('user_with', '')
 
-        port = random.randint(40000, 50000)
-        url = f"srt://127.0.0.1:{port}"
+        port = random.randint(SRT_PORT_MIN, SRT_PORT_MAX)
+        public_host = resolve_srt_public_host()
+        # FFmpeg SRT listener is most compatible using empty-host form: srt://:<port>
+        if SRT_BIND_HOST in ('0.0.0.0', '::', ''):
+            listen_url = f"srt://:{port}"
+        else:
+            listen_url = f"srt://{SRT_BIND_HOST}:{port}"
+        caller_url = f"srt://{public_host}:{port}"
 
         file_uid = datetime.now().strftime(f"{port}%Y%m%d_%H%M%S")
         filename = f"recording_{file_uid}.mkv"
@@ -465,13 +524,18 @@ def start_screen_recording(_username):
         log_message(f"Output file path: {ffmpeg_output}")
         log_message(f"FFmpeg path: {FFMPEG_PATH}")
         log_message(f"FFmpeg exists: {os.path.exists(FFMPEG_PATH)}")
+        listen_query = '?mode=listener&transtype=live&latency=120'
+        caller_query = '?mode=caller&transtype=live&latency=120'
+
+        log_message(f"SRT listen URL: {listen_url}{listen_query}")
+        log_message(f"SRT caller URL: {caller_url}{caller_query}")
         
         # Start FFmpeg process
         ffmpeg_process = subprocess.Popen(
             [FFMPEG_PATH, 
              '-probesize', '10M',
              '-flags', 'low_delay',
-             '-i', url + '?mode=listener',
+             '-i', listen_url + listen_query,
              '-map', '0:v',   # Map video first
              '-map', '0:a?',   # Map audio second
              '-c:v', 'copy',  # Then specify video codec
@@ -499,7 +563,7 @@ def start_screen_recording(_username):
             # Process is still running - good!
             log_message("FFmpeg process is running")
 
-        return jsonify({'status': 'ffmpeg available', 'url': url + '?mode=caller', 'uid': file_uid}), 200
+        return jsonify({'status': 'ffmpeg available', 'url': caller_url + caller_query, 'uid': file_uid}), 200
         
     except Exception as e:
         log_message(f"Recording start error: {str(e)}")

@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_from_directory, render_template
+from flask import Flask, jsonify, request, send_from_directory, render_template, Response
 import os
 import boto3
 import json
@@ -292,6 +292,7 @@ def get_media_aws():
             # Transform into media data type format
             media_item = {
                 "media_id": idx,
+                "s3_key": item['Key'],
                 "type": media_type,
                 "media_url": media_url,
                 "timestamp": item['LastModified'].isoformat(),
@@ -317,6 +318,20 @@ def get_media_aws():
 
     except Exception as e:
         print(f"Error in get_media_aws: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/proxy-image', methods=['GET'])
+def proxy_image():
+    """Proxy an S3 object by its key so the frontend can draw it on a canvas without CORS issues."""
+    s3_key = request.args.get('key')
+    if not s3_key:
+        return jsonify({"error": "Missing key parameter"}), 400
+    try:
+        obj = s3_client.get_object(Bucket=BUCKET_NAME, Key=s3_key)
+        content_type = obj.get('ContentType', 'application/octet-stream')
+        body = obj['Body'].read()
+        return Response(body, content_type=content_type)
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/generate-presigned-url', methods=['POST'])

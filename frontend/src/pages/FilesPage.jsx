@@ -31,8 +31,9 @@ function FilesPage() {
     const [newUsername, setNewUsername] = useState('');
     const [addUserLoading, setAddUserLoading] = useState(false);
     const [addUserError, setAddUserError] = useState(null);
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
     const currentUsername = useContext(UserContext).username || 'User';
-    const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
+    const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
     const abortControllerRef = useRef(null);
 
     useEffect(() => {
@@ -435,7 +436,10 @@ function FilesPage() {
                 mediaClass = 'bg-blue-100';
         }
 
-        const isOwned = item.owner_user_id === 0;
+        // Extract owner username from s3_key (first part before /)
+        const ownerUsername = item.s3_key.split('/')[0];
+        const isOwned = ownerUsername === currentUsername;
+        console.log(`File: ${item.s3_key}, ownerUsername: ${ownerUsername}, currentUsername: ${currentUsername}, isOwned: ${isOwned}`);
 
         switch (item.type) {
             case 'video':
@@ -669,7 +673,8 @@ function FilesPage() {
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-4">
                                 {filteredMedia.map(item => {
-                                    const isOwned = item.owner_user_id === 0;
+                                    const ownerUsername = item.s3_key.split('/')[0];
+                                    const isOwned = ownerUsername === currentUsername;
                                     return (
                                         <div key={item.s3_key} className="relative group bg-white rounded-lg border border-gray-100 p-4 h-64 flex flex-col">
                                             {renderMediaItem(item)}

@@ -926,21 +926,6 @@ def update_media_metadata(username):
         print(f"Error updating media metadata: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/users', methods=['GET'])
-def get_users():
-    try:
-        # Ensure user.json exists 
-        ensure_user_json_exists()
-
-        # Read the JSON file
-        user_json_path = get_user_json_path()
-        with open(user_json_path, 'r') as f:
-            user_data = json.load(f)
-
-        return jsonify(list(user_data.get('users', {}).keys())), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 # Upload profile picture to directory    
 @app.route('/api/<username>/upload-profile-pic', methods=['POST'])
 def upload_profile_pic(username):

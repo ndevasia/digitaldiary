@@ -83,7 +83,11 @@ function FilesPage() {
         }
 
         if (userFilter.size > 0) {
-            filtered = filtered.filter(item => userFilter.has(item.owner_user_id.toString()));
+            filtered = filtered.filter(item => {
+                // Extract owner username from s3_key (first path segment)
+                const ownerUsername = item.s3_key.split('/')[0];
+                return userFilter.has(ownerUsername);
+            });
         }
 
         if (gameFilter.size > 0) {
@@ -152,14 +156,27 @@ function FilesPage() {
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch(`${apiBasePath}/users`);
+            const response = await fetch(
+                `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}/friends`
+            );
             if (!response.ok) {
-                throw new Error('Failed to fetch users');
+                throw new Error('Failed to fetch friends');
             }
-            const data = await response.json();
-            setUsers([{ user_id: -1, username: 'All Users' }, ...data]);
+            const friendsData = await response.json();
+            const friendsList = friendsData.friends || [];
+            
+            // Build users array: current user + friends
+            const usersList = [
+                { user_id: -1, username: 'All Users' },
+                { user_id: 0, username: currentUsername },
+                ...friendsList.map((friend, idx) => ({ 
+                    user_id: idx + 1, 
+                    username: friend 
+                }))
+            ];
+            setUsers(usersList);
         } catch (error) {
-            console.error('Error fetching users:', error);
+            console.error('Error fetching friends:', error);
             setError(error.message);
         }
     };
@@ -199,7 +216,7 @@ function FilesPage() {
             }
 
             const promises = userList.map(async (u) => {
-                const resp = await fetch(`/api/${encodeURIComponent(u)}/media_aws`, { signal });
+                const resp = await fetch(`${API_BASE_URL}/api/${encodeURIComponent(u)}/media_aws`, { signal });
                 return resp.ok ? resp.json() : [];
             });
 
@@ -216,10 +233,10 @@ function FilesPage() {
 
         // Single user selected; `userFilter` holds the username
         const usernames = users
-            .filter(u => userFilter.has(String(u.user_id)))
-            .map(u => u.username || u.user_id);
+            .filter(u => userFilter.has(u.username))
+            .map(u => u.username);
         const promises = usernames.map(async (username) => {
-            const resp = await fetch(`/api/${encodeURIComponent(username)}/media_aws`, { signal });
+            const resp = await fetch(`${API_BASE_URL}/api/${encodeURIComponent(username)}/media_aws`, { signal });
             if (!resp.ok) return [];
             return resp.json();
         });
@@ -536,15 +553,14 @@ function FilesPage() {
                                             setUserFilter(new Set()); // Clearing the set represents "All"
                                         } else {
                                             const newSet = new Set(userFilter);
-                                            newSet.delete('all'); // Remove 'all' if a specific user is picked
-                                            const id = String(user.user_id);
-                                            if (newSet.has(id)) newSet.delete(id);
-                                            else newSet.add(id);
+                                            const username = user.username;
+                                            if (newSet.has(username)) newSet.delete(username);
+                                            else newSet.add(username);
                                             setUserFilter(newSet);
                                         }
                                     }}
                                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                                          (user.user_id === -1 && userFilter.size === 0) || userFilter.has(String(user.user_id))
+                                          (user.user_id === -1 && userFilter.size === 0) || userFilter.has(user.username)
                                               ? 'bg-teal-500 text-white'
                                               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                       }`}

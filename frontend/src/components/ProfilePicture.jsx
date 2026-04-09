@@ -3,7 +3,7 @@ import { Camera } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { UserContext } from '../context/UserContext.jsx';
 
-const API_BASE_URL = 'http://localhost:5001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 function ProfilePicture() {
     const currentUsername = useContext(UserContext).username || 'User';

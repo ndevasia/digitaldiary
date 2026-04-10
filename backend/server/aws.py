@@ -387,3 +387,124 @@ class S3:
         except Exception as e:
             print(f"Error checking if user exists: {e}")
             return False
+
+    # ----------------------------
+    # User metadata (user.json)
+    # ----------------------------
+
+    def read_user_json(self):
+        """
+        Read user.json from S3 root.
+        Returns the parsed JSON data or None if file doesn't exist.
+        """
+        try:
+            response = self.client.get_object(
+                Bucket=self.bucket_name,
+                Key="user.json"
+            )
+            data = json.loads(response["Body"].read().decode("utf-8"))
+            return data
+        except self.client.exceptions.NoSuchKey:
+            return None
+        except Exception as e:
+            print(f"Error reading user.json from S3: {e}")
+            return None
+
+    def write_user_json(self, data):
+        """
+        Write user.json to S3 root.
+        Uses atomic write pattern: write to temp key, then copy to final location.
+        """
+        try:
+            json_str = json.dumps(data, indent=4)
+            
+            # Write to temp location first
+            temp_key = "user.json.tmp"
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=temp_key,
+                Body=json_str,
+                ContentType="application/json"
+            )
+            
+            # Atomic copy/move from temp to final location
+            copy_source = {
+                'Bucket': self.bucket_name,
+                'Key': temp_key
+            }
+            self.client.copy_object(
+                CopySource=copy_source,
+                Bucket=self.bucket_name,
+                Key="user.json"
+            )
+            
+            # Delete temp file
+            self.client.delete_object(
+                Bucket=self.bucket_name,
+                Key=temp_key
+            )
+            
+            return True
+        except Exception as e:
+            print(f"Error writing user.json to S3: {e}")
+            return False
+
+    def ensure_user_json_exists(self):
+        """
+        Ensure user.json exists in S3. If not, create it with a basic structure.
+        """
+        try:
+            data = self.read_user_json()
+            if data is None:
+                # File doesn't exist, create it
+                initial_data = {"users": {}}
+                return self.write_user_json(initial_data)
+            return True
+        except Exception as e:
+            print(f"Error ensuring user.json exists: {e}")
+            return False
+
+    def get_user_id_from_username(self, username):
+        """
+        Convert username to user_id using user.json from S3.
+        Returns the user_id or None if not found.
+        """
+        try:
+            data = self.read_user_json()
+            if data is None:
+                print(f"Warning: user.json not found in S3")
+                return None
+            
+            users = data.get('users', {})
+            user_data = users.get(username)
+            
+            if user_data is None:
+                return None
+            
+            return user_data.get('user_id')
+        except Exception as e:
+            print(f"Error getting user_id from username: {e}")
+            return None
+
+    def is_secret_valid(self, username, secret):
+        """
+        Check if the provided secret is valid for the username using user.json from S3.
+        Returns True if valid, False otherwise.
+        """
+        try:
+            data = self.read_user_json()
+            if data is None:
+                print(f"Warning: user.json not found in S3")
+                return False
+            
+            users = data.get('users', {})
+            user_data = users.get(username)
+            
+            if user_data is None:
+                return False
+            
+            stored_secret = user_data.get('secret')
+            return stored_secret == secret
+        except Exception as e:
+            print(f"Error validating secret: {e}")
+            return False

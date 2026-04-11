@@ -9,7 +9,7 @@
     "dev-delayed": "vite && (sleep 2 && electron .)",
     "build": "vite build",
     "electron:dev": "vite build && electron .",
-    "electron:build": "vite build && electron-builder"
+    "electron:build": "vite build && electron-packager . DigitalDiary --out=../dist/ --overwrite --ignore=node_modules --extra-resource=../bin"
   },
   "dependencies": {
     "@electron/remote": "^2.1.2",
@@ -50,8 +50,8 @@
     ],
     "extraResources": [
       {
-        "from": "../backend",
-        "to": "backend"
+        "from": "../bin",
+        "to": "bin"
       }
     ],
     "extraFiles": [

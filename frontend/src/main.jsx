@@ -1,6 +1,6 @@
 import { useState, useEffect, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import './index.css';
 import App from './App.jsx';
 import HomePage from './pages/HomePage.jsx';
@@ -16,9 +16,11 @@ import { UserContext } from './context/UserContext.jsx';
 
 const AUTH_USERNAME = import.meta.env.VITE_USERNAME;
 const AUTH_SECRET = import.meta.env.VITE_USER_SECRET;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5001';
 
 if (typeof window !== 'undefined' && !window.__digitalDiaryFetchAuthPatched) {
   const originalFetch = window.fetch.bind(window);
+  const isFileProtocol = window.location.protocol === 'file:';
 
   window.fetch = (input, init = {}) => {
     const rawUrl = typeof input === 'string' ? input : input?.url;
@@ -29,7 +31,14 @@ if (typeof window !== 'undefined' && !window.__digitalDiaryFetchAuthPatched) {
         const headers = new Headers(init.headers);
         headers.set('X-Username', AUTH_USERNAME || '');
         headers.set('X-User-Secret', AUTH_SECRET || '');
-        return originalFetch(input, { ...init, headers });
+
+        // Vite proxy only exists in dev server. In packaged Electron (file://),
+        // route API calls directly to the configured backend origin.
+        const requestUrl = isFileProtocol
+          ? `${API_BASE_URL}${resolvedUrl.pathname}${resolvedUrl.search}`
+          : input;
+
+        return originalFetch(requestUrl, { ...init, headers });
       }
     } catch (_) {
       // Fall through to original fetch if URL parsing fails.

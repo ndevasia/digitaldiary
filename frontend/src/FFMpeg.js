@@ -4,7 +4,8 @@ const fs = window.require('fs');
 const { spawn, spawnSync } = window.require('child_process');
 const { ipcRenderer } = window.require('electron');
 
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+// In renderer, infer dev mode from Vite env or non-file protocol.
+const isDev = (process.env.NODE_ENV === 'development') || (window.location.protocol !== 'file:');
 
 /**
  * Everything below here up to the class is related to platform detection and
@@ -32,18 +33,20 @@ if (platform === 'mac' && (arch !== 'x64' && arch !== 'arm64')) {
 
 const rootPath = ipcRenderer.sendSync('get-root-path');
 
-const ffmpegDir = path.join(
-    rootPath,
-    '..',
-    'bin',
-    platform,
-    arch
-);
+const ffmpegBinaryName = platform === 'win' ? 'ffmpeg.exe' : 'ffmpeg';
+const ffmpegCandidateDirs = [
+    path.join(rootPath, '..', 'bin', platform, arch),
+    path.join(process.resourcesPath || '', 'bin', platform, arch),
+    path.join(rootPath, 'bin', platform, arch),
+];
 
-const defaultFFMpegPath = path.join(
-    ffmpegDir,
-    platform === 'win' ? 'ffmpeg.exe' : 'ffmpeg'
-);
+const ffmpegDir = ffmpegCandidateDirs.find((dir) => {
+    if (!dir) return false;
+    return fs.existsSync(path.join(dir, ffmpegBinaryName));
+}) || ffmpegCandidateDirs[0];
+
+const defaultFFMpegPath = path.join(ffmpegDir, ffmpegBinaryName);
+console.log('FFMpeg path resolved to:', defaultFFMpegPath, 'exists:', fs.existsSync(defaultFFMpegPath));
 
 // Download FFMpeg binary if it is not there (only in dev mode)
 // Just do this for the overlay tool to avoid complications with the main app

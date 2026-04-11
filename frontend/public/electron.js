@@ -141,6 +141,7 @@ function createMainWindow() {
             enableRemoteModule: true
         }
     });
+    mainWindow.setMenuBarVisibility(false);
 
     // Load the main React UI
     if (isDev) {

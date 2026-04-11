@@ -66,38 +66,19 @@ def log_message(message):
         f.write(f"{message}\n")
 
 def get_user_id_from_username(username):
-    """Helper function to convert username to user_id using user.json"""
+    """Helper function to convert username to user_id using user.json from S3"""
     try:
-        ensure_user_json_exists()
-        user_json_path = get_user_json_path()
-        
-        with open(user_json_path, 'r') as f:
-            user_data = json.load(f)
-        
-        users = user_data.get('users', {})
-        if users[username]:
-            return users[username].get('user_id')
-        
-        return None
+        s3 = S3('system')
+        return s3.get_user_id_from_username(username)
     except Exception as e:
         print(f"Error getting user_id from username: {e}")
         return None
 
 def is_secret_valid(username, secret):
-    """Verify that a user exists and has the correct secret"""
+    """Verify that a user exists and has the correct secret using S3"""
     try:
-        ensure_user_json_exists()
-        user_json_path = get_user_json_path()
-        
-        with open(user_json_path, 'r') as f:
-            user_data = json.load(f)
-        
-        users = user_data.get('users', {})
-        user = users.get(username)
-        if user and user.get('secret') == secret:
-            return True
-        
-        return False
+        s3 = S3('system')
+        return s3.is_secret_valid(username, secret)
     except Exception as e:
         print(f"Error verifying secret: {e}")
         return False
@@ -118,24 +99,15 @@ def authenticate():
     if not secret or not username or not is_secret_valid(username, secret):
         return jsonify({"error": "Unauthorized"}), 401
 
-# Helper functions for user.json
-def get_user_json_path():
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
-
+# Helper functions for user.json (now in S3)
 def ensure_user_json_exists():
-    """Ensure user.json exists with a basic structure."""
+    """Ensure user.json exists with a basic structure in S3."""
     try:
-        path = get_user_json_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-
-        if not os.path.exists(path):
-            # Create blank user.json with basic structure
-            tmp_path = path + '.tmp'
-            with open(tmp_path, 'w') as f:
-                json.dump({"users": {}}, f, indent=4)
-            os.replace(tmp_path, path)
+        s3 = S3('system')
+        return s3.ensure_user_json_exists()
     except Exception as e:
         print(f"Error ensuring user.json exists: {str(e)}")
+        return False
 
 # S3 Setup
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
@@ -731,18 +703,17 @@ def create_session(username):
         # Validate that user_with contains only actual friends
         if user_with:
             try:
-                ensure_user_json_exists()
-                user_json_path = get_user_json_path()
-                with open(user_json_path, 'r') as f:
-                    user_data = json.load(f)
-                friends = user_data.get('users', {}).get(username, {}).get('friends', [])
-                
-                # Parse plus-separated friends and validate
-                provided_friends = [f.strip() for f in user_with.split('+') if f.strip()]
-                invalid_friends = [f for f in provided_friends if f not in friends]
-                
-                if invalid_friends:
-                    return jsonify({"error": f"Invalid friends: {'/'.join(invalid_friends)}"}), 400
+                s3 = S3('system')
+                user_data = s3.read_user_json()
+                if user_data is not None:
+                    friends = user_data.get('users', {}).get(username, {}).get('friends', [])
+                    
+                    # Parse plus-separated friends and validate
+                    provided_friends = [f.strip() for f in user_with.split('+') if f.strip()]
+                    invalid_friends = [f for f in provided_friends if f not in friends]
+                    
+                    if invalid_friends:
+                        return jsonify({"error": f"Invalid friends: {'/'.join(invalid_friends)}"}), 400
             except Exception as e:
                 log_message(f"Warning: Could not validate friends: {e}")
                 # Don't fail the session creation if validation fails, just log it
@@ -1046,28 +1017,40 @@ def add_friend(username):
         if friend_username == username:
             return jsonify({"error": "Cannot add yourself as a friend"}), 400
         
-        ensure_user_json_exists()
-        user_json_path = get_user_json_path()
-        
-        with open(user_json_path, 'r') as f:
-            user_data = json.load(f)
-        
-        users = user_data.get('users', {})
-        
-        # Check if friend already exists in user.json
-        if (friend_username in users.get(username, {}).get('friends', [])):
-            return jsonify({"message": "Friend already added"}), 200
-        
-        # Add friend to user.json
-        users[username]['friends'].append(friend_username)
-        user_data['users'] = users
-        
-        tmp_path = user_json_path + '.tmp'
-        with open(tmp_path, 'w') as f:
-            json.dump(user_data, f, indent=4)
-        os.replace(tmp_path, user_json_path)
-        
-        return jsonify({"message": "Friend added successfully", "friend": friend_username}), 201
+        # Use S3 to read, modify, and write user.json
+        try:
+            s3 = S3('system')
+            
+            # Ensure user.json exists
+            s3.ensure_user_json_exists()
+            
+            # Read current user.json
+            user_data = s3.read_user_json()
+            if user_data is None:
+                return jsonify({"error": "Could not read user data"}), 500
+            
+            users = user_data.get('users', {})
+            
+            # Initialize user record if it doesn't exist
+            if username not in users:
+                users[username] = {'friends': [], 'user_id': 1, 'secret': ''}
+            
+            # Check if friend already exists in user.json
+            if friend_username in users.get(username, {}).get('friends', []):
+                return jsonify({"message": "Friend already added"}), 200
+            
+            # Add friend to user.json
+            users[username]['friends'].append(friend_username)
+            user_data['users'] = users
+            
+            # Write updated user.json to S3
+            if not s3.write_user_json(user_data):
+                return jsonify({"error": "Failed to save user data"}), 500
+            
+            return jsonify({"message": "Friend added successfully", "friend": friend_username}), 201
+        except Exception as e:
+            print(f"Error managing friends in S3: {str(e)}")
+            return jsonify({"error": str(e)}), 500
     except Exception as e:
         print(f"Error in add_friend: {str(e)}")
         return jsonify({"error": str(e)}), 500
@@ -1079,14 +1062,18 @@ def get_friends(username):
     Returns: { "friends": [...] } or error
     """
     try:
-        ensure_user_json_exists()
-        user_json_path = get_user_json_path()
+        s3 = S3('system')
         
-        with open(user_json_path, 'r') as f:
-            user_data = json.load(f)
+        # Ensure user.json exists
+        s3.ensure_user_json_exists()
+        
+        # Read user.json from S3
+        user_data = s3.read_user_json()
+        if user_data is None:
+            return jsonify({"error": "Could not read user data"}), 500
         
         users = user_data.get('users', {})
-        # Friends are all users with user_id > 0
+        # Friends are stored in the user's friends list
         friends = users.get(username, {}).get('friends', [])
         
         return jsonify({"friends": friends}), 200

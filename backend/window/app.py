@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, request, Response
 import os
 import boto3
-import json
 import sys
 import signal
 from flask_cors import CORS  # You'll need to install flask-cors
@@ -224,6 +223,88 @@ signal.signal(signal.SIGINT, graceful_exit)   # Handle Ctrl+C
 @app.route('/api/test', methods=['GET'])
 def test_endpoint():
     return jsonify({"message": "API is working!"})
+
+@app.route('/api/hero-image', methods=['GET'])
+def get_hero_image():
+    """Retrieve the stored hero image for the authenticated user"""
+    try:
+        username = request.headers.get('X-Username')
+        if not username:
+            return jsonify({"hero_image_url": None}), 200
+        
+        object_name = f"{username}/hero.jpg"
+        
+        # Check if hero image exists
+        try:
+            s3_client.head_object(Bucket=BUCKET_NAME, Key=object_name)
+        except s3_client.exceptions.NoSuchKey:
+            return jsonify({"hero_image_url": None}), 200
+        
+        # Generate presigned URL for retrieval
+        hero_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
+        
+        return jsonify({"hero_image_url": hero_url}), 200
+    except Exception as e:
+        print(f"Error in get_hero_image: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/hero-image', methods=['POST'])
+def upload_hero_image():
+    """Upload and store a hero image for the authenticated user"""
+    try:
+        username = request.headers.get('X-Username')
+        if not username:
+            return jsonify({"error": "Username required"}), 400
+        
+        if 'file' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        # Validate file type
+        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+            return jsonify({"error": "Invalid file type. Only images allowed."}), 400
+        
+        # Determine content type
+        content_types = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp'
+        }
+        ext = ''.join(file.filename.rsplit('.', 1)[-1:]).lower()
+        ext = '.' + ext if ext else '.jpg'
+        content_type = content_types.get(ext, 'image/jpeg')
+        
+        # Upload to S3
+        object_name = f"{username}/hero.jpg"
+        file.seek(0)
+        
+        s3_client.upload_fileobj(
+            file,
+            BUCKET_NAME,
+            object_name,
+            ExtraArgs={'ContentType': content_type}
+        )
+        
+        # Generate presigned URL
+        hero_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
+        
+        return jsonify({"hero_image_url": hero_url}), 200
+    except Exception as e:
+        print(f"Error in upload_hero_image: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/media_aws', methods=['GET'])
 def get_media_aws(username):
@@ -721,7 +802,7 @@ def create_session(username):
         # Import aws.py's S3 class and call create_session
         from server.aws import S3
         s3 = S3(username)
-        success = s3.create_session(username, app_name, user_with)
+        success = s3.create_session(app_name, user_with)
         
         if not success:
             return jsonify({"error": "Failed to create session in S3"}), 500

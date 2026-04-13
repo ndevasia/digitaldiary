@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useContext } from 'react';
 import { ChevronLeft, Trash2, Pencil, Check, X, Type, ImageIcon, Plus, MousePointer2, Upload, Download } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
+import { UserContext } from '../context/UserContext.jsx';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const SCRAPBOOKS_KEY = 'digitaldiary.scrapbooks';
 const SCRAPBOOK_ITEMS_PREFIX = 'digitaldiary.scrapbook.items.';
 const IMAGE_SIZE = { width: 220, height: 220 };
@@ -134,6 +136,8 @@ function readFileAsDataUrl(file) {
 
 function ScrapbookEditorPage() {
   const { scrapbookId } = useParams();
+  const currentUsername = useContext(UserContext).username || 'User';
+  const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
   const [scrapbook, setScrapbook] = useState(null);
   const [items, setItems] = useState([]);
   const [hasHydratedItems, setHasHydratedItems] = useState(false);
@@ -166,7 +170,7 @@ function ScrapbookEditorPage() {
       try {
         setLoadingMedia(true);
         setMediaError(null);
-        const response = await fetch('/api/media_aws');
+        const response = await fetch(`${apiBasePath}/media_aws`);
         if (!response.ok) {
           throw new Error('Failed to fetch media');
         }
@@ -183,7 +187,7 @@ function ScrapbookEditorPage() {
     };
 
     fetchMedia();
-  }, []);
+  }, [apiBasePath]);
 
   useEffect(() => {
     if (!scrapbookId || !hasHydratedItems) return;

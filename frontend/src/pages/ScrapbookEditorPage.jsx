@@ -880,7 +880,19 @@ function ScrapbookEditorPage() {
                     onClick={() => addMediaToCanvas(entry)}
                   >
                     {isVideo ? (
-                      <video src={entry.media_url} className="h-28 w-full rounded-xl object-cover" />
+                      <div className="relative h-28 w-full rounded-xl bg-gray-900 flex items-center justify-center overflow-hidden">
+                        <video 
+                          src={entry.media_url} 
+                          className="w-full h-full object-cover"
+                          preload="metadata"
+                          muted
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
+                          <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                          </svg>
+                        </div>
+                      </div>
                     ) : (
                       <img src={entry.media_url} alt={entry.game || 'Photo'} className="h-28 w-full rounded-xl object-cover" draggable={false} />
                     )}

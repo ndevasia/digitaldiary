@@ -157,6 +157,9 @@ function ScrapbookEditorPage() {
   const [editingTextId, setEditingTextId] = useState(null);
   const [isLibraryOpen, setIsLibraryOpen] = useState(true);
   const [libraryFilter, setLibraryFilter] = useState('all');
+  const [friends, setFriends] = useState([]);
+  const [selectedFriends, setSelectedFriends] = useState(new Set([currentUsername]));
+  const [loadingFriends, setLoadingFriends] = useState(false);
   const [notice, setNotice] = useState('');
   const canvasRef = useRef(null);
   const uploadInputRef = useRef(null);
@@ -171,18 +174,61 @@ function ScrapbookEditorPage() {
   }, [scrapbookId, currentUsername]);
 
   useEffect(() => {
+    const fetchFriends = async () => {
+      try {
+        setLoadingFriends(true);
+        const response = await fetch(`${apiBasePath}/friends`);
+        if (response.ok) {
+          const data = await response.json();
+          const friendsList = data.friends || [];
+          setFriends(friendsList);
+        }
+      } catch (error) {
+        console.error('Error loading friends:', error);
+      } finally {
+        setLoadingFriends(false);
+      }
+    };
+
+    fetchFriends();
+  }, [apiBasePath]);
+
+  useEffect(() => {
     const fetchMedia = async () => {
       try {
         setLoadingMedia(true);
         setMediaError(null);
-        const response = await fetch(`${apiBasePath}/media_aws`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch media');
+
+        // Fetch media from current user and all selected friends
+        const usersToFetch = Array.from(selectedFriends);
+        const allMedia = [];
+
+        for (const username of usersToFetch) {
+          try {
+            const userApiBasePath = `/api/${encodeURIComponent(username)}`;
+            const response = await fetch(`${userApiBasePath}/media_aws`);
+            if (response.ok) {
+              const data = await response.json();
+              // Add username info to each media item for identification
+              const mediaWithUser = data.map(item => ({
+                ...item,
+                owner: username
+              }));
+              allMedia.push(...mediaWithUser);
+            }
+          } catch (error) {
+            console.error(`Error loading media for user ${username}:`, error);
+          }
         }
 
-        const data = await response.json();
-        const filtered = data.filter((item) => item.type === 'screenshot' || item.type === 'video');
-        setMedia(filtered);
+        const filtered = allMedia.filter((item) => item.type === 'screenshot' || item.type === 'video');
+        // Sort by timestamp, most recent first
+        const sorted = filtered.sort((a, b) => {
+          const timeA = new Date(a.timestamp || 0).getTime();
+          const timeB = new Date(b.timestamp || 0).getTime();
+          return timeB - timeA;
+        });
+        setMedia(sorted);
       } catch (error) {
         console.error('Error loading media:', error);
         setMediaError('Could not load photos/videos.');
@@ -192,7 +238,7 @@ function ScrapbookEditorPage() {
     };
 
     fetchMedia();
-  }, [apiBasePath]);
+  }, [selectedFriends]);
 
   useEffect(() => {
     if (!scrapbookId || !hasHydratedItems) return;
@@ -835,25 +881,74 @@ function ScrapbookEditorPage() {
               </button>
             </div>
 
-            <div className="mb-4 flex gap-2">
-              {[
-                { value: 'all', label: 'All' },
-                { value: 'photos', label: 'Photos' },
-                { value: 'videos', label: 'Videos' }
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setLibraryFilter(option.value)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                    libraryFilter === option.value
-                      ? 'bg-teal-500 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
+            <div className="mb-4 space-y-3">
+              <div className="flex gap-2">
+                {[
+                  { value: 'all', label: 'All' },
+                  { value: 'photos', label: 'Photos' },
+                  { value: 'videos', label: 'Videos' }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setLibraryFilter(option.value)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                      libraryFilter === option.value
+                        ? 'bg-teal-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">Users</label>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                    <input
+                      type="checkbox"
+                      checked={selectedFriends.has(currentUsername)}
+                      onChange={(e) => {
+                        const newSelected = new Set(selectedFriends);
+                        if (e.target.checked) {
+                          newSelected.add(currentUsername);
+                        } else {
+                          newSelected.delete(currentUsername);
+                        }
+                        setSelectedFriends(newSelected);
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-xs text-gray-700">{currentUsername} (You)</span>
+                  </label>
+
+                  {friends.map((friend) => (
+                    <label key={friend} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                      <input
+                        type="checkbox"
+                        checked={selectedFriends.has(friend)}
+                        onChange={(e) => {
+                          const newSelected = new Set(selectedFriends);
+                          if (e.target.checked) {
+                            newSelected.add(friend);
+                          } else {
+                            newSelected.delete(friend);
+                          }
+                          setSelectedFriends(newSelected);
+                        }}
+                        className="rounded"
+                      />
+                      <span className="text-xs text-gray-700">{friend}</span>
+                    </label>
+                  ))}
+
+                  {friends.length === 0 && (
+                    <div className="text-xs text-gray-400 p-2">No friends yet</div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {loadingMedia && <div className="text-sm text-gray-500">Loading media...</div>}
@@ -896,12 +991,24 @@ function ScrapbookEditorPage() {
                     ) : (
                       <img src={entry.media_url} alt={entry.game || 'Photo'} className="h-28 w-full rounded-xl object-cover" draggable={false} />
                     )}
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <div className="truncate text-xs font-medium text-gray-700">{entry.game || (isVideo ? 'Video' : 'Photo')}</div>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-gray-500">
-                        <Plus size={10} />
-                        Add
-                      </span>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="truncate text-xs font-medium text-gray-700">{entry.game || (isVideo ? 'Video' : 'Photo')}</div>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                          <Plus size={10} />
+                          Add
+                        </span>
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="truncate text-xs text-gray-500">
+                          {entry.owner === currentUsername ? 'Your media' : `From ${entry.owner}`}
+                        </div>
+                        {entry.timestamp && (
+                          <div className="truncate text-xs text-gray-400">
+                            {new Date(entry.timestamp).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </button>
                 );

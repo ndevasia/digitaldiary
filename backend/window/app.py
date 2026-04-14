@@ -121,6 +121,7 @@ SCREENSHOTS_DIR = os.path.join(base_dir, "screenshots")
 AUDIO_DIR = os.path.join(base_dir, "audio")
 THUMBNAILS_DIR = os.path.join(RECORDINGS_DIR, "thumbnails")
 PROFILE_PICS_DIR = os.path.join(base_dir, "profile_pics") # Profile picture directory
+HERO_IMAGES_DIR = os.path.join(base_dir, "hero_images") # Hero image directory
 
 # Figure out OS and architecture for ffmpeg binary path
 BIN_DIR = os.path.join(base_dir, "bin")
@@ -198,7 +199,7 @@ os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(PROFILE_PICS_DIR, exist_ok=True)
-
+os.makedirs(HERO_IMAGES_DIR, exist_ok=True)
 # Global variables for recording state
 recorder_thread = None
 audio_recorder = None
@@ -224,86 +225,162 @@ signal.signal(signal.SIGINT, graceful_exit)   # Handle Ctrl+C
 def test_endpoint():
     return jsonify({"message": "API is working!"})
 
-@app.route('/api/hero-image', methods=['GET'])
-def get_hero_image():
-    """Retrieve the stored hero image for the authenticated user"""
+# Upload hero image to directory    
+@app.route('/api/<username>/upload-hero-image', methods=['POST'])
+def upload_hero_image(username):
     try:
-        username = request.headers.get('X-Username')
-        if not username:
-            return jsonify({"hero_image_url": None}), 200
-        
-        object_name = f"{username}/hero.jpg"
-        
-        # Check if hero image exists
-        try:
-            s3_client.head_object(Bucket=BUCKET_NAME, Key=object_name)
-        except s3_client.exceptions.NoSuchKey:
-            return jsonify({"hero_image_url": None}), 200
-        
-        # Generate presigned URL for retrieval
-        hero_url = s3_client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
-            ExpiresIn=3600
-        )
-        
-        return jsonify({"hero_image_url": hero_url}), 200
-    except Exception as e:
-        print(f"Error in get_hero_image: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/hero-image', methods=['POST'])
-def upload_hero_image():
-    """Upload and store a hero image for the authenticated user"""
-    try:
-        username = request.headers.get('X-Username')
-        if not username:
-            return jsonify({"error": "Username required"}), 400
-        
         if 'file' not in request.files:
-            return jsonify({"error": "No file provided"}), 400
+            return jsonify({"error": "No file part"}), 400
         
         file = request.files['file']
         if file.filename == '':
-            return jsonify({"error": "No file selected"}), 400
+            return jsonify({"error": "No selected file"}), 400
         
-        # Validate file type
-        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
-            return jsonify({"error": "Invalid file type. Only images allowed."}), 400
+        # Simple extension check
+        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            return jsonify({"error": "File type not supported"}), 400
         
-        # Determine content type
+        _, ext = os.path.splitext(file.filename) 
+        ext = ext.lower()
+        object_name = f"{username}/hero{ext}"
+
         content_types = {
             '.png': 'image/png',
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
-            '.gif': 'image/gif',
-            '.webp': 'image/webp'
+            '.gif': 'image/gif'
         }
-        ext = ''.join(file.filename.rsplit('.', 1)[-1:]).lower()
-        ext = '.' + ext if ext else '.jpg'
-        content_type = content_types.get(ext, 'image/jpeg')
-        
-        # Upload to S3
-        object_name = f"{username}/hero.jpg"
+
+        # Ensure pointer is at the start
         file.seek(0)
-        
+
+        # Uploads new profile picture first
         s3_client.upload_fileobj(
             file,
             BUCKET_NAME,
             object_name,
-            ExtraArgs={'ContentType': content_type}
+            # octet-stream used for fallback if unknown extension
+            ExtraArgs={'ContentType': content_types.get(ext, 'application/octet-stream')}
         )
-        
-        # Generate presigned URL
-        hero_url = s3_client.generate_presigned_url(
+
+        # Clean up old/different extensions
+        existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/hero")
+
+        if 'Contents' in existing_files:
+        # Filter out the file we JUST uploaded so we don't delete it
+            delete_keys = [
+                {'Key': obj['Key']} 
+                for obj in existing_files['Contents'] 
+                if obj['Key'] != object_name
+            ]
+            if delete_keys:
+                s3_client.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': delete_keys})
+
+        new_url = s3_client.generate_presigned_url(
             'get_object',
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},
             ExpiresIn=3600
         )
         
-        return jsonify({"hero_image_url": hero_url}), 200
+        return jsonify({"message": "Success", "url": new_url}), 200
     except Exception as e:
-        print(f"Error in upload_hero_image: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    
+# Retrieve hero image from directory
+@app.route('/api/<username>/hero-image', methods=['GET'])
+def get_hero_image(username):
+    try:
+        # List objects with the prefix for hero images
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME, 
+            Prefix=f"{username}/hero"
+        )
+
+        # Check if any files were actually found
+        if 'Contents' not in response or len(response['Contents']) == 0:
+            # If no files found, return None for placeholder in frontend
+            return jsonify({"url": None}), 200
+
+        # Get the Key of the first (most relevant) match
+        object_name = response['Contents'][0]['Key']
+
+        # 4. Generate the presigned URL for the found file
+        hero_image_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
+
+        return jsonify({"url": hero_image_url}), 200
+
+    except Exception as e:
+        # Standard error response if S3 connection fails
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/<username>/friends/add', methods=['POST'])
+def add_friend(username):
+    """Add a friend to the current user's friends list by adding them to user.json.
+    
+    Request body:
+      - friend_username: the username of the friend to add
+    
+    Returns: { "message": "Friend added successfully" } or error
+    """
+    try:
+        data = request.json or {}
+        friend_username = data.get('friend_username')
+        
+        if not friend_username:
+            return jsonify({"error": "friend_username is required"}), 400
+        
+        # Check if friend exists in S3
+        prefix = f"{friend_username}/"
+        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix, MaxKeys=1)
+        friend_exists = 'Contents' in response and len(response['Contents']) > 0
+        
+        if not friend_exists:
+            return jsonify({"error": f"User '{friend_username}' does not exist"}), 404
+        
+        # Check if trying to add self
+        if friend_username == username:
+            return jsonify({"error": "Cannot add yourself as a friend"}), 400
+        
+        # Use S3 to read, modify, and write user.json
+        try:
+            s3 = S3('system')
+            
+            # Ensure user.json exists
+            s3.ensure_user_json_exists()
+            
+            # Read current user.json
+            user_data = s3.read_user_json()
+            if user_data is None:
+                return jsonify({"error": "Could not read user data"}), 500
+            
+            users = user_data.get('users', {})
+            
+            # Initialize user record if it doesn't exist
+            if username not in users:
+                users[username] = {'friends': [], 'user_id': 1, 'secret': ''}
+            
+            # Check if friend already exists in user.json
+            if friend_username in users.get(username, {}).get('friends', []):
+                return jsonify({"message": "Friend already added"}), 200
+            
+            # Add friend to user.json
+            users[username]['friends'].append(friend_username)
+            user_data['users'] = users
+            
+            # Write updated user.json to S3
+            if not s3.write_user_json(user_data):
+                return jsonify({"error": "Failed to save user data"}), 500
+            
+            return jsonify({"message": "Friend added successfully", "friend": friend_username}), 201
+        except Exception as e:
+            print(f"Error managing friends in S3: {str(e)}")
+            return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        print(f"Error in add_friend: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/media_aws', methods=['GET'])

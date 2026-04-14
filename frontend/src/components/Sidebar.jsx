@@ -55,7 +55,7 @@ function Sidebar() {
                     }`}
                 >
                     <FolderOpen size={20} className="mr-3" />
-                    Files
+                    My Files
                 </Link>
                 <Link
                     to="/scrapbook"

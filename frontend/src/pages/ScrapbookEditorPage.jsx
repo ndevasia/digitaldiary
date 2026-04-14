@@ -152,6 +152,9 @@ function ScrapbookEditorPage() {
   const [editingTextId, setEditingTextId] = useState(null);
   const [isLibraryOpen, setIsLibraryOpen] = useState(true);
   const [libraryFilter, setLibraryFilter] = useState('all');
+  const [availablePeople, setAvailablePeople] = useState([]);
+  const [selectedPeople, setSelectedPeople] = useState([]);
+  const [showPersonFilter, setShowPersonFilter] = useState(false);
   const [notice, setNotice] = useState('');
   const canvasRef = useRef(null);
   const uploadInputRef = useRef(null);
@@ -170,13 +173,48 @@ function ScrapbookEditorPage() {
       try {
         setLoadingMedia(true);
         setMediaError(null);
-        const response = await fetch(`${apiBasePath}/media_aws`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch media');
-        }
 
-        const data = await response.json();
-        const filtered = data.filter((item) => item.type === 'screenshot' || item.type === 'video');
+        // Fetch current user's media
+        const userResponse = await fetch(`${apiBasePath}/media_aws`);
+        if (!userResponse.ok) {
+          throw new Error('Failed to fetch user media');
+        }
+        const userData = await userResponse.json();
+        const userMediaWithOwner = userData.map((item) => ({ ...item, owner: currentUsername }));
+
+        // Fetch friends list
+        const friendsResponse = await fetch(`${apiBasePath}/friends`);
+        const friendsData = friendsResponse.ok ? await friendsResponse.json() : { friends: [] };
+        const friends = friendsData.friends || [];
+
+        // Build list of all people (user + friends)
+        const allPeople = [currentUsername, ...friends];
+        setAvailablePeople(allPeople);
+        setSelectedPeople(allPeople);
+
+        // Fetch media for all friends in parallel
+        const friendsMediaPromises = friends.map((friendUsername) =>
+          fetch(`/api/${encodeURIComponent(friendUsername)}/media_aws`)
+            .then((response) => {
+              if (response.ok) {
+                return response.json().then((data) =>
+                  data.map((item) => ({ ...item, owner: friendUsername }))
+                );
+              }
+              return [];
+            })
+            .catch((err) => {
+              console.error(`Error fetching media for ${friendUsername}:`, err);
+              return [];
+            })
+        );
+
+        const friendsMediaArrays = await Promise.all(friendsMediaPromises);
+        const allFriendsMedia = friendsMediaArrays.flat();
+
+        // Combine user's media with friends' media
+        const combinedMedia = [...userMediaWithOwner, ...allFriendsMedia];
+        const filtered = combinedMedia.filter((item) => item.type === 'screenshot' || item.type === 'video');
         setMedia(filtered);
       } catch (error) {
         console.error('Error loading media:', error);
@@ -187,7 +225,7 @@ function ScrapbookEditorPage() {
     };
 
     fetchMedia();
-  }, [apiBasePath]);
+  }, [apiBasePath, currentUsername]);
 
   useEffect(() => {
     if (!scrapbookId || !hasHydratedItems) return;
@@ -239,12 +277,22 @@ function ScrapbookEditorPage() {
   }, [media]);
 
   const filteredMedia = useMemo(() => {
-    if (libraryFilter === 'all') return media;
+    let result = media;
+
+    // Filter by type
     if (libraryFilter === 'photos') {
-      return media.filter((entry) => entry.type === 'screenshot');
+      result = result.filter((entry) => entry.type === 'screenshot');
+    } else if (libraryFilter === 'videos') {
+      result = result.filter((entry) => entry.type === 'video');
     }
-    return media.filter((entry) => entry.type === 'video');
-  }, [libraryFilter, media]);
+
+    // Filter by selected people
+    if (selectedPeople.length > 0) {
+      result = result.filter((entry) => selectedPeople.includes(entry.owner));
+    }
+
+    return result;
+  }, [libraryFilter, media, selectedPeople]);
 
   const showNotice = (message) => {
     setNotice(message);
@@ -851,6 +899,66 @@ function ScrapbookEditorPage() {
               ))}
             </div>
 
+            {availablePeople.length > 0 && (
+              <div className="relative mb-4">
+                <button
+                  type="button"
+                  onClick={() => setShowPersonFilter(!showPersonFilter)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-xs font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                >
+                  <div className="flex items-center justify-between">
+                    <span>From: {selectedPeople.length === availablePeople.length ? 'Everyone' : `${selectedPeople.length} selected`}</span>
+                    <span className={`text-gray-400 transition ${showPersonFilter ? 'rotate-180' : ''}`}>▼</span>
+                  </div>
+                </button>
+
+                {showPersonFilter && (
+                  <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-md">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPeople(availablePeople);
+                      }}
+                      className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50 border-b border-gray-200"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPeople([]);
+                      }}
+                      className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50 border-b border-gray-200"
+                    >
+                      Clear all
+                    </button>
+                    {availablePeople.map((person) => (
+                      <button
+                        key={person}
+                        type="button"
+                        onClick={() => {
+                          if (selectedPeople.includes(person)) {
+                            setSelectedPeople(selectedPeople.filter((p) => p !== person));
+                          } else {
+                            setSelectedPeople([...selectedPeople, person]);
+                          }
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedPeople.includes(person)}
+                          onChange={() => {}}
+                          className="h-3 w-3 rounded cursor-pointer"
+                        />
+                        <span>{person === currentUsername ? `${person} (You)` : person}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {loadingMedia && <div className="text-sm text-gray-500">Loading media...</div>}
             {mediaError && <div className="text-sm text-red-500">{mediaError}</div>}
 
@@ -875,7 +983,7 @@ function ScrapbookEditorPage() {
                     onClick={() => addMediaToCanvas(entry)}
                   >
                     {isVideo ? (
-                      <video src={entry.media_url} className="h-28 w-full rounded-xl object-cover" />
+                      <video src={entry.media_url} preload="metadata" className="h-28 w-full rounded-xl object-cover" />
                     ) : (
                       <img src={entry.media_url} alt={entry.game || 'Photo'} className="h-28 w-full rounded-xl object-cover" draggable={false} />
                     )}

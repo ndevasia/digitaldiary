@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Upload, X, Image, Camera } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
 function HeroImage({ onImageChange }) {
     const currentUsername = useContext(UserContext).username || 'User';
-    const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
+    const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
     const [heroImage, setHeroImage] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [showHeroEditOptions, setShowHeroEditOptions] = useState(false);
@@ -29,14 +31,14 @@ function HeroImage({ onImageChange }) {
             const data = await response.json();
             console.log('Hero image API response:', data);
             
-            if (data.hero_image_url) {
-                console.log('Setting hero image from backend:', data.hero_image_url);
-                setHeroImage(data.hero_image_url);
+            if (data.url) {
+                console.log('Setting hero image from backend:', data.url);
+                setHeroImage(data.url);
                 setNoScreenshotsAvailable(false);
                 
                 // Notify parent component about the change
                 if (onImageChange) {
-                    onImageChange(data.hero_image_url);
+                    onImageChange(data.url);
                 }
             } else {
                 console.log('No hero image returned from backend');
@@ -81,33 +83,49 @@ function HeroImage({ onImageChange }) {
         }
     };
     
-    const handleFileUpload = (event) => {
+    const handleFileUpload = async (event) => {
         const file = event.target.files[0];
-        if (file) {
-            setIsUploading(true);
+        if (!file) return;
+
+        // Check file type
+        const allowedExtensions = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
+        if (!allowedExtensions.includes(file.type)) {
+            console.error('Unsupported file type:', file.type);
+            return;
+        }
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            console.log('Uploading hero image...');
+            const response = await fetch(`${apiBasePath}/upload-hero-image`, {
+                method: 'POST',
+                body: formData
+            });
             
-            // Create a FileReader to read the file as a data URL
-            const reader = new FileReader();
-            
-            reader.onload = (e) => {
-                const imageDataUrl = e.target.result;
-                setHeroImage(imageDataUrl);
-                setIsUploading(false);
+            const data = await response.json();
+
+            if (response.ok && data.url) {
+                console.log('Hero image upload success, new URL:', data.url);
+                // Append timestamp to force cache invalidation
+                const timestampedUrl = `${data.url}${data.url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+                setHeroImage(timestampedUrl);
                 setShowHeroEditOptions(false);
                 setNoScreenshotsAvailable(false);
                 
                 // Notify parent component about the change
                 if (onImageChange) {
-                    onImageChange(imageDataUrl);
+                    onImageChange(timestampedUrl);
                 }
-            };
-            
-            reader.onerror = () => {
-                console.error('Error reading file');
-                setIsUploading(false);
-            };
-            
-            reader.readAsDataURL(file);
+            } else {
+                console.error('Failed to upload hero image:', data.error);
+            }
+        } catch (error) {
+            console.error('Error uploading hero image:', error);
+        } finally {
+            setIsUploading(false);
         }
     };
     
@@ -124,15 +142,49 @@ function HeroImage({ onImageChange }) {
         setShowScreenshotSelector(true);
     };
     
-    const handleScreenshotSelect = (screenshot) => {
-        setHeroImage(screenshot.media_url);
-        setShowScreenshotSelector(false);
-        setShowHeroEditOptions(false);
-        setNoScreenshotsAvailable(false);
-        
-        // Notify parent component about the change
-        if (onImageChange) {
-            onImageChange(screenshot.media_url);
+    const handleScreenshotSelect = async (screenshot) => {
+        try {
+            setIsUploading(true);
+            
+            // Download the screenshot from the presigned URL
+            const response = await fetch(screenshot.media_url);
+            if (!response.ok) {
+                throw new Error('Failed to download screenshot');
+            }
+            const blob = await response.blob();
+            
+            // Create FormData and upload as hero image
+            const formData = new FormData();
+            formData.append('file', blob, 'screenshot.png');
+            
+            console.log('Uploading selected screenshot as hero image...');
+            const uploadResponse = await fetch(`${apiBasePath}/upload-hero-image`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await uploadResponse.json();
+            
+            if (uploadResponse.ok && data.url) {
+                console.log('Screenshot set as hero image, URL:', data.url);
+                // Append timestamp to force cache invalidation
+                const timestampedUrl = `${data.url}${data.url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+                setHeroImage(timestampedUrl);
+                setShowScreenshotSelector(false);
+                setShowHeroEditOptions(false);
+                setNoScreenshotsAvailable(false);
+                
+                // Notify parent component about the change
+                if (onImageChange) {
+                    onImageChange(timestampedUrl);
+                }
+            } else {
+                console.error('Failed to set screenshot as hero image:', data.error);
+            }
+        } catch (error) {
+            console.error('Error setting screenshot as hero image:', error);
+        } finally {
+            setIsUploading(false);
         }
     };
     

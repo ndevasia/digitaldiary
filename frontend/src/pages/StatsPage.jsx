@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { BarChart2 } from 'lucide-react';
 import Timeline from '../components/Timeline';
 import { UserContext } from '../context/UserContext.jsx';
@@ -16,13 +16,53 @@ function StatsPage() {
     const [loadingStats, setLoadingStats] = useState(true);
     const [gameEvents, setGameEvents] = useState([]);
     const [loadingTimeline, setLoadingTimeline] = useState(true);
+    const [notification, setNotification] = useState({ message: '', type: '', visible: false });
+    const notificationTimeoutRef = useRef(null);
 
     useEffect(() => {
         if (currentUsername !== 'User') {
             fetchMediaStats();
         }
         fetchGameSessions();
-    }, [currentUsername]); 
+    }, [currentUsername]);
+
+    // Cleanup notification timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (notificationTimeoutRef.current) {
+                clearTimeout(notificationTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    const showNotification = (message, type = 'info') => {
+        // Clear previous timeout if exists
+        if (notificationTimeoutRef.current) {
+            clearTimeout(notificationTimeoutRef.current);
+        }
+        
+        setNotification({ message, type, visible: true });
+        notificationTimeoutRef.current = setTimeout(() => {
+            setNotification({ message: '', type: '', visible: false });
+            notificationTimeoutRef.current = null;
+        }, 3000);
+    };
+
+    const renderNotification = () => {
+        if (!notification.visible) return null;
+
+        const bgColor = {
+            'success': 'bg-green-500',
+            'error': 'bg-red-500',
+            'info': 'bg-blue-500'
+        }[notification.type] || 'bg-blue-500';
+
+        return (
+            <div className={`fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-40 max-w-md`}>
+                {notification.message}
+            </div>
+        );
+    };
 
     const fetchMediaStats = async () => {
         try {
@@ -78,6 +118,11 @@ function StatsPage() {
         }
     };
 
+    const handleDeleteSuccess = (timestamp) => {
+        const updatedEvents = gameEvents.filter(e => e.start_timestamp !== timestamp);
+        setGameEvents(updatedEvents);
+    };
+
     const renderStatsSummary = () => {
         if (loadingStats) {
             return (
@@ -123,6 +168,7 @@ function StatsPage() {
 
             {renderStatsSummary()}
 
+            {/* Timeline Section */}
             <div className="max-w-7xl mx-auto px-4 py-8">
                 <h2 className="text-2xl font-bold text-teal-700 mb-6">Recent Activity</h2>
                 {loadingTimeline ? (
@@ -134,9 +180,16 @@ function StatsPage() {
                         </div>
                     </div>
                 ) : (
-                    <Timeline events={gameEvents} />
+                    <Timeline 
+                        events={gameEvents} 
+                        apiBasePath={apiBasePath}
+                        onNotification={showNotification}
+                        onDeleteSuccess={handleDeleteSuccess}
+                    />
                 )}
             </div>
+
+            {renderNotification()}
         </div>
     );
 }

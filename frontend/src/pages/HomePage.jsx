@@ -26,7 +26,6 @@ function HomePage() {
     const [loadingSession, setLoadingSession] = useState(true);
     const [modalKey, setModalKey] = useState(0);
     const [notification, setNotification] = useState({ message: '', type: '', visible: false });
-    const [deleteConfirmation, setDeleteConfirmation] = useState({ visible: false, event: null });
     const navigate = useNavigate();
     const currentUsername = useContext(UserContext).username || 'User';
     const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
@@ -258,9 +257,9 @@ function HomePage() {
         setShowSessionModal(false);
     };
 
-    const handleDeleteTimelineEvent = (event) => {
-        const userDisplay = event.user_with === '0' || !event.user_with ? 'myself' : event.user_with;
-        setDeleteConfirmation({ visible: true, event, actionType: 'delete', userDisplay });
+    const handleDeleteSuccess = (timestamp) => {
+        const updatedEvents = gameEvents.filter(e => e.start_timestamp !== timestamp);
+        setGameEvents(updatedEvents);
     };
 
     const fetchActiveSession = async () => {
@@ -500,105 +499,6 @@ function HomePage() {
         );
     };
 
-    // Confirmation Modal
-    const renderConfirmationModal = () => {
-        if (!deleteConfirmation.visible) return null;
-
-        const handleConfirm = async () => {
-            setDeleteConfirmation({ visible: false, event: null });
-            
-            if (deleteConfirmation.actionType === 'delete') {
-                try {
-                    const response = await fetch(`${apiBasePath}/session/delete`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            start_timestamp: deleteConfirmation.event.start_timestamp
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const data = await response.json();
-                        throw new Error(data.error || 'Failed to delete session');
-                    }
-
-                    const updatedEvents = gameEvents.filter(e => e.start_timestamp !== deleteConfirmation.event.start_timestamp);
-                    setGameEvents(updatedEvents);
-                    showNotification('Session deleted', 'success');
-                } catch (error) {
-                    console.error('Error deleting session:', error);
-                    showNotification('Error: ' + error.message, 'error');
-                }
-            } else if (deleteConfirmation.actionType === 'end') {
-                try {
-                    const response = await fetch(`${apiBasePath}/session/end`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        }
-                    });
-
-                    if (!response.ok) {
-                        throw new Error('Failed to end session');
-                    }
-
-                    await Promise.all([fetchGameSessions(), fetchActiveSession()]);
-                    setShowSessionModal(false);
-                    showNotification('Session ended', 'success');
-                } catch (error) {
-                    console.error('Error ending session:', error);
-                    showNotification('Error ending session: ' + error.message, 'error');
-                }
-            }
-        };
-
-        const handleCancel = () => {
-            setDeleteConfirmation({ visible: false, event: null });
-        };
-
-        const isEndAction = deleteConfirmation.actionType === 'end';
-        const title = isEndAction ? 'End Session' : 'Delete Session';
-        const message = isEndAction 
-            ? 'Are you sure you want to end this session?'
-            : `Delete session "${deleteConfirmation.event?.app_name}" with ${deleteConfirmation.userDisplay}?`;
-
-        return (
-            <div
-                className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-                onClick={handleCancel}
-            >
-                <div
-                    className="bg-white rounded-lg shadow-lg w-full max-w-md mx-4"
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <div className="bg-red-500 text-white px-6 py-4 rounded-t-lg">
-                        <h2 className="text-xl font-semibold">{title}</h2>
-                    </div>
-
-                    <div className="px-6 py-6">
-                        <p className="text-gray-700 mb-6">{message}</p>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={handleCancel}
-                                className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleConfirm}
-                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
-                            >
-                                {isEndAction ? 'End' : 'Delete'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
     // Session Modal
     const renderSessionModal = () => {
         if (!showSessionModal) return null;
@@ -762,9 +662,6 @@ function HomePage() {
             {/* Session Modal */}
             {renderSessionModal()}
 
-            {/* Confirmation Modal */}
-            {renderConfirmationModal()}
-
             {/* Notification Toast */}
             {renderNotification()}
 
@@ -780,7 +677,12 @@ function HomePage() {
                         </div>
                     </div>
                 ) : (
-                    <Timeline events={gameEvents} onDeleteEvent={handleDeleteTimelineEvent} />
+                    <Timeline 
+                        events={gameEvents} 
+                        apiBasePath={apiBasePath}
+                        onNotification={showNotification}
+                        onDeleteSuccess={handleDeleteSuccess}
+                    />
                 )}
             </div>
         </div>

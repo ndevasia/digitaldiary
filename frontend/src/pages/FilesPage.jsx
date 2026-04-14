@@ -48,9 +48,6 @@ function FilesPage() {
             if (mediaDropdownRef.current && !mediaDropdownRef.current.contains(target)) {
                 setShowDropdown(false);
             }
-            if (usersDropdownRef.current && !usersDropdownRef.current.contains(target)) {
-                setShowUsersDropdown(false);
-            }
             if (gamesDropdownRef.current && !gamesDropdownRef.current.contains(target)) {
                 setShowGamesDropdown(false);
             }

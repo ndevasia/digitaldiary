@@ -1029,7 +1029,7 @@ def upload_hero_image(username):
         )
 
         # Clean up old/different extensions
-        existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/profile")
+        existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/hero")
 
         if 'Contents' in existing_files:
         # Filter out the file we JUST uploaded so we don't delete it

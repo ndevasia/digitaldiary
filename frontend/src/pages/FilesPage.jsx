@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext, useRef } from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, X, Loader } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
@@ -10,7 +10,6 @@ function FilesPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [showDropdown, setShowDropdown] = useState(false);
-    const [showUsersDropdown, setShowUsersDropdown] = useState(false);
     const [showGamesDropdown, setShowGamesDropdown] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [modalImage, setModalImage] = useState('');
@@ -18,32 +17,22 @@ function FilesPage() {
     const [editingField, setEditingField] = useState(null);
     const [editValue, setEditValue] = useState('');
     const mediaDropdownRef = useRef(null);
-    const usersDropdownRef = useRef(null);
     const gamesDropdownRef = useRef(null);
-    const [users, setUsers] = useState([]);
     const [games, setGames] = useState([]);
     const [filter, setFilter] = useState(new Set());
-    const [userFilter, setUserFilter] = useState(new Set());
     const [gameFilter, setGameFilter] = useState(new Set());
     const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
     const [dateRangeInfo, setDateRangeInfo] = useState({ min: '', max: '' });
-    const [showAddUserModal, setShowAddUserModal] = useState(false);
-    const [newUsername, setNewUsername] = useState('');
-    const [addUserLoading, setAddUserLoading] = useState(false);
-    const [addUserError, setAddUserError] = useState(null);
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
     const currentUsername = useContext(UserContext).username || 'User';
     const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
     const abortControllerRef = useRef(null);
 
     useEffect(() => {
-        fetchUsers();
-        // initial media load will be handled by users/userFilter effect
-
         // Refetch data when page becomes visible (user navigates back)
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
-                fetchMedia();
+                fetchMediaData();
             }
         };
 
@@ -78,16 +67,14 @@ function FilesPage() {
             item.timestamp && ['video', 'audio', 'screenshot'].includes(item.type)
         );
 
+        // Filter to only show current user's media
+        filtered = filtered.filter(item => {
+            const ownerUsername = item.s3_key.split('/')[0];
+            return ownerUsername === currentUsername;
+        });
+
         if (filter.size > 0) {
             filtered = filtered.filter(item => filter.has(item.type));
-        }
-
-        if (userFilter.size > 0) {
-            filtered = filtered.filter(item => {
-                // Extract owner username from s3_key (first path segment)
-                const ownerUsername = item.s3_key.split('/')[0];
-                return userFilter.has(ownerUsername);
-            });
         }
 
         if (gameFilter.size > 0) {
@@ -105,7 +92,7 @@ function FilesPage() {
         }
 
         setFilteredMedia(filtered);
-    }, [filter, userFilter, gameFilter, mediaList, dateRange]);
+    }, [filter, gameFilter, mediaList, dateRange, currentUsername]);
 
     // calculate date range boundaries from media
     useEffect(() => {
@@ -131,20 +118,20 @@ function FilesPage() {
     }, [mediaList]);
 
     useEffect(() => {
-        fetchMedia();
+        fetchMediaData();
         return () => {
             // Cancel any in-flight requests when dependencies change
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
             }
         };
-    }, [userFilter, users]);
+    }, []);
 
     // auto-refresh media when the date range changes
     useEffect(() => {
         // only trigger a fetch if a date was actually picked
         if (dateRange.startDate || dateRange.endDate) {
-            fetchMedia();
+            fetchMediaData();
         }
         return () => {
             if (abortControllerRef.current) {
@@ -154,110 +141,28 @@ function FilesPage() {
     }, [dateRange.startDate, dateRange.endDate]);
 
 
-    const fetchUsers = async () => {
+    const fetchMediaData = async () => {
         try {
-            const response = await fetch(
-                `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}/friends`
-            );
+            setLoading(true);
+            setError(null);
+            const response = await fetch(`${apiBasePath}/media_aws`);
             if (!response.ok) {
-                throw new Error('Failed to fetch friends');
+                throw new Error('Failed to fetch media');
             }
-            const friendsData = await response.json();
-            const friendsList = friendsData.friends || [];
-            
-            // Build users array: current user + friends
-            const usersList = [
-                { user_id: -1, username: 'All Users' },
-                { user_id: 0, username: currentUsername },
-                ...friendsList.map((friend, idx) => ({ 
-                    user_id: idx + 1, 
-                    username: friend 
-                }))
-            ];
-            setUsers(usersList);
-        } catch (error) {
-            console.error('Error fetching friends:', error);
-            setError(error.message);
-        }
-    };
-
-    const fetchMedia = async () => {
-        try {
-          // Cancel any previous request
-          if (abortControllerRef.current) {
-              abortControllerRef.current.abort();
-          }
-          abortControllerRef.current = new AbortController();
-          const signal = abortControllerRef.current.signal;
-
-          setLoading(true);
-          setError(null);
-
-          // If "All Users" is selected, fetch per-user and concatenate results
-          const isAllSelected = userFilter.size === 0 || userFilter.has('all');
-
-        if (isAllSelected) {
-            const userList = users
-                .filter(u => u.user_id !== -1)
-                .map(u => u.username);
-
-            if (userList.length === 0) {
-                const resp = await fetch(`${apiBasePath}/media_aws`, { signal });
-                if (!resp.ok) throw new Error('Failed to fetch media');
-                const data = await resp.json();
-                const sorted = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                setMediaList(sorted);
-                const uniqueGames = Array.from(
-                  new Set(sorted.map(item => item.app_name).filter(Boolean))
-                );
-                setGames(uniqueGames);
-                setGameFilter(new Set()); // Clear game filter when switching users
-                return;
-            }
-
-            const promises = userList.map(async (u) => {
-                const resp = await fetch(`${API_BASE_URL}/api/${encodeURIComponent(u)}/media_aws`, { signal });
-                return resp.ok ? resp.json() : [];
-            });
-
-            const arrays = await Promise.all(promises);
-            const merged = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            setMediaList(merged);
+            const data = await response.json();
+            const sorted = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            setMediaList(sorted);
             const uniqueGames = Array.from(
-              new Set(merged.map(item => item.app_name).filter(Boolean))
+                new Set(sorted.map(item => item.app_name).filter(Boolean))
             );
             setGames(uniqueGames);
-            setGameFilter(new Set()); // Clear game filter when switching users
-            return;
+        } catch (error) {
+            console.error('Error fetching media:', error);
+            setError(error.message);
+        } finally {
+            setLoading(false);
         }
-
-        // Single user selected; `userFilter` holds the username
-        const usernames = users
-            .filter(u => userFilter.has(u.username))
-            .map(u => u.username);
-        const promises = usernames.map(async (username) => {
-            const resp = await fetch(`${API_BASE_URL}/api/${encodeURIComponent(username)}/media_aws`, { signal });
-            if (!resp.ok) return [];
-            return resp.json();
-        });
-          
-        const arrays = await Promise.all(promises);
-        const data = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setMediaList(data);
-        const uniqueGames = Array.from(
-          new Set(data.map(item => item.app_name).filter(Boolean))
-        );
-        setGames(uniqueGames);
-        setGameFilter(new Set()); // Clear game filter when switching users
-      } catch (error) {
-          if (error.name !== 'AbortError') {
-              console.error('Error fetching media:', error);
-              setError(error.message);
-          }
-      } finally {
-          setLoading(false);
-      }
-  };
+    };
 
     const handleFilterChange = (filterType) => {
         setFilter(filterType);
@@ -535,7 +440,7 @@ function FilesPage() {
         <div className="h-screen flex flex-col">
             <div className="flex-1 p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
+                    <h1 className="text-2xl font-semibold text-gray-700">My Files</h1>
                 </header>
 
                 <div className="bg-white rounded-lg border border-gray-200 p-8">
@@ -543,42 +448,6 @@ function FilesPage() {
 
                     {/* Filters Section */}
                     <div className="mb-8">
-                        {/* User Filter Tabs */}
-                        <div className="flex flex-wrap gap-2 mb-6">
-                            {users.map((user) => (
-                                  <button
-                                      key={user.user_id}
-                                      onClick={() => {
-                                        if (user.user_id === -1) {
-                                            setUserFilter(new Set()); // Clearing the set represents "All"
-                                        } else {
-                                            const newSet = new Set(userFilter);
-                                            const username = user.username;
-                                            if (newSet.has(username)) newSet.delete(username);
-                                            else newSet.add(username);
-                                            setUserFilter(newSet);
-                                        }
-                                    }}
-                                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                                          (user.user_id === -1 && userFilter.size === 0) || userFilter.has(user.username)
-                                              ? 'bg-teal-500 text-white'
-                                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                      }`}
-                                  >
-                                      {user.username}
-                                  </button>
-                            ))}
-                            <button
-                                onClick={() => {
-                                    setNewUsername('');
-                                    setAddUserError(null);
-                                    setShowAddUserModal(true);
-                                }}
-                                className="px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 bg-gray-100 text-gray-600 hover:bg-gray-200"
-                            >
-                                Add User
-                            </button>
-                        </div>
                         {/* Media + App + Date Filters */}
                         <div className="flex flex-wrap gap-4">
                             {/* Media Type Dropdown */}
@@ -681,7 +550,10 @@ function FilesPage() {
                 {/* Media Grid */}
                     <div className="w-full mt-6">
                         {loading ? (
-                            <div className="text-gray-500">Loading media...</div>
+                            <div className="flex flex-col items-center justify-center h-64 gap-4">
+                                <Loader size={48} className="text-teal-500 animate-spin" />
+                                <p className="text-gray-500 text-lg">Loading media...</p>
+                            </div>
                         ) : error ? (
                             <div className="text-red-500">Error: {error}</div>
                         ) : filteredMedia.length === 0 ? (
@@ -719,112 +591,6 @@ function FilesPage() {
                     </div>
                 </div>
             </div>
-            {/* Add User Modal */}
-            {showAddUserModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-md w-full p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-semibold">Add User</h3>
-                            <button onClick={() => setShowAddUserModal(false)} className="text-gray-500 hover:text-gray-700">✕</button>
-                        </div>
-
-                        <div className="mb-4">
-                            <label className="block text-sm text-gray-700 mb-2">Username</label>
-                            <input
-                                type="text"
-                                className="w-full border border-gray-200 rounded px-3 py-2"
-                                value={newUsername}
-                                onChange={(e) => setNewUsername(e.target.value)}
-                                placeholder="Enter username to add"
-                            />
-                            {addUserError && <p className="text-red-500 text-sm mt-2">{addUserError}</p>}
-                        </div>
-
-                        <div className="flex justify-end gap-2">
-                            <button
-                                className="px-4 py-2 rounded bg-gray-200 text-gray-700"
-                                onClick={() => setShowAddUserModal(false)}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="px-4 py-2 rounded bg-teal-500 text-white disabled:opacity-50"
-                                onClick={async () => {
-                                    const usernameToCheck = newUsername.trim();
-                                    if (!usernameToCheck) {
-                                        setAddUserError('Please enter a username');
-                                        return;
-                                    }
-
-                                    try {
-                                        setAddUserLoading(true);
-                                        setAddUserError(null);
-
-                                        // TODO: i removed this endpoint
-
-                                        // 1) Check S3 for the username
-                                        const resp = await fetch(`${apiBasePath}/users_aws/check?username=${encodeURIComponent(usernameToCheck)}`);
-                                        if (!resp.ok) {
-                                            const err = await resp.json();
-                                            throw new Error(err.error || 'Error checking username');
-                                        }
-                                        const data = await resp.json();
-                                        if (!data.exists) {
-                                            setAddUserError('User not found in S3');
-                                            return;
-                                        }
-
-                                        // 2) Persist the username to user.json on the backend
-                                        const addResp = await fetch(`${apiBasePath}/users`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ username: usernameToCheck })
-                                        });
-
-                                        if (!addResp.ok) {
-                                            const err = await addResp.json();
-                                            throw new Error(err.error || 'Failed to add user');
-                                        }
-
-                                        if (addResp.status === 200) {
-                                            // Already exists: fetch canonical user object from server so we have the integer id
-                                            const usersResp = await fetch(`${apiBasePath}/users`);
-                                            if (usersResp.ok) {
-                                                const allUsers = await usersResp.json();
-                                                const found = allUsers.find(u => u.username === usernameToCheck);
-                                                if (found) {
-                                                    setUsers(prev => {
-                                                        const exists = prev.some(u => String(u.user_id) === String(found.user_id));
-                                                        if (exists) return prev;
-                                                        return [...prev, found];
-                                                    });
-                                                }
-                                            }
-                                        } else if (addResp.status === 201) {
-                                            const newUser = await addResp.json();
-                                            setUsers(prev => {
-                                                const exists = prev.some(u => String(u.user_id) === String(newUser.user_id));
-                                                if (exists) return prev;
-                                                return [...prev, newUser];
-                                            });
-                                        }
-
-                                        setShowAddUserModal(false);
-                                        setNewUsername('');
-                                    } catch (err) {
-                                        console.error('Error adding user:', err);
-                                        setAddUserError(err.message || 'Error adding user');
-                                    } finally {
-                                        setAddUserLoading(false);
-                                    }
-                                }}
-                            >
-                                {addUserLoading ? 'Checking...' : 'Add'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
             {/* Image Modal */}
             {renderImageModal()}
         </div>

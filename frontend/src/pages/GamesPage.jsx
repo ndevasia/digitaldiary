@@ -5,6 +5,7 @@ import VideoPlayer from '../components/VideoPlayer.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
 
 function GamesPage() {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const [mediaData, setMediaData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -15,7 +16,7 @@ function GamesPage() {
   const [editingField, setEditingField] = useState(null);
   const [editValue, setEditValue] = useState('');
   const currentUsername = useContext(UserContext).username || 'User';
-  const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
+  const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
 
   useEffect(() => {
     fetchMediaData();

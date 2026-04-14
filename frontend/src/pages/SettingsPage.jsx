@@ -5,7 +5,8 @@ import { UserContext } from '../context/UserContext.jsx';
 
 function SettingsPage() {
     const currentUsername = useContext(UserContext).username || 'User';
-    const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+    const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
 
     let [audioDevices, setAudioDevices] = useState(null);
     let [selectedAudioDevice, setSelectedAudioDevice] = useState("none");

@@ -35,7 +35,8 @@ const IconButton = ({ icon: Icon, onClick, isLoading, isActive, tooltip }) => (
 
 function App() {
     const currentUsername = useContext(UserContext).username || 'User';
-    const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+    const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
     const [screenshotState, setScreenshotState] = useState(INACTIVE);
     const [audioRecordingState, setAudioRecordingState] = useState(INACTIVE);
     const [screenRecordingState, setScreenRecordingState] = useState(INACTIVE);

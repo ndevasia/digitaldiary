@@ -4,8 +4,9 @@ import VideoPlayer from '../components/VideoPlayer.jsx';
 import { UserContext } from '../context/UserContext.jsx';
 
 function FriendsPage() {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const currentUsername = useContext(UserContext).username || 'User';
-  const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
+  const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
   const [friends, setFriends] = useState([]);
   const [friendsMediaData, setFriendsMediaData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -31,7 +32,7 @@ function FriendsPage() {
       // Fetch media for all friends in parallel using Promise.all
       const friendsList = data.friends || [];
       const mediaPromises = friendsList.map(friendUsername =>
-        fetch(`/api/${encodeURIComponent(friendUsername)}/media_aws`)
+        fetch(`${API_BASE_URL}/api/${encodeURIComponent(friendUsername)}/media_aws`)
           .then(response => {
             if (response.ok) {
               return response.json().then(mediaArray => ({

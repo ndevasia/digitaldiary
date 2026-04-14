@@ -140,9 +140,10 @@ function readFileAsDataUrl(file) {
 
 function ScrapbookEditorPage() {
   const { scrapbookId } = useParams();
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const user = useContext(UserContext);
   const currentUsername = user?.username || 'User';
-  const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
+  const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
   const [scrapbook, setScrapbook] = useState(null);
   const [items, setItems] = useState([]);
   const [hasHydratedItems, setHasHydratedItems] = useState(false);
@@ -205,8 +206,7 @@ function ScrapbookEditorPage() {
 
         for (const username of usersToFetch) {
           try {
-            const userApiBasePath = `/api/${encodeURIComponent(username)}`;
-            const response = await fetch(`${userApiBasePath}/media_aws`);
+            const response = await fetch(`${API_BASE_URL}/api/${encodeURIComponent(username)}/media_aws`);
             if (response.ok) {
               const data = await response.json();
               // Add username info to each media item for identification

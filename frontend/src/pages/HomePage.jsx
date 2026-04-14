@@ -27,8 +27,9 @@ function HomePage() {
     const [modalKey, setModalKey] = useState(0);
     const [notification, setNotification] = useState({ message: '', type: '', visible: false });
     const navigate = useNavigate();
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
     const currentUsername = useContext(UserContext).username || 'User';
-    const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
+    const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
     const notificationTimeoutRef = useRef(null);
 
     useEffect(() => {

@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useContext } from 'react';
 import { ChevronLeft, Trash2, Pencil, Check, X, Type, ImageIcon, Plus, MousePointer2, Upload, Download } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
+import { UserContext } from '../context/UserContext.jsx';
 
 const SCRAPBOOKS_KEY = 'digitaldiary.scrapbooks';
 const SCRAPBOOK_ITEMS_PREFIX = 'digitaldiary.scrapbook.items.';
@@ -106,7 +107,8 @@ function loadImage(src, s3Key) {
 
       // For S3-hosted images, fetch through our backend proxy to avoid CORS / canvas tainting
       if (s3Key) {
-        const resp = await fetch(`/api/proxy-image?key=${encodeURIComponent(s3Key)}`);
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+        const resp = await fetch(`${API_BASE_URL}/api/proxy-image?key=${encodeURIComponent(s3Key)}`);
         if (resp.ok) {
           const blob = await resp.blob();
           useSrc = URL.createObjectURL(blob);
@@ -134,6 +136,9 @@ function readFileAsDataUrl(file) {
 
 function ScrapbookEditorPage() {
   const { scrapbookId } = useParams();
+  const currentUsername = useContext(UserContext).username || 'User';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+  const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
   const [scrapbook, setScrapbook] = useState(null);
   const [items, setItems] = useState([]);
   const [hasHydratedItems, setHasHydratedItems] = useState(false);
@@ -166,7 +171,7 @@ function ScrapbookEditorPage() {
       try {
         setLoadingMedia(true);
         setMediaError(null);
-        const response = await fetch('/api/media_aws');
+        const response = await fetch(`${apiBasePath}/media_aws`);
         if (!response.ok) {
           throw new Error('Failed to fetch media');
         }

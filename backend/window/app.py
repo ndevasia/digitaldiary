@@ -122,6 +122,7 @@ SCREENSHOTS_DIR = os.path.join(base_dir, "screenshots")
 AUDIO_DIR = os.path.join(base_dir, "audio")
 THUMBNAILS_DIR = os.path.join(RECORDINGS_DIR, "thumbnails")
 PROFILE_PICS_DIR = os.path.join(base_dir, "profile_pics") # Profile picture directory
+HERO_IMAGES_DIR = os.path.join(base_dir, "hero_images") # Hero images directory
 
 # Figure out OS and architecture for ffmpeg binary path
 BIN_DIR = os.path.join(base_dir, "bin")
@@ -199,7 +200,7 @@ os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(PROFILE_PICS_DIR, exist_ok=True)
-
+os.makedirs(HERO_IMAGES_DIR, exist_ok=True)
 # Global variables for recording state
 recorder_thread = None
 audio_recorder = None
@@ -721,7 +722,7 @@ def create_session(username):
         # Import aws.py's S3 class and call create_session
         from server.aws import S3
         s3 = S3(username)
-        success = s3.create_session(username, app_name, user_with)
+        success = s3.create_session(app_name, user_with)
         
         if not success:
             return jsonify({"error": "Failed to create session in S3"}), 500
@@ -989,6 +990,98 @@ def get_profile_pic(username):
         # Standard error response if S3 connection fails
         return jsonify({"error": str(e)}), 500
 
+# Upload hero image to directory    
+@app.route('/api/<username>/upload-hero-image', methods=['POST'])
+def upload_hero_image(username):
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        
+        # Simple extension check
+        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            return jsonify({"error": "File type not supported"}), 400
+        
+        _, ext = os.path.splitext(file.filename) 
+        ext = ext.lower()
+        object_name = f"{username}/hero{ext}"
+
+        content_types = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif'
+        }
+
+        # Ensure pointer is at the start
+        file.seek(0)
+
+        # Uploads new profile picture first
+        s3_client.upload_fileobj(
+            file,
+            BUCKET_NAME,
+            object_name,
+            # octet-stream used for fallback if unknown extension
+            ExtraArgs={'ContentType': content_types.get(ext, 'application/octet-stream')}
+        )
+
+        # Clean up old/different extensions
+        existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/profile")
+
+        if 'Contents' in existing_files:
+        # Filter out the file we JUST uploaded so we don't delete it
+            delete_keys = [
+                {'Key': obj['Key']} 
+                for obj in existing_files['Contents'] 
+                if obj['Key'] != object_name
+            ]
+            if delete_keys:
+                s3_client.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': delete_keys})
+
+        new_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
+        
+        return jsonify({"message": "Success", "url": new_url}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+# Retrieve profile picture from directory
+@app.route('/api/<username>/hero-image', methods=['GET'])
+def get_hero_image(username):
+    try:
+        # List objects with the prefix for hero images
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME, 
+            Prefix=f"{username}/hero"
+        )
+
+        # Check if any files were actually found
+        if 'Contents' not in response or len(response['Contents']) == 0:
+            # If no files found, return None for placeholder in frontend
+            return jsonify({"url": None}), 200
+
+        # Get the Key of the first (most relevant) match
+        object_name = response['Contents'][0]['Key']
+
+        # 4. Generate the presigned URL for the found file
+        hero_image_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
+
+        return jsonify({"url": hero_image_url}), 200
+
+    except Exception as e:
+        # Standard error response if S3 connection fails
+        return jsonify({"error": str(e)}), 500
+    
 @app.route('/api/<username>/friends/add', methods=['POST'])
 def add_friend(username):
     """Add a friend to the current user's friends list by adding them to user.json.

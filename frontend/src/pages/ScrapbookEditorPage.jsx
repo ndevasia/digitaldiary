@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState, useRef, useContext } from 'react';
+import React, { useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { ChevronLeft, Trash2, Pencil, Check, X, Type, ImageIcon, Plus, MousePointer2, Upload, Download } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
-import { UserContext } from '../context/UserContext.jsx';
+import { UserContext } from '../context/UserContext';
 
 const SCRAPBOOKS_KEY = 'digitaldiary.scrapbooks';
 const SCRAPBOOK_ITEMS_PREFIX = 'digitaldiary.scrapbook.items.';
@@ -16,9 +16,10 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(value, max));
 }
 
-function getScrapbookById(scrapbookId) {
+function getScrapbookById(username, scrapbookId) {
   try {
-    const raw = localStorage.getItem(SCRAPBOOKS_KEY);
+    const key = `${SCRAPBOOKS_KEY}.${username}`;
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     return parsed.find((entry) => String(entry.id) === String(scrapbookId)) || null;
   } catch {
@@ -26,42 +27,46 @@ function getScrapbookById(scrapbookId) {
   }
 }
 
-function loadItems(scrapbookId) {
+function loadItems(username, scrapbookId) {
   try {
-    const raw = localStorage.getItem(`${SCRAPBOOK_ITEMS_PREFIX}${scrapbookId}`);
+    const key = `${SCRAPBOOK_ITEMS_PREFIX}${username}.${scrapbookId}`;
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-function saveItems(scrapbookId, items) {
+function saveItems(username, scrapbookId, items) {
   try {
-    localStorage.setItem(`${SCRAPBOOK_ITEMS_PREFIX}${scrapbookId}`, JSON.stringify(items));
+    const key = `${SCRAPBOOK_ITEMS_PREFIX}${username}.${scrapbookId}`;
+    localStorage.setItem(key, JSON.stringify(items));
     return true;
   } catch {
     return false;
   }
 }
 
-function touchScrapbookUpdatedAt(scrapbookId) {
+function touchScrapbookUpdatedAt(username, scrapbookId) {
   try {
-    const raw = localStorage.getItem(SCRAPBOOKS_KEY);
+    const key = `${SCRAPBOOKS_KEY}.${username}`;
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     const next = parsed.map((entry) =>
       String(entry.id) === String(scrapbookId)
         ? { ...entry, updatedAt: new Date().toISOString() }
         : entry
     );
-    localStorage.setItem(SCRAPBOOKS_KEY, JSON.stringify(next));
+    localStorage.setItem(key, JSON.stringify(next));
   } catch {
     // no-op
   }
 }
 
-function updateScrapbookEntry(scrapbookId, updater) {
+function updateScrapbookEntry(username, scrapbookId, updater) {
   try {
-    const raw = localStorage.getItem(SCRAPBOOKS_KEY);
+    const key = `${SCRAPBOOKS_KEY}.${username}`;
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     const next = parsed.map((entry) => {
       if (String(entry.id) !== String(scrapbookId)) {
@@ -70,7 +75,7 @@ function updateScrapbookEntry(scrapbookId, updater) {
 
       return updater(entry);
     });
-    localStorage.setItem(SCRAPBOOKS_KEY, JSON.stringify(next));
+    localStorage.setItem(key, JSON.stringify(next));
     return next.find((entry) => String(entry.id) === String(scrapbookId)) || null;
   } catch {
     return null;
@@ -107,8 +112,7 @@ function loadImage(src, s3Key) {
 
       // For S3-hosted images, fetch through our backend proxy to avoid CORS / canvas tainting
       if (s3Key) {
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-        const resp = await fetch(`${API_BASE_URL}/api/proxy-image?key=${encodeURIComponent(s3Key)}`);
+        const resp = await fetch(`/api/proxy-image?key=${encodeURIComponent(s3Key)}`);
         if (resp.ok) {
           const blob = await resp.blob();
           useSrc = URL.createObjectURL(blob);
@@ -136,9 +140,9 @@ function readFileAsDataUrl(file) {
 
 function ScrapbookEditorPage() {
   const { scrapbookId } = useParams();
-  const currentUsername = useContext(UserContext).username || 'User';
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-  const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
+  const user = useContext(UserContext);
+  const currentUsername = user?.username || 'User';
+  const apiBasePath = `/api/${encodeURIComponent(currentUsername)}`;
   const [scrapbook, setScrapbook] = useState(null);
   const [items, setItems] = useState([]);
   const [hasHydratedItems, setHasHydratedItems] = useState(false);
@@ -160,11 +164,11 @@ function ScrapbookEditorPage() {
   const noticeTimeoutRef = useRef(null);
 
   useEffect(() => {
-    const found = getScrapbookById(scrapbookId);
+    const found = getScrapbookById(currentUsername, scrapbookId);
     setScrapbook(found ? { ...found, backgroundColor: found.backgroundColor || '#ffffff' } : null);
-    setItems(loadItems(scrapbookId));
+    setItems(loadItems(currentUsername, scrapbookId));
     setHasHydratedItems(true);
-  }, [scrapbookId]);
+  }, [scrapbookId, currentUsername]);
 
   useEffect(() => {
     const fetchMedia = async () => {
@@ -188,17 +192,17 @@ function ScrapbookEditorPage() {
     };
 
     fetchMedia();
-  }, []);
+  }, [apiBasePath]);
 
   useEffect(() => {
     if (!scrapbookId || !hasHydratedItems) return;
-    if (saveItems(scrapbookId, items)) {
-      touchScrapbookUpdatedAt(scrapbookId);
+    if (saveItems(currentUsername, scrapbookId, items)) {
+      touchScrapbookUpdatedAt(currentUsername, scrapbookId);
       return;
     }
 
     setNotice('This scrapbook is too large to save in local storage. Remove some pasted media or use library media instead.');
-  }, [items, scrapbookId, hasHydratedItems]);
+  }, [items, scrapbookId, hasHydratedItems, currentUsername]);
 
   useEffect(() => () => {
     if (noticeTimeoutRef.current) {
@@ -415,7 +419,7 @@ function ScrapbookEditorPage() {
   };
 
   const setBackgroundColor = (color) => {
-    const updated = updateScrapbookEntry(scrapbookId, (entry) => ({
+    const updated = updateScrapbookEntry(currentUsername, scrapbookId, (entry) => ({
       ...entry,
       backgroundColor: color,
       updatedAt: new Date().toISOString()
@@ -489,7 +493,7 @@ function ScrapbookEditorPage() {
 
   const confirmRenameScrapbook = () => {
     if (!nameValue.trim()) return;
-    const updated = updateScrapbookEntry(scrapbookId, (entry) => ({
+    const updated = updateScrapbookEntry(currentUsername, scrapbookId, (entry) => ({
       ...entry,
       name: nameValue.trim(),
       updatedAt: new Date().toISOString()

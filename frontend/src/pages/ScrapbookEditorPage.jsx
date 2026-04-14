@@ -915,12 +915,35 @@ function ScrapbookEditorPage() {
 
             for (const item of items) {
               if (item.type === 'text') {
+                // Draw rounded rectangle background with border (text bubble styling)
+                const radius = 12;
+                const padding = 8;
+                ctx.fillStyle = '#fffbeb'; // Light yellow background
+                ctx.fillRect(item.x + radius, item.y, item.width - 2 * radius, item.height);
+                ctx.fillRect(item.x, item.y + radius, item.width, item.height - 2 * radius);
+                
+                // Draw corners with arc
+                ctx.beginPath();
+                ctx.moveTo(item.x + radius, item.y);
+                ctx.arcTo(item.x, item.y, item.x, item.y + radius, radius);
+                ctx.arcTo(item.x, item.y + item.height, item.x + radius, item.y + item.height, radius);
+                ctx.arcTo(item.x + item.width, item.y + item.height, item.x + item.width, item.y + item.height - radius, radius);
+                ctx.arcTo(item.x + item.width, item.y, item.x + item.width - radius, item.y, radius);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Draw border
+                ctx.strokeStyle = '#fcd34d'; // Yellow border
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                
+                // Draw text on top
                 ctx.font = `${item.fontSize || 16}px sans-serif`;
                 ctx.fillStyle = item.color || '#374151';
                 const lines = (item.text || '').split('\n');
                 const lineHeight = (item.fontSize || 16) * 1.3;
                 lines.forEach((line, i) => {
-                  ctx.fillText(line, item.x + 8, item.y + (item.fontSize || 16) + i * lineHeight);
+                  ctx.fillText(line, item.x + padding, item.y + padding + (item.fontSize || 16) + i * lineHeight);
                 });
               } else if (item.type === 'sticker') {
                 const size = Math.max(32, Math.min(item.width, item.height) * 0.72);

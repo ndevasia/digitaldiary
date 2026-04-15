@@ -2,12 +2,14 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { BarChart2 } from 'lucide-react';
 import Timeline from '../components/Timeline';
 import { UserContext } from '../context/UserContext.jsx';
+import { useMediaCache } from '../context/MediaCacheContext.jsx';
 
 function StatsPage() {
     const user = useContext(UserContext);
     const currentUsername = user?.username || 'User';
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
     const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
+    const mediaCache = useMediaCache();
 
     const [mediaStats, setMediaStats] = useState({
         screenshots: 0,
@@ -34,6 +36,16 @@ function StatsPage() {
                 clearTimeout(notificationTimeoutRef.current);
             }
         };
+    }, []);
+
+    // Listen for cache invalidation events
+    useEffect(() => {
+        const handleCacheInvalidation = () => {
+            fetchMediaStats();
+        };
+
+        window.addEventListener('mediaCache:invalidate', handleCacheInvalidation);
+        return () => window.removeEventListener('mediaCache:invalidate', handleCacheInvalidation);
     }, []);
 
     const showNotification = (message, type = 'info') => {
@@ -68,8 +80,17 @@ function StatsPage() {
     const fetchMediaStats = async () => {
         try {
             setLoadingStats(true);
-            const response = await fetch(`${apiBasePath}/media_aws`);
-            const mediaData = await response.json();
+            
+            // Check cache first
+            let mediaData = mediaCache.get(currentUsername);
+            
+            if (!mediaData) {
+                // Cache miss, fetch from API
+                const response = await fetch(`${apiBasePath}/media_aws`);
+                mediaData = await response.json();
+                // Cache the data
+                mediaCache.set(currentUsername, mediaData);
+            }
 
             const stats = mediaData.reduce((acc, item) => {
                 if (item.type === 'screenshot') acc.screenshots++;

@@ -4,7 +4,8 @@ import boto3
 import json
 import sys
 import signal
-from flask_cors import CORS  # You'll need to install flask-cors
+from flask_cors import CORS
+from flask_caching import Cache
 import subprocess
 import platform
 import socket
@@ -85,6 +86,9 @@ def is_secret_valid(username, secret):
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS to allow React app to communicate with Flask
+
+# Initialize caching with simple in-memory backend
+cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
 @app.before_request
 def authenticate():
@@ -227,6 +231,7 @@ def test_endpoint():
     return jsonify({"message": "API is working!"})
 
 @app.route('/api/<username>/media_aws', methods=['GET'])
+@cache.cached(timeout=480, key_prefix=lambda: f"media_aws_{request.view_args['username']}")
 def get_media_aws(username):
     try:
         # List objects in the specified user's directory in S3
@@ -462,6 +467,10 @@ def upload_screenshot(username):
         except Exception as e:
             log_message(f"Warning: Could not tag screenshot object: {e}")
         
+        # Invalidate cache for this user
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
+        
         return jsonify({
             'status': 'success',
             'url': url
@@ -630,6 +639,10 @@ def stop_screen_recording(username, file_uid):
             log_message(f"Error uploading recording: {e}")
             return jsonify({'error': f"Failed to upload recording: {str(e)}"}), 500
 
+        # Invalidate cache for this user
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
+
         # Return paths
         return jsonify({
             'status': 'stopped',
@@ -682,6 +695,10 @@ def upload_audio_recording(username):
             )
         except Exception as e:
             log_message(f"Warning: Could not tag audio object: {e}")
+        
+        # Invalidate cache for this user
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
         
         return jsonify({
             'status': 'success',
@@ -862,6 +879,10 @@ def delete_media(username):
         if not success:
             return jsonify({"error": "Failed to delete file from S3"}), 500
         
+        # Invalidate cache for this user
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
+        
         return jsonify({"status": "success"})
         
     except Exception as e:
@@ -892,10 +913,25 @@ def update_media_metadata(username):
         if not success:
             return jsonify({"error": "Failed to update media metadata"}), 500
         
+        # Invalidate cache for this user
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
+        
         return jsonify({"status": "success"})
         
     except Exception as e:
         print(f"Error updating media metadata: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/<username>/cache/invalidate', methods=['POST'])
+def invalidate_cache(username):
+    """Manual cache invalidation endpoint"""
+    try:
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
+        return jsonify({"status": "success", "message": f"Cache invalidated for user {username}"})
+    except Exception as e:
+        print(f"Error invalidating cache: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 # Upload profile picture to directory    

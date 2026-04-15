@@ -3,6 +3,7 @@ import { Mic, Video, Camera, X, Minus, Maximize, Minimize, BarChart2 } from 'luc
 import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import FFMpeg from './FFMpeg';
 import { UserContext } from './context/UserContext.jsx';
+import useCacheInvalidation from './hooks/useCacheInvalidation.js';
 const { ipcRenderer } = window.require('electron');
 
 const INACTIVE = "inactive";
@@ -42,6 +43,7 @@ function App() {
     const [screenRecordingState, setScreenRecordingState] = useState(INACTIVE);
     const screenRecordingUID = useRef(null);
     const [isMaximized, setIsMaximized] = useState(false);
+    const { invalidateCache } = useCacheInvalidation();
 
     // Add effect to listen for main window open/close events
     useEffect(() => {
@@ -127,6 +129,8 @@ function App() {
             }).then((response) => {
                 if (response.ok) {
                     console.log('Screenshot uploaded successfully');
+                    // Invalidate cache to trigger refetch on pages
+                    invalidateCache(currentUsername);
                 } else {
                     console.error('Screenshot upload failed');
                 }
@@ -195,6 +199,8 @@ function App() {
                     FFMpeg.stopVideoStream(true).then(() => {
                         console.log('Screen recording stopped');
                         setScreenRecordingState(INACTIVE);
+                        // Invalidate cache to trigger refetch on pages
+                        invalidateCache(currentUsername);
                     }).catch((err) => {
                         console.error('Screen recording error:', err);
                         setScreenRecordingState(INACTIVE);
@@ -255,6 +261,8 @@ function App() {
                     }).then((response) => {
                         if (response.ok) {
                             console.log('Audio file uploaded successfully');
+                            // Invalidate cache to trigger refetch on pages
+                            invalidateCache(currentUsername);
                         } else {
                             console.error('Audio file upload failed');
                         }

@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 import { UserContext } from '../context/UserContext.jsx';
+import { useMediaCache } from '../context/MediaCacheContext.jsx';
 
 function FriendsPage() {
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -14,10 +15,105 @@ function FriendsPage() {
   const [selectedFriend, setSelectedFriend] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalImage, setModalImage] = useState('');
+  const mediaCache = useMediaCache();
+  const pollingIntervalRef = useRef(null);
 
   useEffect(() => {
     fetchFriends();
+    
+    // Clean up polling interval on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
   }, []);
+
+  // Handle visibility changes - pause/resume polling
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        // Pause polling when tab is hidden
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      } else {
+        // Resume polling when tab becomes visible
+        startPolling();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [friends]);
+
+  // Listen for cache invalidation events
+  useEffect(() => {
+    const handleCacheInvalidation = () => {
+      // When cache is invalidated, clear friend media cache and refetch
+      refetchFriendsMedia();
+    };
+
+    window.addEventListener('mediaCache:invalidate', handleCacheInvalidation);
+    return () => window.removeEventListener('mediaCache:invalidate', handleCacheInvalidation);
+  }, [friends]);
+
+  const refetchFriendsMedia = async () => {
+    // Fetch media for all friends
+    const friendsList = friends || [];
+    if (friendsList.length === 0) return;
+
+    const mediaPromises = friendsList.map(friendUsername =>
+      fetchFriendMediaWithCache(friendUsername)
+    );
+    
+    const resultsArray = await Promise.all(mediaPromises);
+    const mediaData = {};
+    resultsArray.forEach(({ friendUsername, media }) => {
+      mediaData[friendUsername] = media;
+    });
+    
+    setFriendsMediaData(mediaData);
+  };
+
+  const fetchFriendMediaWithCache = async (friendUsername) => {
+    try {
+      // Check cache first
+      let media = mediaCache.get(friendUsername);
+      
+      if (!media) {
+        // Cache miss, fetch from API
+        const response = await fetch(`${API_BASE_URL}/api/${encodeURIComponent(friendUsername)}/media_aws`);
+        if (response.ok) {
+          media = await response.json();
+          // Cache the data
+          mediaCache.set(friendUsername, media);
+        } else {
+          media = [];
+        }
+      }
+      
+      return ({ friendUsername, media });
+    } catch (err) {
+      console.error(`Error fetching media for ${friendUsername}:`, err);
+      return { friendUsername, media: [] };
+    }
+  };
+
+  const startPolling = () => {
+    // Clear any existing polling interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    // Start polling every 90 seconds (1.5 minutes, within the 2-min cache TTL)
+    pollingIntervalRef.current = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refetchFriendsMedia();
+      }
+    }, 90000);
+  };
 
   const fetchFriends = async () => {
     try {
@@ -29,23 +125,10 @@ function FriendsPage() {
       const data = await response.json();
       setFriends(data.friends || []);
       
-      // Fetch media for all friends in parallel using Promise.all
+      // Fetch media for all friends in parallel using cache
       const friendsList = data.friends || [];
       const mediaPromises = friendsList.map(friendUsername =>
-        fetch(`${API_BASE_URL}/api/${encodeURIComponent(friendUsername)}/media_aws`)
-          .then(response => {
-            if (response.ok) {
-              return response.json().then(mediaArray => ({
-                friendUsername,
-                media: mediaArray
-              }));
-            }
-            return { friendUsername, media: [] };
-          })
-          .catch(err => {
-            console.error(`Error fetching media for ${friendUsername}:`, err);
-            return { friendUsername, media: [] };
-          })
+        fetchFriendMediaWithCache(friendUsername)
       );
       
       const resultsArray = await Promise.all(mediaPromises);
@@ -56,6 +139,9 @@ function FriendsPage() {
       
       setFriendsMediaData(mediaData);
       setLoading(false);
+      
+      // Start polling for friend media updates
+      startPolling();
     } catch (error) {
       console.error('Error fetching friends:', error);
       setError(error.message);

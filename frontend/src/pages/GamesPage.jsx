@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { ChevronLeft, X } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
+import { useMediaCache } from '../context/MediaCacheContext.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
 
@@ -17,6 +18,7 @@ function GamesPage() {
   const [editValue, setEditValue] = useState('');
   const currentUsername = useContext(UserContext).username || 'User';
   const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
+  const mediaCache = useMediaCache();
 
   useEffect(() => {
     fetchMediaData();
@@ -32,14 +34,39 @@ function GamesPage() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
+  // Listen for cache invalidation events
+  useEffect(() => {
+    const handleCacheInvalidation = () => {
+      fetchMediaData();
+    };
+
+    window.addEventListener('mediaCache:invalidate', handleCacheInvalidation);
+    return () => window.removeEventListener('mediaCache:invalidate', handleCacheInvalidation);
+  }, []);
+
   const fetchMediaData = async () => {
     try {
       setLoading(true);
+      
+      // Check cache first
+      const cachedData = mediaCache.get(currentUsername);
+      if (cachedData) {
+        console.log('Using cached media data');
+        setMediaData(cachedData);
+        setLoading(false);
+        return;
+      }
+      
+      // Fetch from API if cache miss
       const response = await fetch(`${apiBasePath}/media_aws`);
       if (!response.ok) {
         throw new Error('Failed to fetch media');
       }
       const data = await response.json();
+      
+      // Cache the data
+      mediaCache.set(currentUsername, data);
+      
       setMediaData(data);
       
       // Log all media with their app_names

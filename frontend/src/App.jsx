@@ -42,7 +42,7 @@ function App() {
     const [audioRecordingState, setAudioRecordingState] = useState(INACTIVE);
     const [screenRecordingState, setScreenRecordingState] = useState(INACTIVE);
     const screenRecordingUID = useRef(null);
-    const [isMaximized, setIsMaximized] = useState(false);
+    const [isMaximized, setIsMaximized] = useState(true);
     const { invalidateCache } = useCacheInvalidation();
 
     // Add effect to listen for main window open/close events

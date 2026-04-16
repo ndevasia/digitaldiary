@@ -179,7 +179,7 @@ function App() {
                         }
                         const data = await response.json();
                         screenRecordingUID.current = data.uid;
-                        const streamDestination = data.url;
+                        const streamDestination = data.url.replace('44.228.196.10', import.meta.env.VITE_SRT_DEST || '');
                         const withAudio = localStorage.getItem('recordAudioWithScreen') === "true";
                         const audioDeviceName = localStorage.getItem('audioDeviceName');
                         FFMpeg.startVideoStream(streamDestination, withAudio, audioDeviceName).then(() => {

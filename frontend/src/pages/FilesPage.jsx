@@ -1,6 +1,8 @@
 import { useState, useEffect, useContext, useRef } from 'react';
-import { ChevronDown, X, Loader } from 'lucide-react';
+import { ChevronDown, X, Loader, RefreshCw } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
+import { useMediaCache } from '../context/MediaCacheContext.jsx';
+import useCacheInvalidation from '../hooks/useCacheInvalidation.js';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
 
@@ -23,10 +25,15 @@ function FilesPage() {
     const [gameFilter, setGameFilter] = useState(new Set());
     const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
     const [dateRangeInfo, setDateRangeInfo] = useState({ min: '', max: '' });
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
     const currentUsername = useContext(UserContext).username || 'User';
     const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
     const abortControllerRef = useRef(null);
+    
+    // Initialize cache and invalidation utilities
+    const mediaCache = useMediaCache();
+    const { invalidateCache } = useCacheInvalidation();
 
     useEffect(() => {
         // Refetch data when page becomes visible (user navigates back)
@@ -38,6 +45,17 @@ function FilesPage() {
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
+
+    // Listen for cache invalidation events from other components
+    useEffect(() => {
+        const handleCacheInvalidation = (event) => {
+            // Refetch media data when cache is invalidated
+            fetchMediaData();
+        };
+
+        window.addEventListener('mediaCache:invalidate', handleCacheInvalidation);
+        return () => window.removeEventListener('mediaCache:invalidate', handleCacheInvalidation);
     }, []);
 
     // Close dropdowns when clicking outside
@@ -142,12 +160,31 @@ function FilesPage() {
         try {
             setLoading(true);
             setError(null);
+            
+            // Check cache first
+            const cachedData = mediaCache.get(currentUsername);
+            if (cachedData) {
+                console.log('Using cached media data');
+                setMediaList(cachedData);
+                const uniqueGames = Array.from(
+                    new Set(cachedData.map(item => item.app_name).filter(Boolean))
+                );
+                setGames(uniqueGames);
+                setLoading(false);
+                return;
+            }
+            
+            // Fetch from API if cache miss
             const response = await fetch(`${apiBasePath}/media_aws`);
             if (!response.ok) {
                 throw new Error('Failed to fetch media');
             }
             const data = await response.json();
             const sorted = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            // Cache the data
+            mediaCache.set(currentUsername, sorted);
+            
             setMediaList(sorted);
             const uniqueGames = Array.from(
                 new Set(sorted.map(item => item.app_name).filter(Boolean))
@@ -158,6 +195,22 @@ function FilesPage() {
             setError(error.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleManualRefresh = async () => {
+        setIsRefreshing(true);
+        try {
+            // Clear local cache to force fresh fetch
+            mediaCache.invalidate(currentUsername);
+            // Invalidate backend cache as well
+            await invalidateCache(currentUsername);
+            // Force immediate fetch, bypassing cache
+            await fetchMediaData();
+        } catch (error) {
+            console.error('Error during manual refresh:', error);
+        } finally {
+            setIsRefreshing(false);
         }
     };
 
@@ -214,6 +267,10 @@ function FilesPage() {
 
             setFilteredMedia(updatedFiltered);
             setMediaList(updatedList);
+            
+            // Invalidate cache for all pages
+            await invalidateCache(currentUsername);
+            
             alert('File deleted successfully');
         } catch (error) {
             console.error('Error deleting media:', error);
@@ -271,6 +328,9 @@ function FilesPage() {
                 return media;
             });
             setMediaList(updatedList);
+            
+            // Invalidate cache for all pages
+            await invalidateCache(currentUsername);
 
             cancelEditing();
         } catch (error) {
@@ -438,6 +498,17 @@ function FilesPage() {
             <div className="flex-1 p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-semibold text-gray-700">My Files</h1>
+                    <button
+                        onClick={handleManualRefresh}
+                        disabled={isRefreshing}
+                        className="p-2 rounded-full hover:bg-gray-100 transition-all disabled:opacity-50"
+                        title="Refresh from AWS"
+                    >
+                        <RefreshCw 
+                            size={24} 
+                            className={`text-teal-600 ${isRefreshing ? 'animate-spin' : ''}`}
+                        />
+                    </button>
                 </header>
 
                 <div className="bg-white rounded-lg border border-gray-200 p-8">

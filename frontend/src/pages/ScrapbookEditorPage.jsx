@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { ChevronLeft, Trash2, Pencil, Check, X, Type, ImageIcon, Plus, MousePointer2, Upload, Download } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { UserContext } from '../context/UserContext';
+import { useMediaCache } from '../context/MediaCacheContext.jsx';
 
 const SCRAPBOOKS_KEY = 'digitaldiary.scrapbooks';
 const SCRAPBOOK_ITEMS_PREFIX = 'digitaldiary.scrapbook.items.';
@@ -144,6 +145,7 @@ function ScrapbookEditorPage() {
   const user = useContext(UserContext);
   const currentUsername = user?.username || 'User';
   const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
+  const mediaCache = useMediaCache();
   const [scrapbook, setScrapbook] = useState(null);
   const [items, setItems] = useState([]);
   const [hasHydratedItems, setHasHydratedItems] = useState(false);
@@ -206,9 +208,20 @@ function ScrapbookEditorPage() {
 
         for (const username of usersToFetch) {
           try {
-            const response = await fetch(`${API_BASE_URL}/api/${encodeURIComponent(username)}/media_aws`);
-            if (response.ok) {
-              const data = await response.json();
+            // Check cache first
+            let data = mediaCache.get(username);
+            
+            if (!data) {
+              // Cache miss, fetch from API
+              const response = await fetch(`${API_BASE_URL}/api/${encodeURIComponent(username)}/media_aws`);
+              if (response.ok) {
+                data = await response.json();
+                // Cache the data
+                mediaCache.set(username, data);
+              }
+            }
+            
+            if (data) {
               // Add username info to each media item for identification
               const mediaWithUser = data.map(item => ({
                 ...item,
@@ -238,7 +251,63 @@ function ScrapbookEditorPage() {
     };
 
     fetchMedia();
-  }, [selectedFriends]);
+  }, [selectedFriends, mediaCache]);
+
+  // Listen for cache invalidation events
+  useEffect(() => {
+    const handleCacheInvalidation = () => {
+      // Invalidate cache for all selected friends
+      Array.from(selectedFriends).forEach(username => {
+        mediaCache.invalidate(username);
+      });
+      
+      // Refetch media
+      const fetchMedia = async () => {
+        try {
+          setLoadingMedia(true);
+          setMediaError(null);
+
+          const usersToFetch = Array.from(selectedFriends);
+          const allMedia = [];
+
+          for (const username of usersToFetch) {
+            try {
+              const response = await fetch(`${API_BASE_URL}/api/${encodeURIComponent(username)}/media_aws`);
+              if (response.ok) {
+                const data = await response.json();
+                mediaCache.set(username, data);
+                const mediaWithUser = data.map(item => ({
+                  ...item,
+                  owner: username
+                }));
+                allMedia.push(...mediaWithUser);
+              }
+            } catch (error) {
+              console.error(`Error loading media for user ${username}:`, error);
+            }
+          }
+
+          const filtered = allMedia.filter((item) => item.type === 'screenshot' || item.type === 'video');
+          const sorted = filtered.sort((a, b) => {
+            const timeA = new Date(a.timestamp || 0).getTime();
+            const timeB = new Date(b.timestamp || 0).getTime();
+            return timeB - timeA;
+          });
+          setMedia(sorted);
+        } catch (error) {
+          console.error('Error loading media:', error);
+          setMediaError('Could not load photos/videos.');
+        } finally {
+          setLoadingMedia(false);
+        }
+      };
+
+      fetchMedia();
+    };
+
+    window.addEventListener('mediaCache:invalidate', handleCacheInvalidation);
+    return () => window.removeEventListener('mediaCache:invalidate', handleCacheInvalidation);
+  }, [selectedFriends, mediaCache]);
 
   useEffect(() => {
     if (!scrapbookId || !hasHydratedItems) return;

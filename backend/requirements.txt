@@ -1,5 +1,6 @@
 flask
 flask-cors
+flask-caching
 boto3
 requests
 pillow

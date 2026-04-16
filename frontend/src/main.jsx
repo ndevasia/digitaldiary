@@ -13,6 +13,7 @@ import ScrapbookPage from './pages/ScrapbookPage.jsx';
 import ScrapbookEditorPage from './pages/ScrapbookEditorPage.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import { UserContext } from './context/UserContext.jsx';
+import { MediaCacheProvider } from './context/MediaCacheContext.jsx';
 
 const AUTH_USERNAME = import.meta.env.VITE_USERNAME;
 const AUTH_SECRET = import.meta.env.VITE_USER_SECRET;
@@ -65,31 +66,35 @@ function MainApp() {
 
   if (isOverlay) {
     return (
-      <UserContext.Provider value={{ username: currentUsername }}>
-        <App />
-      </UserContext.Provider>
+      <MediaCacheProvider>
+        <UserContext.Provider value={{ username: currentUsername }}>
+          <App />
+        </UserContext.Provider>
+      </MediaCacheProvider>
     );
   }
 
   return (
-    <Router>
-      <UserContext.Provider value={{ username: currentUsername }}>
-        <div className="flex h-screen bg-blue-50">
-          <Sidebar />
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/files" element={<FilesPage />} />
-            <Route path="/games" element={<GamesPage />} />
-            <Route path="/scrapbook" element={<ScrapbookPage />} />
-            <Route path="/scrapbook/:scrapbookId" element={<ScrapbookEditorPage />} />
-            <Route path="/friends" element={<FriendsPage />} />
-            <Route path="/stats" element={<StatsPage />} />
-            <Route path="/journals" element={<HomePage />} /> {/* Placeholder */}
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
-        </div>
-      </UserContext.Provider>
-    </Router>
+    <MediaCacheProvider>
+      <Router>
+        <UserContext.Provider value={{ username: currentUsername }}>
+          <div className="flex h-screen bg-blue-50">
+            <Sidebar />
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/files" element={<FilesPage />} />
+              <Route path="/games" element={<GamesPage />} />
+              <Route path="/scrapbook" element={<ScrapbookPage />} />
+              <Route path="/scrapbook/:scrapbookId" element={<ScrapbookEditorPage />} />
+              <Route path="/friends" element={<FriendsPage />} />
+              <Route path="/stats" element={<StatsPage />} />
+              <Route path="/journals" element={<HomePage />} /> {/* Placeholder */}
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </div>
+        </UserContext.Provider>
+      </Router>
+    </MediaCacheProvider>
   );
 }
 

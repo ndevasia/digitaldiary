@@ -1,22 +1,23 @@
-from flask import Flask, jsonify, request, send_from_directory, render_template, Response
+from flask import Flask, jsonify, request, Response
 import os
 import boto3
 import json
 import sys
 import signal
-from flask_cors import CORS  # You'll need to install flask-cors
+from flask_cors import CORS
+from flask_caching import Cache
 import subprocess
 import platform
+import socket
 from datetime import datetime, timedelta, timezone
-import numpy as np
 import requests
-import sounddevice as sd  # Used in AudioRecorderThread
-import soundfile as sf    # Used in AudioRecorderThread
-from PyQt5.QtCore import QDateTime  # For consistent date formatting
 import random
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
+
+# Resolve project root for both local runs and container runs.
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Fix path to import from sibling directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -49,102 +50,83 @@ except ImportError as e:
 if sys.stdin is None:
     sys.stdin = open(os.devnull)
 if sys.stdout is None:
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+    log_dir = os.path.join(PROJECT_ROOT, 'logs')
     os.makedirs(log_dir, exist_ok=True)
     sys.stdout = open(os.path.join(log_dir, 'app.log'), 'w')
 if sys.stderr is None:
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+    log_dir = os.path.join(PROJECT_ROOT, 'logs')
     os.makedirs(log_dir, exist_ok=True)
     sys.stderr = open(os.path.join(log_dir, 'error.log'), 'w')
 
 # Add a function to log to both console and file
 def log_message(message):
     print(message)
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
+    log_dir = os.path.join(PROJECT_ROOT, 'logs')
     os.makedirs(log_dir, exist_ok=True)
     with open(os.path.join(log_dir, 'app.log'), 'a') as f:
         f.write(f"{message}\n")
 
-
-def get_default_username():
-    """Get the default username (user 0) from user.json"""
-    try:
-        user_json_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'model', 'user.json'
-        )
-        
-        if os.path.exists(user_json_path):
-            with open(user_json_path, 'r') as f:
-                data = json.load(f)
-            users = data.get('users', [])
-            # Find user with user_id = 0
-            for user in users:
-                if user.get('user_id') == 0:
-                    return user.get('username')
-        
-        # Fallback if no user 0 found
-        return os.getenv('USERNAME', 'User')
-    except Exception as e:
-        log_message(f"Error getting default username: {e}")
-        return os.getenv('USERNAME', 'User')
-
 def get_user_id_from_username(username):
-    """Get the user_id from a username by looking it up in user.json"""
+    """Helper function to convert username to user_id using user.json from S3"""
     try:
-        ensure_user_json_exists()
-        user_json_path = get_user_json_path()
-        
-        with open(user_json_path, 'r') as f:
-            user_data = json.load(f)
-        
-        users = user_data.get('users', [])
-        for user in users:
-            if user.get('username') == username:
-                return user.get('user_id')
-        
-        return None
+        s3 = S3('system')
+        return s3.get_user_id_from_username(username)
     except Exception as e:
         print(f"Error getting user_id from username: {e}")
         return None
 
+def is_secret_valid(username, secret):
+    """Verify that a user exists and has the correct secret using S3"""
+    try:
+        s3 = S3('system')
+        return s3.is_secret_valid(username, secret)
+    except Exception as e:
+        print(f"Error verifying secret: {e}")
+        return False
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS to allow React app to communicate with Flask
 
+# Initialize caching with simple in-memory backend
+cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
-# Helper functions for user.json
-def get_user_json_path():
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
+@app.before_request
+def authenticate():
+    """Middleware to check for valid secret in headers before processing any request"""
+    # Let CORS preflight through without auth headers.
+    if request.method == 'OPTIONS':
+        return
+    if request.endpoint == 'test_endpoint':  # Allow unauthenticated access to test endpoint
+        return
+    secret = request.headers.get('X-User-Secret')
+    username = request.headers.get('X-Username')
+    if not secret or not username or not is_secret_valid(username, secret):
+        return jsonify({"error": "Unauthorized"}), 401
 
+# Helper functions for user.json (now in S3)
 def ensure_user_json_exists():
-    """Ensure user.json exists with a basic structure."""
+    """Ensure user.json exists with a basic structure in S3."""
     try:
-        path = get_user_json_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-
-        if not os.path.exists(path):
-            # Create default owner with user_id 0 (ideally we will never hit this branch of logic)
-            default_user = {"user_id": 0, "username": "owner"}
-            tmp_path = path + '.tmp'
-            with open(tmp_path, 'w') as f:
-                json.dump({"users": [default_user]}, f, indent=4)
-            os.replace(tmp_path, path)
+        s3 = S3('system')
+        return s3.ensure_user_json_exists()
     except Exception as e:
         print(f"Error ensuring user.json exists: {str(e)}")
+        return False
 
 # S3 Setup
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 s3_client = boto3.client('s3', region_name=AWS_REGION)
 
-# Get the base directory (similar to how overlay.py gets to "recordings")
-# This ensures we save to the project's root recordings directory
-base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Get the base directory for recordings/bin/etc.
+# In container this resolves to /app when running /app/window/app.py.
+base_dir = PROJECT_ROOT
 RECORDINGS_DIR = os.path.join(base_dir, "recordings")
 SCREENSHOTS_DIR = os.path.join(base_dir, "screenshots")
 AUDIO_DIR = os.path.join(base_dir, "audio")
 THUMBNAILS_DIR = os.path.join(RECORDINGS_DIR, "thumbnails")
 PROFILE_PICS_DIR = os.path.join(base_dir, "profile_pics") # Profile picture directory
+HERO_IMAGES_DIR = os.path.join(base_dir, "hero_images") # Hero images directory
 
 # Figure out OS and architecture for ffmpeg binary path
 BIN_DIR = os.path.join(base_dir, "bin")
@@ -167,6 +149,60 @@ FFMPEG_PATH = os.path.join(
     'ffmpeg' + ('.exe' if platform_os == 'win' else '')
 )
 
+# SRT settings for container/network deployments.
+SRT_PORT_MIN = int(os.getenv('SRT_PORT_MIN', '40000'))
+SRT_PORT_MAX = int(os.getenv('SRT_PORT_MAX', '40100'))
+if SRT_PORT_MIN > SRT_PORT_MAX:
+    SRT_PORT_MIN, SRT_PORT_MAX = SRT_PORT_MAX, SRT_PORT_MIN
+SRT_BIND_HOST = os.getenv('SRT_BIND_HOST', '0.0.0.0')
+SRT_PUBLIC_HOST = os.getenv('SRT_PUBLIC_HOST', 'auto')
+
+log_message(f"base_dir: {base_dir}")
+log_message(f"FFMPEG_PATH: {FFMPEG_PATH}")
+log_message(f"FFMPEG exists: {os.path.exists(FFMPEG_PATH)}")
+log_message(f"SRT settings -> bind: {SRT_BIND_HOST}, public: {SRT_PUBLIC_HOST}, range: {SRT_PORT_MIN}-{SRT_PORT_MAX}")
+
+
+def resolve_srt_public_host():
+    """Resolve the host clients should use to reach SRT listener."""
+    configured_host = (SRT_PUBLIC_HOST or '').strip()
+    invalid_hosts = {'0.0.0.0', '::', 'localhost', '127.0.0.1'}
+    if configured_host and configured_host.lower() != 'auto':
+        if configured_host in invalid_hosts:
+            log_message(
+                f"SRT_PUBLIC_HOST '{configured_host}' is not routable for caller mode; falling back to auto detection"
+            )
+        else:
+            return configured_host
+
+    def get_interface_ip():
+        try:
+            # Standard trick to discover the outbound interface IP without sending traffic.
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(('8.8.8.8', 80))
+                return s.getsockname()[0]
+        except Exception:
+            return None
+
+    forwarded_host = (request.headers.get('X-Forwarded-Host') or '').split(',')[0].strip()
+    if forwarded_host:
+        host = forwarded_host.split(':')[0]
+        if host not in invalid_hosts:
+            return host
+
+    host_header = (request.headers.get('Host') or '').strip()
+    if host_header:
+        host = host_header.split(':')[0]
+        if host not in invalid_hosts:
+            return host
+
+    # In local WSL dev, localhost returned to a Windows client often fails for UDP/SRT.
+    # Prefer a routable Linux interface IP when running in auto mode.
+    interface_ip = get_interface_ip()
+    if interface_ip:
+        return interface_ip
+
+    return '127.0.0.1'
 
 # Create directories (same as in overlay.py)
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
@@ -174,7 +210,7 @@ os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(PROFILE_PICS_DIR, exist_ok=True)
-
+os.makedirs(HERO_IMAGES_DIR, exist_ok=True)
 # Global variables for recording state
 recorder_thread = None
 audio_recorder = None
@@ -189,38 +225,6 @@ recording_processes = {}
 recording_metadata = {}
 # Define a cleanup function to run when the app closes
 def graceful_exit(signum, frame):
-    print("Received stop signal. Cleaning up...")
-    
-    # 1. Stop Video Recording if active
-    global recorder_thread
-    if recorder_thread and hasattr(recorder_thread, 'recording') and recorder_thread.recording:
-        print("Stopping active video recording...")
-        try:
-            recorder_thread.stop()
-            # Wait briefly for file to save
-            import time
-            time.sleep(1)
-        except Exception as e:
-            print(f"Error stopping video recording: {e}")
-        
-    # 2. Stop Audio Recording if active
-    global audio_recorder
-    if audio_recorder and audio_recorder.get('recording', False):
-        print("Stopping active audio recording...")
-        try:
-            # Stop recording
-            audio_recorder['recording'] = False
-            sd.sleep(200)  # Wait for recording to finalize
-            
-            # Save the audio file
-            if audio_recorder['frames']:
-                now = QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')
-                audio_path = os.path.join(AUDIO_DIR, f'audio_recording_{now}.wav')
-                sf.write(audio_path, np.concatenate(audio_recorder['frames']), audio_recorder['samplerate'])
-                print(f"Audio recording saved to {audio_path}")
-        except Exception as e:
-            print(f"Error stopping audio recording: {e}")
-    
     print("Cleanup done. Exiting.")
     sys.exit(0)
 
@@ -232,15 +236,12 @@ signal.signal(signal.SIGINT, graceful_exit)   # Handle Ctrl+C
 def test_endpoint():
     return jsonify({"message": "API is working!"})
 
-@app.route('/api/media_aws', methods=['GET'])
-def get_media_aws():
+@app.route('/api/<username>/media_aws', methods=['GET'])
+@cache.cached(timeout=480, key_prefix=lambda: f"media_aws_{request.view_args['username']}")
+def get_media_aws(username):
     try:
-        username = get_default_username()
-        # Support optional single 'username' query param so callers can request another user's media
-        req_username = request.args.get('username')
-        prefix_username = req_username if req_username else username
         # List objects in the specified user's directory in S3
-        prefix = f"{prefix_username}/"
+        prefix = f"{username}/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
 
         if 'Contents' not in response:
@@ -355,11 +356,10 @@ def generate_presigned_url():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/latest-screenshot', methods=['GET'])
-def latest_screenshot():
+@app.route('/api/<username>/latest-screenshot', methods=['GET'])
+def latest_screenshot(username):
     """Returns the URL for the latest screenshot"""
     try:
-        username = get_default_username()
         # List all objects under USERNAME prefix to find any screenshots
         prefix = username + "/screenshot_"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
@@ -382,8 +382,8 @@ def latest_screenshot():
         print(f"Error in latest_screenshot: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/random-screenshot-by-days/<int:days>', methods=['GET'])
-def get_random_screenshot_by_days(days):
+@app.route('/api/<username>/random-screenshot-by-days/<int:days>', methods=['GET'])
+def get_random_screenshot_by_days(username, days):
     """Returns the URL for a randomly selected screenshot taken approximately X days ago or longer"""
     try:
         # Calculate the date from approximately X days ago
@@ -394,7 +394,6 @@ def get_random_screenshot_by_days(days):
         # Extract just the date part (year, month, day) for comparison
         # target_date_only = target_date.date()
         
-        username = get_default_username()
         prefix = username + "/screenshot_"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
         
@@ -426,13 +425,15 @@ def get_random_screenshot_by_days(days):
         print(f"Error in get_random_screenshot_by_days: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/screenshots/<filename>')
-def get_screenshot(filename):
-    """Serves the screenshot file."""
-    return send_from_directory(SCREENSHOTS_DIR, filename)
+# unsecure endpoint
+#
+# @app.route('/api/<username>/screenshots/<filename>')
+# def get_screenshot(username, filename):
+#     """Serves the screenshot file."""
+#     return send_from_directory(SCREENSHOTS_DIR, filename)
 
-@app.route('/api/screenshot', methods=['POST'])
-def upload_screenshot():
+@app.route('/api/<username>/screenshot', methods=['POST'])
+def upload_screenshot(username):
     if 'file' not in request.files:
         return jsonify({'error': 'No file part in the request'}), 400
     file = request.files['file']
@@ -445,8 +446,7 @@ def upload_screenshot():
         user_with = request.form.get('user_with', '')
         
         # Generate presigned URL for upload
-        current_username = get_default_username()
-        object_name = f"{current_username}/{file.filename}"
+        object_name = f"{username}/{file.filename}"
         url = s3_client.generate_presigned_url(
             'put_object',
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -473,6 +473,10 @@ def upload_screenshot():
         except Exception as e:
             log_message(f"Warning: Could not tag screenshot object: {e}")
         
+        # Invalidate cache for this user
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
+        
         return jsonify({
             'status': 'success',
             'url': url
@@ -481,8 +485,8 @@ def upload_screenshot():
         print(f'Screenshot error: {str(e)}')
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/recording/start', methods=['POST'])
-def start_screen_recording():
+@app.route('/api/<username>/recording/start', methods=['POST'])
+def start_screen_recording(username):
     try:
         global recording_processes
         global recording_metadata
@@ -492,8 +496,14 @@ def start_screen_recording():
         app_name = data.get('app_name', '')
         user_with = data.get('user_with', '')
 
-        port = random.randint(40000, 50000)
-        url = f"srt://127.0.0.1:{port}"
+        port = random.randint(SRT_PORT_MIN, SRT_PORT_MAX)
+        public_host = resolve_srt_public_host()
+        # FFmpeg SRT listener is most compatible using empty-host form: srt://:<port>
+        if SRT_BIND_HOST in ('0.0.0.0', '::', ''):
+            listen_url = f"srt://:{port}"
+        else:
+            listen_url = f"srt://{SRT_BIND_HOST}:{port}"
+        caller_url = f"srt://{public_host}:{port}"
 
         file_uid = datetime.now().strftime(f"{port}%Y%m%d_%H%M%S")
         filename = f"recording_{file_uid}.mkv"
@@ -502,13 +512,18 @@ def start_screen_recording():
         log_message(f"Output file path: {ffmpeg_output}")
         log_message(f"FFmpeg path: {FFMPEG_PATH}")
         log_message(f"FFmpeg exists: {os.path.exists(FFMPEG_PATH)}")
+        listen_query = '?mode=listener&transtype=live&latency=120'
+        caller_query = '?mode=caller&transtype=live&latency=120'
+
+        log_message(f"SRT listen URL: {listen_url}{listen_query}")
+        log_message(f"SRT caller URL: {caller_url}{caller_query}")
         
         # Start FFmpeg process
         ffmpeg_process = subprocess.Popen(
             [FFMPEG_PATH, 
              '-probesize', '10M',
              '-flags', 'low_delay',
-             '-i', url + '?mode=listener',
+             '-i', listen_url + listen_query,
              '-map', '0:v',   # Map video first
              '-map', '0:a?',   # Map audio second
              '-c:v', 'copy',  # Then specify video codec
@@ -536,7 +551,7 @@ def start_screen_recording():
             # Process is still running - good!
             log_message("FFmpeg process is running")
 
-        return jsonify({'status': 'ffmpeg available', 'url': url + '?mode=caller', 'uid': file_uid}), 200
+        return jsonify({'status': 'ffmpeg available', 'url': caller_url + caller_query, 'uid': file_uid}), 200
         
     except Exception as e:
         log_message(f"Recording start error: {str(e)}")
@@ -544,8 +559,8 @@ def start_screen_recording():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/recording/status/<file_uid>', methods=['GET'])
-def recording_status(file_uid):
+@app.route('/api/<username>/recording/status/<file_uid>', methods=['GET'])
+def recording_status(username, file_uid):
     try:
         global recording_processes
         if file_uid in recording_processes and recording_processes[file_uid].poll() is None:
@@ -556,8 +571,8 @@ def recording_status(file_uid):
         print(f"Recording status error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/recording/stop/<file_uid>', methods=['POST'])
-def stop_screen_recording(file_uid):
+@app.route('/api/<username>/recording/stop/<file_uid>', methods=['POST'])
+def stop_screen_recording(username, file_uid):
     try:
         global recording_processes
         global recording_metadata
@@ -585,7 +600,7 @@ def stop_screen_recording(file_uid):
 
         # Upload the recording to S3
         try:
-            object_name = f"{get_default_username()}/recordings/{filename}"
+            object_name = f"{username}/recordings/{filename}"
             url = s3_client.generate_presigned_url(
                 'put_object',
                 Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -630,6 +645,10 @@ def stop_screen_recording(file_uid):
             log_message(f"Error uploading recording: {e}")
             return jsonify({'error': f"Failed to upload recording: {str(e)}"}), 500
 
+        # Invalidate cache for this user
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
+
         # Return paths
         return jsonify({
             'status': 'stopped',
@@ -642,8 +661,8 @@ def stop_screen_recording(file_uid):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/audio/upload', methods=['POST'])
-def upload_audio_recording():
+@app.route('/api/<username>/audio/upload', methods=['POST'])
+def upload_audio_recording(username):
     if 'file' not in request.files:
         return jsonify({'error': 'No file part in the request'}), 400
     file = request.files['file']
@@ -656,7 +675,7 @@ def upload_audio_recording():
         user_with = request.form.get('user_with', '')
         
         # Generate presigned URL for upload
-        object_name = f"{get_default_username()}/recordings/{file.filename}"
+        object_name = f"{username}/recordings/{file.filename}"
         url = s3_client.generate_presigned_url(
             'put_object',
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -683,6 +702,10 @@ def upload_audio_recording():
         except Exception as e:
             log_message(f"Warning: Could not tag audio object: {e}")
         
+        # Invalidate cache for this user
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
+        
         return jsonify({
             'status': 'success',
             'url': url
@@ -691,37 +714,8 @@ def upload_audio_recording():
         print(f'Audio upload error: {str(e)}')
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/media', methods=['GET'])
-def get_media():
-    try:
-        media_type = request.args.get('media_type')
-        user_id = request.args.get('user_id')
-
-        MEDIA_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '../model/media.json'))
-
-        with open(MEDIA_FOLDER, 'r') as file:
-            data = json.load(file)
-
-        media = data['media']
-
-        if media_type:
-            media = [item for item in media if item['type'] == media_type]
-
-        if user_id:
-            # Convert user_id to int for consistent filtering with integer user_ids
-            try:
-                user_id_int = int(user_id)
-                media = [item for item in media if item['owner_user_id'] == user_id_int]
-            except ValueError:
-                # If conversion fails, fall back to string comparison
-                media = [item for item in media if str(item['owner_user_id']) == str(user_id)]
-
-        return jsonify(media)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/session/create', methods=['POST'])
-def create_session():
+@app.route('/api/<username>/session/create', methods=['POST'])
+def create_session(username):
     try:
         data = request.json
         app_name = data.get('appName')
@@ -733,25 +727,24 @@ def create_session():
         # Validate that user_with contains only actual friends
         if user_with:
             try:
-                ensure_user_json_exists()
-                user_json_path = get_user_json_path()
-                with open(user_json_path, 'r') as f:
-                    user_data = json.load(f)
-                friends = [u.get('username') for u in user_data.get('users', []) if u.get('user_id', 0) > 0]
-                
-                # Parse plus-separated friends and validate
-                provided_friends = [f.strip() for f in user_with.split('+') if f.strip()]
-                invalid_friends = [f for f in provided_friends if f not in friends]
-                
-                if invalid_friends:
-                    return jsonify({"error": f"Invalid friends: {'/'.join(invalid_friends)}"}), 400
+                s3 = S3('system')
+                user_data = s3.read_user_json()
+                if user_data is not None:
+                    friends = user_data.get('users', {}).get(username, {}).get('friends', [])
+                    
+                    # Parse plus-separated friends and validate
+                    provided_friends = [f.strip() for f in user_with.split('+') if f.strip()]
+                    invalid_friends = [f for f in provided_friends if f not in friends]
+                    
+                    if invalid_friends:
+                        return jsonify({"error": f"Invalid friends: {'/'.join(invalid_friends)}"}), 400
             except Exception as e:
                 log_message(f"Warning: Could not validate friends: {e}")
                 # Don't fail the session creation if validation fails, just log it
         
         # Import aws.py's S3 class and call create_session
         from server.aws import S3
-        s3 = S3()
+        s3 = S3(username)
         success = s3.create_session(app_name, user_with)
         
         if not success:
@@ -767,8 +760,8 @@ def create_session():
         print(f"Error creating session: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/session/update', methods=['POST'])
-def update_session():
+@app.route('/api/<username>/session/update', methods=['POST'])
+def update_session(username):
     try:
         data = request.json
         session_id = data.get('session_id')
@@ -778,8 +771,7 @@ def update_session():
         
         # Import aws.py's S3 class and call update_session
         from server.aws import S3
-        current_username = get_default_username()
-        s3 = S3(username=current_username)
+        s3 = S3(username)
         success = s3.update_session(session_id)
         
         if not success:
@@ -794,13 +786,12 @@ def update_session():
         print(f"Error updating session: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/session/latest', methods=['GET'])
-def get_latest_session():
+@app.route('/api/<username>/session/latest', methods=['GET'])
+def get_latest_session(username):
     try:
         # Import aws.py's S3 class and call get_latest_session
         from server.aws import S3
-        current_username = get_default_username()
-        s3 = S3(username=current_username)
+        s3 = S3(username)
         latest_session = s3.get_latest_session()
         
         if not latest_session:
@@ -815,12 +806,12 @@ def get_latest_session():
         print(f"Error getting latest session: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/session/end', methods=['POST'])
-def end_session():
+@app.route('/api/<username>/session/end', methods=['POST'])
+def end_session(username):
     try:
         # Import aws.py's S3 class and call end_session
         from server.aws import S3
-        s3 = S3()
+        s3 = S3(username)
         success = s3.end_session()
         
         if not success:
@@ -832,12 +823,12 @@ def end_session():
         print(f"Error ending session: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/sessions/list', methods=['GET'])
-def list_sessions():
+@app.route('/api/<username>/sessions/list', methods=['GET'])
+def list_sessions(username):
     try:
         # Import aws.py's S3 class and get all sessions
         from server.aws import S3
-        s3 = S3()
+        s3 = S3(username)
         sessions = s3.get_all_sessions()
         
         if not sessions:
@@ -849,8 +840,8 @@ def list_sessions():
         print(f"Error listing sessions: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/session/delete', methods=['POST'])
-def delete_session():
+@app.route('/api/<username>/session/delete', methods=['POST'])
+def delete_session(username):
     try:
         data = request.json
         start_timestamp = data.get('start_timestamp')
@@ -860,7 +851,7 @@ def delete_session():
         
         # Import aws.py's S3 class and delete the session
         from server.aws import S3
-        s3 = S3()
+        s3 = S3(username)
         success = s3.delete_session(start_timestamp)
         
         if not success:
@@ -872,8 +863,8 @@ def delete_session():
         print(f"Error deleting session: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/media/delete', methods=['DELETE', 'POST'])
-def delete_media():
+@app.route('/api/<username>/media/delete', methods=['DELETE', 'POST'])
+def delete_media(username):
     try:
         # Support both JSON body (for DELETE) and form data (for POST for backwards compatibility)
         if request.method == 'DELETE':
@@ -888,11 +879,15 @@ def delete_media():
         
         # Import aws.py's S3 class and delete the file
         from server.aws import S3
-        s3 = S3()
+        s3 = S3(username)
         success = s3.delete_file(file_key)
         
         if not success:
             return jsonify({"error": "Failed to delete file from S3"}), 500
+        
+        # Invalidate cache for this user
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
         
         return jsonify({"status": "success"})
         
@@ -900,8 +895,8 @@ def delete_media():
         print(f"Error deleting media: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/media/update-metadata', methods=['POST'])
-def update_media_metadata():
+@app.route('/api/<username>/media/update-metadata', methods=['POST'])
+def update_media_metadata(username):
     try:
         data = request.json
         s3_key = data.get('s3_key')
@@ -918,11 +913,15 @@ def update_media_metadata():
         
         # Import aws.py's S3 class and update metadata
         from server.aws import S3
-        s3 = S3()
+        s3 = S3(username)
         success = s3.update_media_metadata(s3_key, trimmed_metadata)
         
         if not success:
             return jsonify({"error": "Failed to update media metadata"}), 500
+        
+        # Invalidate cache for this user
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
         
         return jsonify({"status": "success"})
         
@@ -930,26 +929,21 @@ def update_media_metadata():
         print(f"Error updating media metadata: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/users', methods=['GET'])
-def get_users():
+@app.route('/api/<username>/cache/invalidate', methods=['POST'])
+def invalidate_cache(username):
+    """Manual cache invalidation endpoint"""
     try:
-        # Ensure user.json exists 
-        ensure_user_json_exists()
-
-        # Read the JSON file
-        user_json_path = get_user_json_path()
-        with open(user_json_path, 'r') as f:
-            user_data = json.load(f)
-
-        return jsonify(user_data.get('users', []))
+        cache_key = f"media_aws_{username}"
+        cache.delete(cache_key)
+        return jsonify({"status": "success", "message": f"Cache invalidated for user {username}"})
     except Exception as e:
+        print(f"Error invalidating cache: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 # Upload profile picture to directory    
-@app.route('/api/upload-profile-pic', methods=['POST'])
-def upload_profile_pic():
+@app.route('/api/<username>/upload-profile-pic', methods=['POST'])
+def upload_profile_pic(username):
     try:
-        username = get_default_username()
         if 'file' not in request.files:
             return jsonify({"error": "No file part"}), 400
         
@@ -1008,10 +1002,9 @@ def upload_profile_pic():
         return jsonify({"error": str(e)}), 500
     
 # Retrieve profile picture from directory
-@app.route('/api/profile-pic', methods=['GET'])
-def get_profile_pic():
+@app.route('/api/<username>/profile-pic', methods=['GET'])
+def get_profile_pic(username):
     try:
-        username = get_default_username()
         # List objects with the prefix for profile pictures
         response = s3_client.list_objects_v2(
             Bucket=BUCKET_NAME, 
@@ -1039,76 +1032,100 @@ def get_profile_pic():
         # Standard error response if S3 connection fails
         return jsonify({"error": str(e)}), 500
 
-
-@app.route('/api/users', methods=['POST'])
-def add_user():
+# Upload hero image to directory    
+@app.route('/api/<username>/upload-hero-image', methods=['POST'])
+def upload_hero_image(username):
     try:
-        data = request.json or {}
-        username = data.get('username')
-        if not username:
-            return jsonify({"error": "username is required"}), 400
-
-        default_username = get_default_username()
-        ensure_user_json_exists()
-        user_json_path = get_user_json_path()
-
-        with open(user_json_path, 'r') as f:
-            user_data = json.load(f)
-
-        users = user_data.get('users', [])
-        # Prevent duplicates based on username only; return the existing user object for convenience
-        existing = next((u for u in users if str(u.get('username')) == str(username)), None)
-        if existing:
-            return jsonify(existing), 200
-
-        # Assign next integer user_id
-        max_id = max([u.get('user_id', 0) for u in users if isinstance(u.get('user_id'), int)], default=-1)
-        new_id = max(max_id + 1, 1)  # Start from 1 (0 is reserved for owner)
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
         
-        new_user = {"user_id": new_id, "username": username}
-        users.append(new_user)
-        user_data['users'] = users
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        
+        # Simple extension check
+        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            return jsonify({"error": "File type not supported"}), 400
+        
+        _, ext = os.path.splitext(file.filename) 
+        ext = ext.lower()
+        object_name = f"{username}/hero{ext}"
 
-        tmp_path = user_json_path + '.tmp'
-        with open(tmp_path, 'w') as f:
-            json.dump(user_data, f, indent=4)
-        os.replace(tmp_path, user_json_path)
+        content_types = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif'
+        }
 
-        return jsonify(new_user), 201
+        # Ensure pointer is at the start
+        file.seek(0)
+
+        # Uploads new profile picture first
+        s3_client.upload_fileobj(
+            file,
+            BUCKET_NAME,
+            object_name,
+            # octet-stream used for fallback if unknown extension
+            ExtraArgs={'ContentType': content_types.get(ext, 'application/octet-stream')}
+        )
+
+        # Clean up old/different extensions
+        existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/hero")
+
+        if 'Contents' in existing_files:
+        # Filter out the file we JUST uploaded so we don't delete it
+            delete_keys = [
+                {'Key': obj['Key']} 
+                for obj in existing_files['Contents'] 
+                if obj['Key'] != object_name
+            ]
+            if delete_keys:
+                s3_client.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': delete_keys})
+
+        new_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
+        
+        return jsonify({"message": "Success", "url": new_url}), 200
     except Exception as e:
-        print(f"Error in add_user: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-@app.route('/api/users_aws/check', methods=['GET'])
-def check_user_exists_aws():
-    """Check whether a given username exists as a top-level prefix (folder) in the S3 bucket.
-
-    Query params:
-      - username: the username to check
-
-    Returns: { "exists": true } or { "exists": false }
-    """
+    
+# Retrieve profile picture from directory
+@app.route('/api/<username>/hero-image', methods=['GET'])
+def get_hero_image(username):
     try:
-        username = request.args.get('username')
-        if not username:
-            return jsonify({"error": "username is required"}), 400
+        # List objects with the prefix for hero images
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME, 
+            Prefix=f"{username}/hero"
+        )
 
-        prefix = f"{username}/"
+        # Check if any files were actually found
+        if 'Contents' not in response or len(response['Contents']) == 0:
+            # If no files found, return None for placeholder in frontend
+            return jsonify({"url": None}), 200
 
-        # Use Delimiter and Prefix to efficiently check for any objects under that prefix
-        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix, MaxKeys=1)
+        # Get the Key of the first (most relevant) match
+        object_name = response['Contents'][0]['Key']
 
-        exists = False
-        if 'Contents' in response and len(response['Contents']) > 0:
-            exists = True
+        # 4. Generate the presigned URL for the found file
+        hero_image_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+            ExpiresIn=3600
+        )
 
-        return jsonify({"exists": exists})
+        return jsonify({"url": hero_image_url}), 200
+
     except Exception as e:
-        print(f"Error in check_user_exists_aws: {str(e)}")
+        # Standard error response if S3 connection fails
         return jsonify({"error": str(e)}), 500
-
-@app.route('/api/friends/add', methods=['POST'])
-def add_friend():
+    
+@app.route('/api/<username>/friends/add', methods=['POST'])
+def add_friend(username):
     """Add a friend to the current user's friends list by adding them to user.json.
     
     Request body:
@@ -1123,10 +1140,6 @@ def add_friend():
         if not friend_username:
             return jsonify({"error": "friend_username is required"}), 400
         
-        current_username = get_default_username()
-        if not current_username:
-            return jsonify({"error": "Current user not set"}), 400
-        
         # Check if friend exists in S3
         prefix = f"{friend_username}/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix, MaxKeys=1)
@@ -1136,103 +1149,72 @@ def add_friend():
             return jsonify({"error": f"User '{friend_username}' does not exist"}), 404
         
         # Check if trying to add self
-        if friend_username == current_username:
+        if friend_username == username:
             return jsonify({"error": "Cannot add yourself as a friend"}), 400
         
-        ensure_user_json_exists()
-        user_json_path = get_user_json_path()
-        
-        with open(user_json_path, 'r') as f:
-            user_data = json.load(f)
-        
-        users = user_data.get('users', [])
-        
-        # Check if friend already exists in user.json
-        if any(u.get('username') == friend_username for u in users):
-            return jsonify({"message": "Friend already added"}), 200
-        
-        # Generate next available user_id (integer > 0)
-        max_user_id = max((u.get('user_id', -1) for u in users), default=-1)
-        new_user_id = max(1, max_user_id + 1) if max_user_id >= 0 else 1
-        
-        # Add friend to user.json
-        new_friend = {"user_id": new_user_id, "username": friend_username}
-        users.append(new_friend)
-        user_data['users'] = users
-        
-        tmp_path = user_json_path + '.tmp'
-        with open(tmp_path, 'w') as f:
-            json.dump(user_data, f, indent=4)
-        os.replace(tmp_path, user_json_path)
-        
-        return jsonify({"message": "Friend added successfully", "friend": friend_username}), 201
+        # Use S3 to read, modify, and write user.json
+        try:
+            s3 = S3('system')
+            
+            # Ensure user.json exists
+            s3.ensure_user_json_exists()
+            
+            # Read current user.json
+            user_data = s3.read_user_json()
+            if user_data is None:
+                return jsonify({"error": "Could not read user data"}), 500
+            
+            users = user_data.get('users', {})
+            
+            # Initialize user record if it doesn't exist
+            if username not in users:
+                users[username] = {'friends': [], 'user_id': 1, 'secret': ''}
+            
+            # Check if friend already exists in user.json
+            if friend_username in users.get(username, {}).get('friends', []):
+                return jsonify({"message": "Friend already added"}), 200
+            
+            # Add friend to user.json
+            users[username]['friends'].append(friend_username)
+            user_data['users'] = users
+            
+            # Write updated user.json to S3
+            if not s3.write_user_json(user_data):
+                return jsonify({"error": "Failed to save user data"}), 500
+            
+            return jsonify({"message": "Friend added successfully", "friend": friend_username}), 201
+        except Exception as e:
+            print(f"Error managing friends in S3: {str(e)}")
+            return jsonify({"error": str(e)}), 500
     except Exception as e:
         print(f"Error in add_friend: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/friends', methods=['GET'])
-def get_friends():
-    """Get the current user's friends list. Returns all users with user_id > 0.
+@app.route('/api/<username>/friends', methods=['GET'])
+def get_friends(username):
+    """Get the current user's friends list.
     
     Returns: { "friends": [...] } or error
     """
     try:
-        ensure_user_json_exists()
-        user_json_path = get_user_json_path()
+        s3 = S3('system')
         
-        with open(user_json_path, 'r') as f:
-            user_data = json.load(f)
+        # Ensure user.json exists
+        s3.ensure_user_json_exists()
         
-        users = user_data.get('users', [])
-        # Friends are all users with user_id > 0
-        friends = [u.get('username') for u in users if u.get('user_id', 0) > 0]
+        # Read user.json from S3
+        user_data = s3.read_user_json()
+        if user_data is None:
+            return jsonify({"error": "Could not read user data"}), 500
+        
+        users = user_data.get('users', {})
+        # Friends are stored in the user's friends list
+        friends = users.get(username, {}).get('friends', [])
         
         return jsonify({"friends": friends}), 200
     except Exception as e:
         print(f"Error in get_friends: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-@app.route('/api/current_user', methods=['GET'])
-def get_current_user():
-    try:
-        username = get_default_username()
-        if not username:
-            user_json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
-            with open(user_json_path, 'r') as f:
-                data = json.load(f)
-            if data.get('users'):
-                username = data['users'][0].get('username')
-        return jsonify({'username': username})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/')
-def index_page():
-    try:
-        screenshot_url = None
-        username = get_default_username()
-        if not username:
-            user_json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'user.json')
-            with open(user_json_path, 'r') as f:
-                data = json.load(f)
-            if data.get('users'):
-                username = data['users'][0].get('username')
-        return render_template('layout.html', username=username, screenshot_url=screenshot_url)
-    except Exception as e:
-        print(e)
-        return "Error", 500
-
-@app.route('/files')
-def files_page():
-    try:
-        username = get_default_username()
-        if not username:
-            return "Error", 500
-        files = []
-        return render_template('files.html', username=username, files=files)
-    except Exception as e:
-        print(e)
-        return "Error", 500
 
 if __name__ == '__main__':
     # Ensure user.json is present when the app starts

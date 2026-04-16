@@ -4,33 +4,6 @@ import os
 import json
 from datetime import datetime
 
-
-def get_default_username():
-    """Get the default username (user 0) from user.json"""
-    try:
-        # Find user.json in the model directory
-        model_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            'backend', 'model'
-        )
-        user_json_path = os.path.join(model_dir, 'user.json')
-        
-        if os.path.exists(user_json_path):
-            with open(user_json_path, 'r') as f:
-                data = json.load(f)
-            users = data.get('users', [])
-            # Find user with user_id = 0
-            for user in users:
-                if user.get('user_id') == 0:
-                    return user.get('username')
-        
-        # Fallback if no user 0 found
-        return os.getenv('USERNAME', 'User')
-    except Exception as e:
-        print(f"Error getting default username: {e}")
-        return os.getenv('USERNAME', 'User')
-
-
 # ----------------------------
 # Environment configuration
 # ----------------------------
@@ -50,7 +23,7 @@ if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
 
 
 class S3:
-    def __init__(self, username=None):
+    def __init__(self, username):
         """
         Initialize an S3 client using credentials from environment variables.
         
@@ -66,7 +39,7 @@ class S3:
         )
 
         self.bucket_name = AWS_S3_BUCKET
-        self.username = get_default_username()
+        self.username = username
         self.session_file = f"{self.username}/SESSION_{self.username}.json"
 
     # ----------------------------
@@ -413,4 +386,125 @@ class S3:
             return False
         except Exception as e:
             print(f"Error checking if user exists: {e}")
+            return False
+
+    # ----------------------------
+    # User metadata (user.json)
+    # ----------------------------
+
+    def read_user_json(self):
+        """
+        Read user.json from S3 root.
+        Returns the parsed JSON data or None if file doesn't exist.
+        """
+        try:
+            response = self.client.get_object(
+                Bucket=self.bucket_name,
+                Key="user.json"
+            )
+            data = json.loads(response["Body"].read().decode("utf-8"))
+            return data
+        except self.client.exceptions.NoSuchKey:
+            return None
+        except Exception as e:
+            print(f"Error reading user.json from S3: {e}")
+            return None
+
+    def write_user_json(self, data):
+        """
+        Write user.json to S3 root.
+        Uses atomic write pattern: write to temp key, then copy to final location.
+        """
+        try:
+            json_str = json.dumps(data, indent=4)
+            
+            # Write to temp location first
+            temp_key = "user.json.tmp"
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=temp_key,
+                Body=json_str,
+                ContentType="application/json"
+            )
+            
+            # Atomic copy/move from temp to final location
+            copy_source = {
+                'Bucket': self.bucket_name,
+                'Key': temp_key
+            }
+            self.client.copy_object(
+                CopySource=copy_source,
+                Bucket=self.bucket_name,
+                Key="user.json"
+            )
+            
+            # Delete temp file
+            self.client.delete_object(
+                Bucket=self.bucket_name,
+                Key=temp_key
+            )
+            
+            return True
+        except Exception as e:
+            print(f"Error writing user.json to S3: {e}")
+            return False
+
+    def ensure_user_json_exists(self):
+        """
+        Ensure user.json exists in S3. If not, create it with a basic structure.
+        """
+        try:
+            data = self.read_user_json()
+            if data is None:
+                # File doesn't exist, create it
+                initial_data = {"users": {}}
+                return self.write_user_json(initial_data)
+            return True
+        except Exception as e:
+            print(f"Error ensuring user.json exists: {e}")
+            return False
+
+    def get_user_id_from_username(self, username):
+        """
+        Convert username to user_id using user.json from S3.
+        Returns the user_id or None if not found.
+        """
+        try:
+            data = self.read_user_json()
+            if data is None:
+                print(f"Warning: user.json not found in S3")
+                return None
+            
+            users = data.get('users', {})
+            user_data = users.get(username)
+            
+            if user_data is None:
+                return None
+            
+            return user_data.get('user_id')
+        except Exception as e:
+            print(f"Error getting user_id from username: {e}")
+            return None
+
+    def is_secret_valid(self, username, secret):
+        """
+        Check if the provided secret is valid for the username using user.json from S3.
+        Returns True if valid, False otherwise.
+        """
+        try:
+            data = self.read_user_json()
+            if data is None:
+                print(f"Warning: user.json not found in S3")
+                return False
+            
+            users = data.get('users', {})
+            user_data = users.get(username)
+            
+            if user_data is None:
+                return False
+            
+            stored_secret = user_data.get('secret')
+            return stored_secret == secret
+        except Exception as e:
+            print(f"Error validating secret: {e}")
             return False

@@ -1,13 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, Pencil, Check, X, Plus, ArrowRight } from 'lucide-react';
+import { UserContext } from '../context/UserContext';
 
 const SCRAPBOOKS_KEY = 'digitaldiary.scrapbooks';
 const SCRAPBOOK_ITEMS_PREFIX = 'digitaldiary.scrapbook.items.';
 
-function readScrapbooks() {
+function readScrapbooks(username) {
   try {
-    const raw = localStorage.getItem(SCRAPBOOKS_KEY);
+    const key = `${SCRAPBOOKS_KEY}.${username}`;
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -15,13 +17,15 @@ function readScrapbooks() {
   }
 }
 
-function writeScrapbooks(scrapbooks) {
-  localStorage.setItem(SCRAPBOOKS_KEY, JSON.stringify(scrapbooks));
+function writeScrapbooks(username, scrapbooks) {
+  const key = `${SCRAPBOOKS_KEY}.${username}`;
+  localStorage.setItem(key, JSON.stringify(scrapbooks));
 }
 
-function getScrapbookItemCount(scrapbookId) {
+function getScrapbookItemCount(username, scrapbookId) {
   try {
-    const raw = localStorage.getItem(`${SCRAPBOOK_ITEMS_PREFIX}${scrapbookId}`);
+    const key = `${SCRAPBOOK_ITEMS_PREFIX}${username}.${scrapbookId}`;
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed.length : 0;
   } catch {
@@ -31,13 +35,15 @@ function getScrapbookItemCount(scrapbookId) {
 
 function ScrapbookPage() {
   const navigate = useNavigate();
+  const user = useContext(UserContext);
+  const currentUsername = user?.username || 'User';
   const [scrapbooks, setScrapbooks] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
 
   useEffect(() => {
-    setScrapbooks(readScrapbooks());
-  }, []);
+    setScrapbooks(readScrapbooks(currentUsername));
+  }, [currentUsername]);
 
   const sortedScrapbooks = useMemo(
     () => [...scrapbooks].sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)),
@@ -45,8 +51,8 @@ function ScrapbookPage() {
   );
 
   const scrapbookCards = useMemo(
-    () => sortedScrapbooks.map((scrapbook) => ({ ...scrapbook, itemCount: getScrapbookItemCount(scrapbook.id) })),
-    [sortedScrapbooks]
+    () => sortedScrapbooks.map((scrapbook) => ({ ...scrapbook, itemCount: getScrapbookItemCount(currentUsername, scrapbook.id) })),
+    [sortedScrapbooks, currentUsername]
   );
 
   const createNewScrapbook = () => {
@@ -61,7 +67,7 @@ function ScrapbookPage() {
 
     const next = [newScrapbook, ...scrapbooks];
     setScrapbooks(next);
-    writeScrapbooks(next);
+    writeScrapbooks(currentUsername, next);
     navigate(`/scrapbook/${newScrapbook.id}`);
   };
 
@@ -73,9 +79,9 @@ function ScrapbookPage() {
     e.stopPropagation();
     const next = scrapbooks.filter((s) => s.id !== id);
     setScrapbooks(next);
-    writeScrapbooks(next);
+    writeScrapbooks(currentUsername, next);
     // Also remove the scrapbook's items
-    localStorage.removeItem(`${SCRAPBOOK_ITEMS_PREFIX}${id}`);
+    localStorage.removeItem(`${SCRAPBOOK_ITEMS_PREFIX}${currentUsername}.${id}`);
   };
 
   const startRename = (e, scrapbook) => {
@@ -91,7 +97,7 @@ function ScrapbookPage() {
       s.id === editingId ? { ...s, name: editingName.trim(), updatedAt: new Date().toISOString() } : s
     );
     setScrapbooks(next);
-    writeScrapbooks(next);
+    writeScrapbooks(currentUsername, next);
     setEditingId(null);
     setEditingName('');
   };

@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { BarChart2 } from 'lucide-react';
 import Timeline from '../components/Timeline';
 import { UserContext } from '../context/UserContext.jsx';
+import { useMediaCache } from '../context/MediaCacheContext.jsx';
 
 function StatsPage() {
     const user = useContext(UserContext);
     const currentUsername = user?.username || 'User';
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+    const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
+    const mediaCache = useMediaCache();
 
     const [mediaStats, setMediaStats] = useState({
         screenshots: 0,
@@ -15,19 +19,78 @@ function StatsPage() {
     const [loadingStats, setLoadingStats] = useState(true);
     const [gameEvents, setGameEvents] = useState([]);
     const [loadingTimeline, setLoadingTimeline] = useState(true);
+    const [notification, setNotification] = useState({ message: '', type: '', visible: false });
+    const notificationTimeoutRef = useRef(null);
 
     useEffect(() => {
         if (currentUsername !== 'User') {
             fetchMediaStats();
         }
         fetchGameSessions();
-    }, [currentUsername]); 
+    }, [currentUsername]);
+
+    // Cleanup notification timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (notificationTimeoutRef.current) {
+                clearTimeout(notificationTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    // Listen for cache invalidation events
+    useEffect(() => {
+        const handleCacheInvalidation = () => {
+            fetchMediaStats();
+        };
+
+        window.addEventListener('mediaCache:invalidate', handleCacheInvalidation);
+        return () => window.removeEventListener('mediaCache:invalidate', handleCacheInvalidation);
+    }, []);
+
+    const showNotification = (message, type = 'info') => {
+        // Clear previous timeout if exists
+        if (notificationTimeoutRef.current) {
+            clearTimeout(notificationTimeoutRef.current);
+        }
+        
+        setNotification({ message, type, visible: true });
+        notificationTimeoutRef.current = setTimeout(() => {
+            setNotification({ message: '', type: '', visible: false });
+            notificationTimeoutRef.current = null;
+        }, 3000);
+    };
+
+    const renderNotification = () => {
+        if (!notification.visible) return null;
+
+        const bgColor = {
+            'success': 'bg-green-500',
+            'error': 'bg-red-500',
+            'info': 'bg-blue-500'
+        }[notification.type] || 'bg-blue-500';
+
+        return (
+            <div className={`fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-40 max-w-md`}>
+                {notification.message}
+            </div>
+        );
+    };
 
     const fetchMediaStats = async () => {
         try {
             setLoadingStats(true);
-            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
-            const mediaData = await response.json();
+            
+            // Check cache first
+            let mediaData = mediaCache.get(currentUsername);
+            
+            if (!mediaData) {
+                // Cache miss, fetch from API
+                const response = await fetch(`${apiBasePath}/media_aws`);
+                mediaData = await response.json();
+                // Cache the data
+                mediaCache.set(currentUsername, mediaData);
+            }
 
             const stats = mediaData.reduce((acc, item) => {
                 if (item.type === 'screenshot') acc.screenshots++;
@@ -47,7 +110,7 @@ function StatsPage() {
     const fetchGameSessions = async () => {
         try {
             setLoadingTimeline(true);
-            const response = await fetch('/api/sessions/list');
+            const response = await fetch(`${apiBasePath}/sessions/list`);
             const sessions = await response.json();
 
             // Format sessions for timeline display
@@ -75,6 +138,11 @@ function StatsPage() {
         } finally {
             setLoadingTimeline(false);
         }
+    };
+
+    const handleDeleteSuccess = (timestamp) => {
+        const updatedEvents = gameEvents.filter(e => e.start_timestamp !== timestamp);
+        setGameEvents(updatedEvents);
     };
 
     const renderStatsSummary = () => {
@@ -122,6 +190,7 @@ function StatsPage() {
 
             {renderStatsSummary()}
 
+            {/* Timeline Section */}
             <div className="max-w-7xl mx-auto px-4 py-8">
                 <h2 className="text-2xl font-bold text-teal-700 mb-6">Recent Activity</h2>
                 {loadingTimeline ? (
@@ -133,9 +202,16 @@ function StatsPage() {
                         </div>
                     </div>
                 ) : (
-                    <Timeline events={gameEvents} />
+                    <Timeline 
+                        events={gameEvents} 
+                        apiBasePath={apiBasePath}
+                        onNotification={showNotification}
+                        onDeleteSuccess={handleDeleteSuccess}
+                    />
                 )}
             </div>
+
+            {renderNotification()}
         </div>
     );
 }

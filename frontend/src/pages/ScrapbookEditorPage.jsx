@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { ChevronLeft, Trash2, Pencil, Check, X, Type, ImageIcon, Plus, MousePointer2, Upload, Download } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
+import { UserContext } from '../context/UserContext';
+import { useMediaCache } from '../context/MediaCacheContext.jsx';
 
 const SCRAPBOOKS_KEY = 'digitaldiary.scrapbooks';
 const SCRAPBOOK_ITEMS_PREFIX = 'digitaldiary.scrapbook.items.';
@@ -15,9 +17,10 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(value, max));
 }
 
-function getScrapbookById(scrapbookId) {
+function getScrapbookById(username, scrapbookId) {
   try {
-    const raw = localStorage.getItem(SCRAPBOOKS_KEY);
+    const key = `${SCRAPBOOKS_KEY}.${username}`;
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     return parsed.find((entry) => String(entry.id) === String(scrapbookId)) || null;
   } catch {
@@ -25,42 +28,46 @@ function getScrapbookById(scrapbookId) {
   }
 }
 
-function loadItems(scrapbookId) {
+function loadItems(username, scrapbookId) {
   try {
-    const raw = localStorage.getItem(`${SCRAPBOOK_ITEMS_PREFIX}${scrapbookId}`);
+    const key = `${SCRAPBOOK_ITEMS_PREFIX}${username}.${scrapbookId}`;
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-function saveItems(scrapbookId, items) {
+function saveItems(username, scrapbookId, items) {
   try {
-    localStorage.setItem(`${SCRAPBOOK_ITEMS_PREFIX}${scrapbookId}`, JSON.stringify(items));
+    const key = `${SCRAPBOOK_ITEMS_PREFIX}${username}.${scrapbookId}`;
+    localStorage.setItem(key, JSON.stringify(items));
     return true;
   } catch {
     return false;
   }
 }
 
-function touchScrapbookUpdatedAt(scrapbookId) {
+function touchScrapbookUpdatedAt(username, scrapbookId) {
   try {
-    const raw = localStorage.getItem(SCRAPBOOKS_KEY);
+    const key = `${SCRAPBOOKS_KEY}.${username}`;
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     const next = parsed.map((entry) =>
       String(entry.id) === String(scrapbookId)
         ? { ...entry, updatedAt: new Date().toISOString() }
         : entry
     );
-    localStorage.setItem(SCRAPBOOKS_KEY, JSON.stringify(next));
+    localStorage.setItem(key, JSON.stringify(next));
   } catch {
     // no-op
   }
 }
 
-function updateScrapbookEntry(scrapbookId, updater) {
+function updateScrapbookEntry(username, scrapbookId, updater) {
   try {
-    const raw = localStorage.getItem(SCRAPBOOKS_KEY);
+    const key = `${SCRAPBOOKS_KEY}.${username}`;
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     const next = parsed.map((entry) => {
       if (String(entry.id) !== String(scrapbookId)) {
@@ -69,7 +76,7 @@ function updateScrapbookEntry(scrapbookId, updater) {
 
       return updater(entry);
     });
-    localStorage.setItem(SCRAPBOOKS_KEY, JSON.stringify(next));
+    localStorage.setItem(key, JSON.stringify(next));
     return next.find((entry) => String(entry.id) === String(scrapbookId)) || null;
   } catch {
     return null;
@@ -134,6 +141,11 @@ function readFileAsDataUrl(file) {
 
 function ScrapbookEditorPage() {
   const { scrapbookId } = useParams();
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+  const user = useContext(UserContext);
+  const currentUsername = user?.username || 'User';
+  const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
+  const mediaCache = useMediaCache();
   const [scrapbook, setScrapbook] = useState(null);
   const [items, setItems] = useState([]);
   const [hasHydratedItems, setHasHydratedItems] = useState(false);
@@ -148,6 +160,9 @@ function ScrapbookEditorPage() {
   const [editingTextId, setEditingTextId] = useState(null);
   const [isLibraryOpen, setIsLibraryOpen] = useState(true);
   const [libraryFilter, setLibraryFilter] = useState('all');
+  const [friends, setFriends] = useState([]);
+  const [selectedFriends, setSelectedFriends] = useState(new Set([currentUsername]));
+  const [loadingFriends, setLoadingFriends] = useState(false);
   const [notice, setNotice] = useState('');
   const canvasRef = useRef(null);
   const uploadInputRef = useRef(null);
@@ -155,25 +170,78 @@ function ScrapbookEditorPage() {
   const noticeTimeoutRef = useRef(null);
 
   useEffect(() => {
-    const found = getScrapbookById(scrapbookId);
+    const found = getScrapbookById(currentUsername, scrapbookId);
     setScrapbook(found ? { ...found, backgroundColor: found.backgroundColor || '#ffffff' } : null);
-    setItems(loadItems(scrapbookId));
+    setItems(loadItems(currentUsername, scrapbookId));
     setHasHydratedItems(true);
-  }, [scrapbookId]);
+  }, [scrapbookId, currentUsername]);
+
+  useEffect(() => {
+    const fetchFriends = async () => {
+      try {
+        setLoadingFriends(true);
+        const response = await fetch(`${apiBasePath}/friends`);
+        if (response.ok) {
+          const data = await response.json();
+          const friendsList = data.friends || [];
+          setFriends(friendsList);
+        }
+      } catch (error) {
+        console.error('Error loading friends:', error);
+      } finally {
+        setLoadingFriends(false);
+      }
+    };
+
+    fetchFriends();
+  }, [apiBasePath]);
 
   useEffect(() => {
     const fetchMedia = async () => {
       try {
         setLoadingMedia(true);
         setMediaError(null);
-        const response = await fetch('/api/media_aws');
-        if (!response.ok) {
-          throw new Error('Failed to fetch media');
+
+        // Fetch media from current user and all selected friends
+        const usersToFetch = Array.from(selectedFriends);
+        const allMedia = [];
+
+        for (const username of usersToFetch) {
+          try {
+            // Check cache first
+            let data = mediaCache.get(username);
+            
+            if (!data) {
+              // Cache miss, fetch from API
+              const response = await fetch(`${API_BASE_URL}/api/${encodeURIComponent(username)}/media_aws`);
+              if (response.ok) {
+                data = await response.json();
+                // Cache the data
+                mediaCache.set(username, data);
+              }
+            }
+            
+            if (data) {
+              // Add username info to each media item for identification
+              const mediaWithUser = data.map(item => ({
+                ...item,
+                owner: username
+              }));
+              allMedia.push(...mediaWithUser);
+            }
+          } catch (error) {
+            console.error(`Error loading media for user ${username}:`, error);
+          }
         }
 
-        const data = await response.json();
-        const filtered = data.filter((item) => item.type === 'screenshot' || item.type === 'video');
-        setMedia(filtered);
+        const filtered = allMedia.filter((item) => item.type === 'screenshot' || item.type === 'video');
+        // Sort by timestamp, most recent first
+        const sorted = filtered.sort((a, b) => {
+          const timeA = new Date(a.timestamp || 0).getTime();
+          const timeB = new Date(b.timestamp || 0).getTime();
+          return timeB - timeA;
+        });
+        setMedia(sorted);
       } catch (error) {
         console.error('Error loading media:', error);
         setMediaError('Could not load photos/videos.');
@@ -183,17 +251,73 @@ function ScrapbookEditorPage() {
     };
 
     fetchMedia();
-  }, []);
+  }, [selectedFriends, mediaCache]);
+
+  // Listen for cache invalidation events
+  useEffect(() => {
+    const handleCacheInvalidation = () => {
+      // Invalidate cache for all selected friends
+      Array.from(selectedFriends).forEach(username => {
+        mediaCache.invalidate(username);
+      });
+      
+      // Refetch media
+      const fetchMedia = async () => {
+        try {
+          setLoadingMedia(true);
+          setMediaError(null);
+
+          const usersToFetch = Array.from(selectedFriends);
+          const allMedia = [];
+
+          for (const username of usersToFetch) {
+            try {
+              const response = await fetch(`${API_BASE_URL}/api/${encodeURIComponent(username)}/media_aws`);
+              if (response.ok) {
+                const data = await response.json();
+                mediaCache.set(username, data);
+                const mediaWithUser = data.map(item => ({
+                  ...item,
+                  owner: username
+                }));
+                allMedia.push(...mediaWithUser);
+              }
+            } catch (error) {
+              console.error(`Error loading media for user ${username}:`, error);
+            }
+          }
+
+          const filtered = allMedia.filter((item) => item.type === 'screenshot' || item.type === 'video');
+          const sorted = filtered.sort((a, b) => {
+            const timeA = new Date(a.timestamp || 0).getTime();
+            const timeB = new Date(b.timestamp || 0).getTime();
+            return timeB - timeA;
+          });
+          setMedia(sorted);
+        } catch (error) {
+          console.error('Error loading media:', error);
+          setMediaError('Could not load photos/videos.');
+        } finally {
+          setLoadingMedia(false);
+        }
+      };
+
+      fetchMedia();
+    };
+
+    window.addEventListener('mediaCache:invalidate', handleCacheInvalidation);
+    return () => window.removeEventListener('mediaCache:invalidate', handleCacheInvalidation);
+  }, [selectedFriends, mediaCache]);
 
   useEffect(() => {
     if (!scrapbookId || !hasHydratedItems) return;
-    if (saveItems(scrapbookId, items)) {
-      touchScrapbookUpdatedAt(scrapbookId);
+    if (saveItems(currentUsername, scrapbookId, items)) {
+      touchScrapbookUpdatedAt(currentUsername, scrapbookId);
       return;
     }
 
     setNotice('This scrapbook is too large to save in local storage. Remove some pasted media or use library media instead.');
-  }, [items, scrapbookId, hasHydratedItems]);
+  }, [items, scrapbookId, hasHydratedItems, currentUsername]);
 
   useEffect(() => () => {
     if (noticeTimeoutRef.current) {
@@ -410,7 +534,7 @@ function ScrapbookEditorPage() {
   };
 
   const setBackgroundColor = (color) => {
-    const updated = updateScrapbookEntry(scrapbookId, (entry) => ({
+    const updated = updateScrapbookEntry(currentUsername, scrapbookId, (entry) => ({
       ...entry,
       backgroundColor: color,
       updatedAt: new Date().toISOString()
@@ -484,7 +608,7 @@ function ScrapbookEditorPage() {
 
   const confirmRenameScrapbook = () => {
     if (!nameValue.trim()) return;
-    const updated = updateScrapbookEntry(scrapbookId, (entry) => ({
+    const updated = updateScrapbookEntry(currentUsername, scrapbookId, (entry) => ({
       ...entry,
       name: nameValue.trim(),
       updatedAt: new Date().toISOString()
@@ -826,25 +950,74 @@ function ScrapbookEditorPage() {
               </button>
             </div>
 
-            <div className="mb-4 flex gap-2">
-              {[
-                { value: 'all', label: 'All' },
-                { value: 'photos', label: 'Photos' },
-                { value: 'videos', label: 'Videos' }
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setLibraryFilter(option.value)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                    libraryFilter === option.value
-                      ? 'bg-teal-500 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
+            <div className="mb-4 space-y-3">
+              <div className="flex gap-2">
+                {[
+                  { value: 'all', label: 'All' },
+                  { value: 'photos', label: 'Photos' },
+                  { value: 'videos', label: 'Videos' }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setLibraryFilter(option.value)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                      libraryFilter === option.value
+                        ? 'bg-teal-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">Users</label>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                    <input
+                      type="checkbox"
+                      checked={selectedFriends.has(currentUsername)}
+                      onChange={(e) => {
+                        const newSelected = new Set(selectedFriends);
+                        if (e.target.checked) {
+                          newSelected.add(currentUsername);
+                        } else {
+                          newSelected.delete(currentUsername);
+                        }
+                        setSelectedFriends(newSelected);
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-xs text-gray-700">{currentUsername} (You)</span>
+                  </label>
+
+                  {friends.map((friend) => (
+                    <label key={friend} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                      <input
+                        type="checkbox"
+                        checked={selectedFriends.has(friend)}
+                        onChange={(e) => {
+                          const newSelected = new Set(selectedFriends);
+                          if (e.target.checked) {
+                            newSelected.add(friend);
+                          } else {
+                            newSelected.delete(friend);
+                          }
+                          setSelectedFriends(newSelected);
+                        }}
+                        className="rounded"
+                      />
+                      <span className="text-xs text-gray-700">{friend}</span>
+                    </label>
+                  ))}
+
+                  {friends.length === 0 && (
+                    <div className="text-xs text-gray-400 p-2">No friends yet</div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {loadingMedia && <div className="text-sm text-gray-500">Loading media...</div>}
@@ -871,16 +1044,40 @@ function ScrapbookEditorPage() {
                     onClick={() => addMediaToCanvas(entry)}
                   >
                     {isVideo ? (
-                      <video src={entry.media_url} className="h-28 w-full rounded-xl object-cover" />
+                      <div className="relative h-28 w-full rounded-xl bg-gray-900 flex items-center justify-center overflow-hidden">
+                        <video 
+                          src={entry.media_url} 
+                          className="w-full h-full object-cover"
+                          preload="metadata"
+                          muted
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
+                          <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                          </svg>
+                        </div>
+                      </div>
                     ) : (
                       <img src={entry.media_url} alt={entry.game || 'Photo'} className="h-28 w-full rounded-xl object-cover" draggable={false} />
                     )}
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <div className="truncate text-xs font-medium text-gray-700">{entry.game || (isVideo ? 'Video' : 'Photo')}</div>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-gray-500">
-                        <Plus size={10} />
-                        Add
-                      </span>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="truncate text-xs font-medium text-gray-700">{entry.game || (isVideo ? 'Video' : 'Photo')}</div>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                          <Plus size={10} />
+                          Add
+                        </span>
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="truncate text-xs text-gray-500">
+                          {entry.owner === currentUsername ? 'Your media' : `From ${entry.owner}`}
+                        </div>
+                        {entry.timestamp && (
+                          <div className="truncate text-xs text-gray-400">
+                            {new Date(entry.timestamp).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </button>
                 );
@@ -906,12 +1103,35 @@ function ScrapbookEditorPage() {
 
             for (const item of items) {
               if (item.type === 'text') {
+                // Draw rounded rectangle background with border (text bubble styling)
+                const radius = 12;
+                const padding = 8;
+                ctx.fillStyle = '#fffbeb'; // Light yellow background
+                ctx.fillRect(item.x + radius, item.y, item.width - 2 * radius, item.height);
+                ctx.fillRect(item.x, item.y + radius, item.width, item.height - 2 * radius);
+                
+                // Draw corners with arc
+                ctx.beginPath();
+                ctx.moveTo(item.x + radius, item.y);
+                ctx.arcTo(item.x, item.y, item.x, item.y + radius, radius);
+                ctx.arcTo(item.x, item.y + item.height, item.x + radius, item.y + item.height, radius);
+                ctx.arcTo(item.x + item.width, item.y + item.height, item.x + item.width, item.y + item.height - radius, radius);
+                ctx.arcTo(item.x + item.width, item.y, item.x + item.width - radius, item.y, radius);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Draw border
+                ctx.strokeStyle = '#fcd34d'; // Yellow border
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                
+                // Draw text on top
                 ctx.font = `${item.fontSize || 16}px sans-serif`;
                 ctx.fillStyle = item.color || '#374151';
                 const lines = (item.text || '').split('\n');
                 const lineHeight = (item.fontSize || 16) * 1.3;
                 lines.forEach((line, i) => {
-                  ctx.fillText(line, item.x + 8, item.y + (item.fontSize || 16) + i * lineHeight);
+                  ctx.fillText(line, item.x + padding, item.y + padding + (item.fontSize || 16) + i * lineHeight);
                 });
               } else if (item.type === 'sticker') {
                 const size = Math.max(32, Math.min(item.width, item.height) * 0.72);

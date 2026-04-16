@@ -1,7 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Upload, X, Image, Camera } from 'lucide-react';
+import { UserContext } from '../context/UserContext.jsx';
 
 function HeroImage({ onImageChange }) {
+    const currentUsername = useContext(UserContext).username || 'User';
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+    const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
     const [heroImage, setHeroImage] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [showHeroEditOptions, setShowHeroEditOptions] = useState(false);
@@ -19,21 +23,21 @@ function HeroImage({ onImageChange }) {
     const fetchHeroImage = async () => {
         try {
             console.log('Fetching hero image from backend...');
-            const response = await fetch('/api/hero-image');
+            const response = await fetch(`${apiBasePath}/hero-image`);
             if (!response.ok) {
                 throw new Error('Failed to fetch hero image');
             }
             const data = await response.json();
             console.log('Hero image API response:', data);
             
-            if (data.hero_image_url) {
-                console.log('Setting hero image from backend:', data.hero_image_url);
-                setHeroImage(data.hero_image_url);
+            if (data.url) {
+                console.log('Setting hero image from backend:', data.url);
+                setHeroImage(data.url);
                 setNoScreenshotsAvailable(false);
                 
                 // Notify parent component about the change
                 if (onImageChange) {
-                    onImageChange(data.hero_image_url);
+                    onImageChange(data.url);
                 }
             } else {
                 console.log('No hero image returned from backend');
@@ -49,7 +53,7 @@ function HeroImage({ onImageChange }) {
         try {
             setLoadingAllScreenshots(true);
             console.log('Fetching all screenshots...');
-            const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
+            const response = await fetch(`${apiBasePath}/media_aws`);
             if (!response.ok) {
                 throw new Error('Failed to fetch screenshots');
             }
@@ -83,19 +87,41 @@ function HeroImage({ onImageChange }) {
         if (file) {
             setIsUploading(true);
             
-            // Create a FileReader to read the file as a data URL
+            // Create a FileReader to preview the file
             const reader = new FileReader();
             
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 const imageDataUrl = e.target.result;
                 setHeroImage(imageDataUrl);
-                setIsUploading(false);
                 setShowHeroEditOptions(false);
                 setNoScreenshotsAvailable(false);
                 
-                // Notify parent component about the change
-                if (onImageChange) {
-                    onImageChange(imageDataUrl);
+                // Upload to server
+                try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    const response = await fetch(`${apiBasePath}/upload-hero-image`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to update hero image');
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Hero image updated:', data);
+                    
+                    // Notify parent component about the change
+                    if (onImageChange) {
+                        onImageChange(imageDataUrl);
+                    }
+                } catch (error) {
+                    console.error('Error uploading hero image:', error);
+                    alert('Failed to upload hero image');
+                } finally {
+                    setIsUploading(false);
                 }
             };
             
@@ -121,15 +147,37 @@ function HeroImage({ onImageChange }) {
         setShowScreenshotSelector(true);
     };
     
-    const handleScreenshotSelect = (screenshot) => {
-        setHeroImage(screenshot.media_url);
-        setShowScreenshotSelector(false);
-        setShowHeroEditOptions(false);
-        setNoScreenshotsAvailable(false);
-        
-        // Notify parent component about the change
-        if (onImageChange) {
-            onImageChange(screenshot.media_url);
+    const handleScreenshotSelect = async (screenshot) => {
+        try {
+            setIsUploading(true);
+            setHeroImage(screenshot.media_url);
+            setShowScreenshotSelector(false);
+            setShowHeroEditOptions(false);
+            setNoScreenshotsAvailable(false);
+            
+            // Update hero image on server
+            const response = await fetch(`${apiBasePath}/upload-hero-image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ media_url: screenshot.media_url })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update hero image');
+            }
+            
+            const data = await response.json();
+            console.log('Hero image updated:', data);
+            
+            // Notify parent component about the change
+            if (onImageChange) {
+                onImageChange(screenshot.media_url);
+            }
+        } catch (error) {
+            console.error('Error updating hero image:', error);
+            alert('Failed to update hero image');
+        } finally {
+            setIsUploading(false);
         }
     };
     

@@ -1,6 +1,8 @@
 import { useState, useEffect, useContext, useRef } from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, X, Loader, RefreshCw } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
+import { useMediaCache } from '../context/MediaCacheContext.jsx';
+import useCacheInvalidation from '../hooks/useCacheInvalidation.js';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
 
@@ -10,7 +12,6 @@ function FilesPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [showDropdown, setShowDropdown] = useState(false);
-    const [showUsersDropdown, setShowUsersDropdown] = useState(false);
     const [showGamesDropdown, setShowGamesDropdown] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [modalImage, setModalImage] = useState('');
@@ -18,35 +19,43 @@ function FilesPage() {
     const [editingField, setEditingField] = useState(null);
     const [editValue, setEditValue] = useState('');
     const mediaDropdownRef = useRef(null);
-    const usersDropdownRef = useRef(null);
     const gamesDropdownRef = useRef(null);
-    const [users, setUsers] = useState([]);
     const [games, setGames] = useState([]);
     const [filter, setFilter] = useState(new Set());
-    const [userFilter, setUserFilter] = useState(new Set());
     const [gameFilter, setGameFilter] = useState(new Set());
     const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
     const [dateRangeInfo, setDateRangeInfo] = useState({ min: '', max: '' });
-    const [showAddUserModal, setShowAddUserModal] = useState(false);
-    const [newUsername, setNewUsername] = useState('');
-    const [addUserLoading, setAddUserLoading] = useState(false);
-    const [addUserError, setAddUserError] = useState(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
     const currentUsername = useContext(UserContext).username || 'User';
+    const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
     const abortControllerRef = useRef(null);
+    
+    // Initialize cache and invalidation utilities
+    const mediaCache = useMediaCache();
+    const { invalidateCache } = useCacheInvalidation();
 
     useEffect(() => {
-        fetchUsers();
-        // initial media load will be handled by users/userFilter effect
-
         // Refetch data when page becomes visible (user navigates back)
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
-                fetchMedia();
+                fetchMediaData();
             }
         };
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
+
+    // Listen for cache invalidation events from other components
+    useEffect(() => {
+        const handleCacheInvalidation = (event) => {
+            // Refetch media data when cache is invalidated
+            fetchMediaData();
+        };
+
+        window.addEventListener('mediaCache:invalidate', handleCacheInvalidation);
+        return () => window.removeEventListener('mediaCache:invalidate', handleCacheInvalidation);
     }, []);
 
     // Close dropdowns when clicking outside
@@ -56,9 +65,6 @@ function FilesPage() {
 
             if (mediaDropdownRef.current && !mediaDropdownRef.current.contains(target)) {
                 setShowDropdown(false);
-            }
-            if (usersDropdownRef.current && !usersDropdownRef.current.contains(target)) {
-                setShowUsersDropdown(false);
             }
             if (gamesDropdownRef.current && !gamesDropdownRef.current.contains(target)) {
                 setShowGamesDropdown(false);
@@ -76,12 +82,14 @@ function FilesPage() {
             item.timestamp && ['video', 'audio', 'screenshot'].includes(item.type)
         );
 
+        // Filter to only show current user's media
+        filtered = filtered.filter(item => {
+            const ownerUsername = item.s3_key.split('/')[0];
+            return ownerUsername === currentUsername;
+        });
+
         if (filter.size > 0) {
             filtered = filtered.filter(item => filter.has(item.type));
-        }
-
-        if (userFilter.size > 0) {
-            filtered = filtered.filter(item => userFilter.has(item.owner_user_id.toString()));
         }
 
         if (gameFilter.size > 0) {
@@ -99,7 +107,7 @@ function FilesPage() {
         }
 
         setFilteredMedia(filtered);
-    }, [filter, userFilter, gameFilter, mediaList, dateRange]);
+    }, [filter, gameFilter, mediaList, dateRange, currentUsername]);
 
     // calculate date range boundaries from media
     useEffect(() => {
@@ -125,20 +133,20 @@ function FilesPage() {
     }, [mediaList]);
 
     useEffect(() => {
-        fetchMedia();
+        fetchMediaData();
         return () => {
             // Cancel any in-flight requests when dependencies change
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
             }
         };
-    }, [userFilter, users]);
+    }, []);
 
     // auto-refresh media when the date range changes
     useEffect(() => {
         // only trigger a fetch if a date was actually picked
         if (dateRange.startDate || dateRange.endDate) {
-            fetchMedia();
+            fetchMediaData();
         }
         return () => {
             if (abortControllerRef.current) {
@@ -148,97 +156,63 @@ function FilesPage() {
     }, [dateRange.startDate, dateRange.endDate]);
 
 
-    const fetchUsers = async () => {
+    const fetchMediaData = async () => {
         try {
-            const response = await fetch('/api/users');
+            setLoading(true);
+            setError(null);
+            
+            // Check cache first
+            const cachedData = mediaCache.get(currentUsername);
+            if (cachedData) {
+                console.log('Using cached media data');
+                setMediaList(cachedData);
+                const uniqueGames = Array.from(
+                    new Set(cachedData.map(item => item.app_name).filter(Boolean))
+                );
+                setGames(uniqueGames);
+                setLoading(false);
+                return;
+            }
+            
+            // Fetch from API if cache miss
+            const response = await fetch(`${apiBasePath}/media_aws`);
             if (!response.ok) {
-                throw new Error('Failed to fetch users');
+                throw new Error('Failed to fetch media');
             }
             const data = await response.json();
-            setUsers([{ user_id: -1, username: 'All Users' }, ...data]);
+            const sorted = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            // Cache the data
+            mediaCache.set(currentUsername, sorted);
+            
+            setMediaList(sorted);
+            const uniqueGames = Array.from(
+                new Set(sorted.map(item => item.app_name).filter(Boolean))
+            );
+            setGames(uniqueGames);
         } catch (error) {
-            console.error('Error fetching users:', error);
+            console.error('Error fetching media:', error);
             setError(error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const fetchMedia = async () => {
+    const handleManualRefresh = async () => {
+        setIsRefreshing(true);
         try {
-          // Cancel any previous request
-          if (abortControllerRef.current) {
-              abortControllerRef.current.abort();
-          }
-          abortControllerRef.current = new AbortController();
-          const signal = abortControllerRef.current.signal;
-
-          setLoading(true);
-          setError(null);
-
-          // If "All Users" is selected, fetch per-user and concatenate results
-          const isAllSelected = userFilter.size === 0 || userFilter.has('all');
-
-        if (isAllSelected) {
-            const userList = users
-                .filter(u => u.user_id !== -1)
-                .map(u => u.username);
-
-            if (userList.length === 0) {
-                const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`, { signal });
-                if (!resp.ok) throw new Error('Failed to fetch media');
-                const data = await resp.json();
-                const sorted = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                setMediaList(sorted);
-                const uniqueGames = Array.from(
-                  new Set(sorted.map(item => item.app_name).filter(Boolean))
-                );
-                setGames(uniqueGames);
-                setGameFilter(new Set()); // Clear game filter when switching users
-                return;
-            }
-
-            const promises = userList.map(async (u) => {
-                const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(u)}`, { signal });
-                return resp.ok ? resp.json() : [];
-            });
-
-            const arrays = await Promise.all(promises);
-            const merged = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            setMediaList(merged);
-            const uniqueGames = Array.from(
-              new Set(merged.map(item => item.app_name).filter(Boolean))
-            );
-            setGames(uniqueGames);
-            setGameFilter(new Set()); // Clear game filter when switching users
-            return;
+            // Clear local cache to force fresh fetch
+            mediaCache.invalidate(currentUsername);
+            // Invalidate backend cache as well
+            await invalidateCache(currentUsername);
+            // Force immediate fetch, bypassing cache
+            await fetchMediaData();
+        } catch (error) {
+            console.error('Error during manual refresh:', error);
+        } finally {
+            setIsRefreshing(false);
         }
-
-        // Single user selected; `userFilter` holds the username
-        const usernames = users
-            .filter(u => userFilter.has(String(u.user_id)))
-            .map(u => u.username || u.user_id);
-        const promises = usernames.map(async (username) => {
-            const resp = await fetch(`/api/media_aws?username=${encodeURIComponent(username)}`, { signal });
-            if (!resp.ok) return [];
-            return resp.json();
-        });
-          
-        const arrays = await Promise.all(promises);
-        const data = arrays.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setMediaList(data);
-        const uniqueGames = Array.from(
-          new Set(data.map(item => item.app_name).filter(Boolean))
-        );
-        setGames(uniqueGames);
-        setGameFilter(new Set()); // Clear game filter when switching users
-      } catch (error) {
-          if (error.name !== 'AbortError') {
-              console.error('Error fetching media:', error);
-              setError(error.message);
-          }
-      } finally {
-          setLoading(false);
-      }
-  };
+    };
 
     const handleFilterChange = (filterType) => {
         setFilter(filterType);
@@ -273,7 +247,7 @@ function FilesPage() {
             }
 
             console.log('Deleting file with key:', s3Key);
-            const response = await fetch('/api/media/delete', {
+            const response = await fetch(`${apiBasePath}/media/delete`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ file_key: s3Key })
@@ -293,6 +267,10 @@ function FilesPage() {
 
             setFilteredMedia(updatedFiltered);
             setMediaList(updatedList);
+            
+            // Invalidate cache for all pages
+            await invalidateCache(currentUsername);
+            
             alert('File deleted successfully');
         } catch (error) {
             console.error('Error deleting media:', error);
@@ -329,7 +307,7 @@ function FilesPage() {
 
         try {
             const trimmedValue = editValue.trim();
-            const response = await fetch('/api/media/update-metadata', {
+            const response = await fetch(`${apiBasePath}/media/update-metadata`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -350,6 +328,9 @@ function FilesPage() {
                 return media;
             });
             setMediaList(updatedList);
+            
+            // Invalidate cache for all pages
+            await invalidateCache(currentUsername);
 
             cancelEditing();
         } catch (error) {
@@ -434,7 +415,10 @@ function FilesPage() {
                 mediaClass = 'bg-blue-100';
         }
 
-        const isOwned = item.owner_user_id === 0;
+        // Extract owner username from s3_key (first part before /)
+        const ownerUsername = item.s3_key.split('/')[0];
+        const isOwned = ownerUsername === currentUsername;
+        console.log(`File: ${item.s3_key}, ownerUsername: ${ownerUsername}, currentUsername: ${currentUsername}, isOwned: ${isOwned}`);
 
         switch (item.type) {
             case 'video':
@@ -513,7 +497,18 @@ function FilesPage() {
         <div className="h-screen flex flex-col">
             <div className="flex-1 p-8 overflow-y-auto">
                 <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
+                    <h1 className="text-2xl font-semibold text-gray-700">My Files</h1>
+                    <button
+                        onClick={handleManualRefresh}
+                        disabled={isRefreshing}
+                        className="p-2 rounded-full hover:bg-gray-100 transition-all disabled:opacity-50"
+                        title="Refresh from AWS"
+                    >
+                        <RefreshCw 
+                            size={24} 
+                            className={`text-teal-600 ${isRefreshing ? 'animate-spin' : ''}`}
+                        />
+                    </button>
                 </header>
 
                 <div className="bg-white rounded-lg border border-gray-200 p-8">
@@ -521,43 +516,6 @@ function FilesPage() {
 
                     {/* Filters Section */}
                     <div className="mb-8">
-                        {/* User Filter Tabs */}
-                        <div className="flex flex-wrap gap-2 mb-6">
-                            {users.map((user) => (
-                                  <button
-                                      key={user.user_id}
-                                      onClick={() => {
-                                        if (user.user_id === -1) {
-                                            setUserFilter(new Set()); // Clearing the set represents "All"
-                                        } else {
-                                            const newSet = new Set(userFilter);
-                                            newSet.delete('all'); // Remove 'all' if a specific user is picked
-                                            const id = String(user.user_id);
-                                            if (newSet.has(id)) newSet.delete(id);
-                                            else newSet.add(id);
-                                            setUserFilter(newSet);
-                                        }
-                                    }}
-                                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 ${
-                                          (user.user_id === -1 && userFilter.size === 0) || userFilter.has(String(user.user_id))
-                                              ? 'bg-teal-500 text-white'
-                                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                      }`}
-                                  >
-                                      {user.username}
-                                  </button>
-                            ))}
-                            <button
-                                onClick={() => {
-                                    setNewUsername('');
-                                    setAddUserError(null);
-                                    setShowAddUserModal(true);
-                                }}
-                                className="px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 bg-gray-100 text-gray-600 hover:bg-gray-200"
-                            >
-                                Add User
-                            </button>
-                        </div>
                         {/* Media + App + Date Filters */}
                         <div className="flex flex-wrap gap-4">
                             {/* Media Type Dropdown */}
@@ -660,7 +618,10 @@ function FilesPage() {
                 {/* Media Grid */}
                     <div className="w-full mt-6">
                         {loading ? (
-                            <div className="text-gray-500">Loading media...</div>
+                            <div className="flex flex-col items-center justify-center h-64 gap-4">
+                                <Loader size={48} className="text-teal-500 animate-spin" />
+                                <p className="text-gray-500 text-lg">Loading media...</p>
+                            </div>
                         ) : error ? (
                             <div className="text-red-500">Error: {error}</div>
                         ) : filteredMedia.length === 0 ? (
@@ -668,7 +629,8 @@ function FilesPage() {
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-4">
                                 {filteredMedia.map(item => {
-                                    const isOwned = item.owner_user_id === 0;
+                                    const ownerUsername = item.s3_key.split('/')[0];
+                                    const isOwned = ownerUsername === currentUsername;
                                     return (
                                         <div key={item.s3_key} className="relative group bg-white rounded-lg border border-gray-100 p-4 h-64 flex flex-col">
                                             {renderMediaItem(item)}
@@ -697,110 +659,6 @@ function FilesPage() {
                     </div>
                 </div>
             </div>
-            {/* Add User Modal */}
-            {showAddUserModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-md w-full p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-semibold">Add User</h3>
-                            <button onClick={() => setShowAddUserModal(false)} className="text-gray-500 hover:text-gray-700">✕</button>
-                        </div>
-
-                        <div className="mb-4">
-                            <label className="block text-sm text-gray-700 mb-2">Username</label>
-                            <input
-                                type="text"
-                                className="w-full border border-gray-200 rounded px-3 py-2"
-                                value={newUsername}
-                                onChange={(e) => setNewUsername(e.target.value)}
-                                placeholder="Enter username to add"
-                            />
-                            {addUserError && <p className="text-red-500 text-sm mt-2">{addUserError}</p>}
-                        </div>
-
-                        <div className="flex justify-end gap-2">
-                            <button
-                                className="px-4 py-2 rounded bg-gray-200 text-gray-700"
-                                onClick={() => setShowAddUserModal(false)}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="px-4 py-2 rounded bg-teal-500 text-white disabled:opacity-50"
-                                onClick={async () => {
-                                    const usernameToCheck = newUsername.trim();
-                                    if (!usernameToCheck) {
-                                        setAddUserError('Please enter a username');
-                                        return;
-                                    }
-
-                                    try {
-                                        setAddUserLoading(true);
-                                        setAddUserError(null);
-
-                                        // 1) Check S3 for the username
-                                        const resp = await fetch(`/api/users_aws/check?username=${encodeURIComponent(usernameToCheck)}`);
-                                        if (!resp.ok) {
-                                            const err = await resp.json();
-                                            throw new Error(err.error || 'Error checking username');
-                                        }
-                                        const data = await resp.json();
-                                        if (!data.exists) {
-                                            setAddUserError('User not found in S3');
-                                            return;
-                                        }
-
-                                        // 2) Persist the username to user.json on the backend
-                                        const addResp = await fetch('/api/users', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ username: usernameToCheck })
-                                        });
-
-                                        if (!addResp.ok) {
-                                            const err = await addResp.json();
-                                            throw new Error(err.error || 'Failed to add user');
-                                        }
-
-                                        if (addResp.status === 200) {
-                                            // Already exists: fetch canonical user object from server so we have the integer id
-                                            const usersResp = await fetch('/api/users');
-                                            if (usersResp.ok) {
-                                                const allUsers = await usersResp.json();
-                                                const found = allUsers.find(u => u.username === usernameToCheck);
-                                                if (found) {
-                                                    setUsers(prev => {
-                                                        const exists = prev.some(u => String(u.user_id) === String(found.user_id));
-                                                        if (exists) return prev;
-                                                        return [...prev, found];
-                                                    });
-                                                }
-                                            }
-                                        } else if (addResp.status === 201) {
-                                            const newUser = await addResp.json();
-                                            setUsers(prev => {
-                                                const exists = prev.some(u => String(u.user_id) === String(newUser.user_id));
-                                                if (exists) return prev;
-                                                return [...prev, newUser];
-                                            });
-                                        }
-
-                                        setShowAddUserModal(false);
-                                        setNewUsername('');
-                                    } catch (err) {
-                                        console.error('Error adding user:', err);
-                                        setAddUserError(err.message || 'Error adding user');
-                                    } finally {
-                                        setAddUserLoading(false);
-                                    }
-                                }}
-                            >
-                                {addUserLoading ? 'Checking...' : 'Add'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
             {/* Image Modal */}
             {renderImageModal()}
         </div>

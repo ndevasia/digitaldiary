@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { ChevronLeft, X } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
+import { useMediaCache } from '../context/MediaCacheContext.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 import AudioPlayer from '../components/AudioPlayer.jsx';
 
 function GamesPage() {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
   const [mediaData, setMediaData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -15,6 +17,8 @@ function GamesPage() {
   const [editingField, setEditingField] = useState(null);
   const [editValue, setEditValue] = useState('');
   const currentUsername = useContext(UserContext).username || 'User';
+  const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
+  const mediaCache = useMediaCache();
 
   useEffect(() => {
     fetchMediaData();
@@ -30,14 +34,39 @@ function GamesPage() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
+  // Listen for cache invalidation events
+  useEffect(() => {
+    const handleCacheInvalidation = () => {
+      fetchMediaData();
+    };
+
+    window.addEventListener('mediaCache:invalidate', handleCacheInvalidation);
+    return () => window.removeEventListener('mediaCache:invalidate', handleCacheInvalidation);
+  }, []);
+
   const fetchMediaData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/media_aws?username=${encodeURIComponent(currentUsername)}`);
+      
+      // Check cache first
+      const cachedData = mediaCache.get(currentUsername);
+      if (cachedData) {
+        console.log('Using cached media data');
+        setMediaData(cachedData);
+        setLoading(false);
+        return;
+      }
+      
+      // Fetch from API if cache miss
+      const response = await fetch(`${apiBasePath}/media_aws`);
       if (!response.ok) {
         throw new Error('Failed to fetch media');
       }
       const data = await response.json();
+      
+      // Cache the data
+      mediaCache.set(currentUsername, data);
+      
       setMediaData(data);
       
       // Log all media with their app_names
@@ -126,7 +155,7 @@ function GamesPage() {
 
     try {
       const trimmedValue = editValue.trim();
-      const response = await fetch('/api/media/update-metadata', {
+      const response = await fetch(`${apiBasePath}/media/update-metadata`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -291,7 +320,7 @@ function GamesPage() {
       }
 
       console.log('Deleting file with key:', s3Key);
-      const response = await fetch('/api/media/delete', {
+      const response = await fetch(`${apiBasePath}/media/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ file_key: s3Key })

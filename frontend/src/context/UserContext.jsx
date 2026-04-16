@@ -1,5 +1,5 @@
 import { createContext } from "react";
 
 export const UserContext = createContext({
-    username: "User"
+    username: import.meta.env.VITE_USERNAME
 });

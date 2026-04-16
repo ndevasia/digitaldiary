@@ -1,0 +1,30 @@
+services:
+  flask-server:
+    build: .
+    container_name: digitaldiary-flask
+    ports:
+      - "5001:5001"
+      - "40000-40100:40000-40100/udp"
+    volumes:
+      - ./recordings:/app/recordings
+      - ./screenshots:/app/screenshots
+      - ./audio:/app/audio
+      - ./profile_pics:/app/profile_pics
+      - ./backend/model:/app/backend/model
+    environment:
+      - FLASK_ENV=production
+      - AWS_REGION=${AWS_REGION:-us-west-2}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - SRT_PORT_MIN=${SRT_PORT_MIN:-40000}
+      - SRT_PORT_MAX=${SRT_PORT_MAX:-40100}
+      - SRT_BIND_HOST=${SRT_BIND_HOST:-0.0.0.0}
+      - SRT_PUBLIC_HOST=${SRT_PUBLIC_HOST:-auto}
+    restart: unless-stopped
+    networks:
+      - digitaldiary-network
+
+networks:
+  digitaldiary-network:
+    driver: bridge

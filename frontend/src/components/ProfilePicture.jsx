@@ -1,10 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import { Camera } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import { UserContext } from '../context/UserContext.jsx';
 
-const API_BASE_URL = 'http://localhost:5001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 function ProfilePicture() {
+    const currentUsername = useContext(UserContext).username || 'User';
+    const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
     // Initialize as null (we don't know if the user has a pic yet)
     const [profilePic, setProfilePic] = useState(null);
     // New state to track if the image is actually loading successfully
@@ -13,7 +16,7 @@ function ProfilePicture() {
 
     // Fetch the S3 URL when the component first loads
     useEffect(() => {
-        fetch(`${API_BASE_URL}/api/profile-pic`)
+        fetch(`${apiBasePath}/profile-pic`)
             .then(res => res.json())
             .then(data => {
                 if (data.url) {
@@ -48,7 +51,7 @@ function ProfilePicture() {
 
         try {
             console.log("Uploading...");
-            const response = await fetch(`${API_BASE_URL}/api/upload-profile-pic`, {
+            const response = await fetch(`${apiBasePath}/upload-profile-pic`, {
                 method: 'POST',
                 body: formData
             });

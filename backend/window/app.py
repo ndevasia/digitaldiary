@@ -162,8 +162,14 @@ log_message(f"SRT settings -> bind: {SRT_BIND_HOST}, public: {SRT_PUBLIC_HOST}, 
 def resolve_srt_public_host():
     """Resolve the host clients should use to reach SRT listener."""
     configured_host = (SRT_PUBLIC_HOST or '').strip()
+    invalid_hosts = {'0.0.0.0', '::', 'localhost', '127.0.0.1'}
     if configured_host and configured_host.lower() != 'auto':
-        return configured_host
+        if configured_host in invalid_hosts:
+            log_message(
+                f"SRT_PUBLIC_HOST '{configured_host}' is not routable for caller mode; falling back to auto detection"
+            )
+        else:
+            return configured_host
 
     def get_interface_ip():
         try:
@@ -177,13 +183,13 @@ def resolve_srt_public_host():
     forwarded_host = (request.headers.get('X-Forwarded-Host') or '').split(',')[0].strip()
     if forwarded_host:
         host = forwarded_host.split(':')[0]
-        if host not in ('localhost', '127.0.0.1'):
+        if host not in invalid_hosts:
             return host
 
     host_header = (request.headers.get('Host') or '').strip()
     if host_header:
         host = host_header.split(':')[0]
-        if host not in ('localhost', '127.0.0.1'):
+        if host not in invalid_hosts:
             return host
 
     # In local WSL dev, localhost returned to a Windows client often fails for UDP/SRT.

@@ -5,11 +5,11 @@
   "main": "public/electron.js",
   "scripts": {
     "start": "vite",
-    "dev": "concurrently \"vite\" \"electron .\"",
+    "dev": "concurrently -k \"vite\" \"electron .\"",
     "dev-delayed": "vite && (sleep 2 && electron .)",
     "build": "vite build",
     "electron:dev": "vite build && electron .",
-    "electron:build": "vite build && electron-packager . DigitalDiary --out=../dist/ --overwrite --ignore=node_modules --extra-resource=../bin"
+    "electron:build": "vite build && electron-packager . DigitalDiary --out=../dist/ --overwrite --ignore=node_modules --extra-resource=../bin --extra-resource=.env"
   },
   "dependencies": {
     "@electron/remote": "^2.1.2",

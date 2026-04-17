@@ -469,14 +469,21 @@ class FFMpeg {
                 );
                 const devices = this.parseMacDevices(process.stderr.toString());
                 const audioDevices = devices.filter(d => d.type === 'audio');
+                
                 if (!audioDevices.length) {
                     throw new Error('No audio capture device found for Mac');
                 }
-                const selectedAudioIndex = audioDevices.findIndex(d => d.name.includes(audioDeviceName));
-                if (selectedAudioIndex === -1 && audioDeviceName) {
-                    throw new Error(`Audio device "${audioDeviceName}" not found on Mac`);
+                
+                // If a device name is specified, MUST find it - don't fallback
+                if (audioDeviceName) {
+                    const selectedAudioIndex = audioDevices.findIndex(d => d.name === audioDeviceName);
+                    if (selectedAudioIndex === -1) {
+                        throw new Error(`Audio device "${audioDeviceName}" not found. Available devices: ${audioDevices.map(d => d.name).join(', ')}`);
+                    }
+                    args.push('-f', 'avfoundation', '-i', `none:${selectedAudioIndex}`);
+                } else {
+                    throw new Error('No audio device selected. Please select one in Settings.');
                 }
-                args.push('-f', 'avfoundation', '-i', `none:${selectedAudioIndex || "0"}`);
                 break;
             case 'linux':
                 args.push('-f', 'alsa', '-ac', '2', '-i', 'hw:0');

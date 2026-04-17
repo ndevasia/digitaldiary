@@ -4,8 +4,7 @@ import boto3
 import json
 import sys
 import signal
-from flask_cors import CORS
-from flask_caching import Cache
+from flask_cors import CORS  # You'll need to install flask-cors
 import subprocess
 import platform
 import socket
@@ -19,8 +18,11 @@ load_dotenv(override=True)
 # Resolve project root for both local runs and container runs.
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Fix path to import from sibling directory
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Fix path to import from sibling directory BEFORE importing from backend modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Now import from s3_usage_logger (after path is set up)
+from s3_usage_logger import log_usage
 
 try:
     # Try importing from server directory (sibling to window directory)
@@ -86,9 +88,6 @@ def is_secret_valid(username, secret):
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS to allow React app to communicate with Flask
-
-# Initialize caching with simple in-memory backend
-cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
 @app.before_request
 def authenticate():
@@ -237,7 +236,7 @@ def test_endpoint():
     return jsonify({"message": "API is working!"})
 
 @app.route('/api/<username>/media_aws', methods=['GET'])
-@cache.cached(timeout=480, key_prefix=lambda: f"media_aws_{request.view_args['username']}")
+@log_usage(feature_name="fetch_media_list")
 def get_media_aws(username):
     try:
         # List objects in the specified user's directory in S3
@@ -322,6 +321,7 @@ def get_media_aws(username):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/proxy-image', methods=['GET'])
+@log_usage(feature_name="proxy_image")
 def proxy_image():
     """Proxy an S3 object by its key so the frontend can draw it on a canvas without CORS issues."""
     s3_key = request.args.get('key')
@@ -357,6 +357,7 @@ def generate_presigned_url():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/latest-screenshot', methods=['GET'])
+@log_usage(feature_name="view_latest_screenshot")
 def latest_screenshot(username):
     """Returns the URL for the latest screenshot"""
     try:
@@ -383,6 +384,7 @@ def latest_screenshot(username):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/random-screenshot-by-days/<int:days>', methods=['GET'])
+@log_usage(feature_name="view_random_screenshot")
 def get_random_screenshot_by_days(username, days):
     """Returns the URL for a randomly selected screenshot taken approximately X days ago or longer"""
     try:
@@ -433,6 +435,7 @@ def get_random_screenshot_by_days(username, days):
 #     return send_from_directory(SCREENSHOTS_DIR, filename)
 
 @app.route('/api/<username>/screenshot', methods=['POST'])
+@log_usage(feature_name="screenshot_capture")
 def upload_screenshot(username):
     if 'file' not in request.files:
         return jsonify({'error': 'No file part in the request'}), 400
@@ -473,10 +476,6 @@ def upload_screenshot(username):
         except Exception as e:
             log_message(f"Warning: Could not tag screenshot object: {e}")
         
-        # Invalidate cache for this user
-        cache_key = f"media_aws_{username}"
-        cache.delete(cache_key)
-        
         return jsonify({
             'status': 'success',
             'url': url
@@ -486,6 +485,7 @@ def upload_screenshot(username):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/<username>/recording/start', methods=['POST'])
+@log_usage(feature_name="recording_start")
 def start_screen_recording(username):
     try:
         global recording_processes
@@ -560,6 +560,7 @@ def start_screen_recording(username):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/<username>/recording/status/<file_uid>', methods=['GET'])
+@log_usage(feature_name="recording_status")
 def recording_status(username, file_uid):
     try:
         global recording_processes
@@ -572,6 +573,7 @@ def recording_status(username, file_uid):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/<username>/recording/stop/<file_uid>', methods=['POST'])
+@log_usage(feature_name="recording_stop")
 def stop_screen_recording(username, file_uid):
     try:
         global recording_processes
@@ -645,10 +647,6 @@ def stop_screen_recording(username, file_uid):
             log_message(f"Error uploading recording: {e}")
             return jsonify({'error': f"Failed to upload recording: {str(e)}"}), 500
 
-        # Invalidate cache for this user
-        cache_key = f"media_aws_{username}"
-        cache.delete(cache_key)
-
         # Return paths
         return jsonify({
             'status': 'stopped',
@@ -662,6 +660,7 @@ def stop_screen_recording(username, file_uid):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/<username>/audio/upload', methods=['POST'])
+@log_usage(feature_name="audio_upload")
 def upload_audio_recording(username):
     if 'file' not in request.files:
         return jsonify({'error': 'No file part in the request'}), 400
@@ -702,10 +701,6 @@ def upload_audio_recording(username):
         except Exception as e:
             log_message(f"Warning: Could not tag audio object: {e}")
         
-        # Invalidate cache for this user
-        cache_key = f"media_aws_{username}"
-        cache.delete(cache_key)
-        
         return jsonify({
             'status': 'success',
             'url': url
@@ -715,6 +710,7 @@ def upload_audio_recording(username):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/<username>/session/create', methods=['POST'])
+@log_usage(feature_name="session_create")
 def create_session(username):
     try:
         data = request.json
@@ -761,6 +757,7 @@ def create_session(username):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/session/update', methods=['POST'])
+@log_usage(feature_name="session_update")
 def update_session(username):
     try:
         data = request.json
@@ -787,6 +784,7 @@ def update_session(username):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/session/latest', methods=['GET'])
+@log_usage(feature_name="session_latest")
 def get_latest_session(username):
     try:
         # Import aws.py's S3 class and call get_latest_session
@@ -807,6 +805,7 @@ def get_latest_session(username):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/session/end', methods=['POST'])
+@log_usage(feature_name="session_end")
 def end_session(username):
     try:
         # Import aws.py's S3 class and call end_session
@@ -824,6 +823,7 @@ def end_session(username):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/sessions/list', methods=['GET'])
+@log_usage(feature_name="sessions_list")
 def list_sessions(username):
     try:
         # Import aws.py's S3 class and get all sessions
@@ -841,6 +841,7 @@ def list_sessions(username):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/session/delete', methods=['POST'])
+@log_usage(feature_name="session_delete")
 def delete_session(username):
     try:
         data = request.json
@@ -864,6 +865,7 @@ def delete_session(username):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/media/delete', methods=['DELETE', 'POST'])
+@log_usage(feature_name="media_delete")
 def delete_media(username):
     try:
         # Support both JSON body (for DELETE) and form data (for POST for backwards compatibility)
@@ -885,10 +887,6 @@ def delete_media(username):
         if not success:
             return jsonify({"error": "Failed to delete file from S3"}), 500
         
-        # Invalidate cache for this user
-        cache_key = f"media_aws_{username}"
-        cache.delete(cache_key)
-        
         return jsonify({"status": "success"})
         
     except Exception as e:
@@ -896,6 +894,7 @@ def delete_media(username):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/media/update-metadata', methods=['POST'])
+@log_usage(feature_name="media_update_metadata")
 def update_media_metadata(username):
     try:
         data = request.json
@@ -919,29 +918,15 @@ def update_media_metadata(username):
         if not success:
             return jsonify({"error": "Failed to update media metadata"}), 500
         
-        # Invalidate cache for this user
-        cache_key = f"media_aws_{username}"
-        cache.delete(cache_key)
-        
         return jsonify({"status": "success"})
         
     except Exception as e:
         print(f"Error updating media metadata: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/<username>/cache/invalidate', methods=['POST'])
-def invalidate_cache(username):
-    """Manual cache invalidation endpoint"""
-    try:
-        cache_key = f"media_aws_{username}"
-        cache.delete(cache_key)
-        return jsonify({"status": "success", "message": f"Cache invalidated for user {username}"})
-    except Exception as e:
-        print(f"Error invalidating cache: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
 # Upload profile picture to directory    
 @app.route('/api/<username>/upload-profile-pic', methods=['POST'])
+@log_usage(feature_name="upload_profile_pic")
 def upload_profile_pic(username):
     try:
         if 'file' not in request.files:
@@ -1003,6 +988,7 @@ def upload_profile_pic(username):
     
 # Retrieve profile picture from directory
 @app.route('/api/<username>/profile-pic', methods=['GET'])
+@log_usage(feature_name="get_profile_pic")
 def get_profile_pic(username):
     try:
         # List objects with the prefix for profile pictures
@@ -1034,6 +1020,7 @@ def get_profile_pic(username):
 
 # Upload hero image to directory    
 @app.route('/api/<username>/upload-hero-image', methods=['POST'])
+@log_usage(feature_name="upload_hero_image")
 def upload_hero_image(username):
     try:
         if 'file' not in request.files:
@@ -1095,6 +1082,7 @@ def upload_hero_image(username):
     
 # Retrieve profile picture from directory
 @app.route('/api/<username>/hero-image', methods=['GET'])
+@log_usage(feature_name="get_hero_image")
 def get_hero_image(username):
     try:
         # List objects with the prefix for hero images
@@ -1125,6 +1113,7 @@ def get_hero_image(username):
         return jsonify({"error": str(e)}), 500
     
 @app.route('/api/<username>/friends/add', methods=['POST'])
+@log_usage(feature_name="add_friend")
 def add_friend(username):
     """Add a friend to the current user's friends list by adding them to user.json.
     
@@ -1191,6 +1180,7 @@ def add_friend(username):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/<username>/friends', methods=['GET'])
+@log_usage(feature_name="get_friends")
 def get_friends(username):
     """Get the current user's friends list.
     

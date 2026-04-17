@@ -70,6 +70,8 @@ function App() {
                 } else {
                     console.error('No audio devices found');
                 }
+            }).catch(err => {
+                console.error('Failed to initialize audio devices:', err);
             });
         }
     }, []);
@@ -239,6 +241,11 @@ function App() {
                 }
 
                 const audioDeviceName = localStorage.getItem('audioDeviceName');
+                if (!audioDeviceName || audioDeviceName === 'none') {
+                    console.error('No valid audio device selected. Please configure one in Settings.');
+                    setAudioRecordingState(INACTIVE);
+                    return;
+                }
                 console.log('Using audio device:', audioDeviceName);
                 FFMpeg.startAudioRecording(audioDeviceName).then(() => {
                     console.log('Audio recording started');

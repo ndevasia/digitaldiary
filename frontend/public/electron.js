@@ -203,11 +203,9 @@ function createMainWindow() {
     if (isDev) {
         mainWindow.webContents.openDevTools();
     }
-
-    mainWindow.on('minimize', () => {
-        if (overlayWindow) {
-            overlayWindow.send('main-window-closed');
-        }
+    
+    mainWindow.on('closed', () => {
+        app.quit();
     });
 
     mainWindow.on('restore', () => {

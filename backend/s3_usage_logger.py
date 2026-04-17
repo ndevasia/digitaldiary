@@ -1,6 +1,7 @@
 """
 S3-based API usage logging for tracking feature usage.
-Stores logs in S3 with one file per user (e.g., username/logs.json)
+Stores logs in S3 with one file per app session (e.g., username/logs/{sessionId}.json)
+Each app session (from open to quit) gets its own log file for easy analysis.
 """
 
 import json
@@ -11,16 +12,15 @@ from functools import wraps
 from flask import request
 
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
-AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "digital-diary")
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-
 
 class S3UsageLogger:
     """Logs API usage to S3 for each user."""
     
     def __init__(self):
-        self.bucket = AWS_S3_BUCKET
+        self.bucket = S3_BUCKET_NAME
         self.region = AWS_REGION
         try:
             self.s3_client = boto3.client(
@@ -34,9 +34,9 @@ class S3UsageLogger:
             print(f"Warning: Could not initialize S3 client for logging: {e}")
             self.available = False
     
-    def log_api_call(self, username, feature_name, endpoint, method, status_code, response_time_ms, page_source=None):
+    def log_api_call(self, username, feature_name, endpoint, method, status_code, response_time_ms, session_id, page_source=None):
         """
-        Log an API call to the user's logs file in S3.
+        Log an API call to the session's logs file in S3.
         
         Args:
             username: Username making the call
@@ -45,6 +45,7 @@ class S3UsageLogger:
             method: HTTP method (GET, POST, etc.)
             status_code: HTTP response status code
             response_time_ms: Time taken in milliseconds
+            session_id: Unique session ID (from app startup to quit)
             page_source: Optional page/component name making the request (e.g., "FilesPage", "ScrapbookEditorPage")
         """
         if not self.available:
@@ -64,7 +65,7 @@ class S3UsageLogger:
             if page_source:
                 log_entry["page_source"] = page_source
             
-            logs_key = f"{username}/logs.json"
+            logs_key = f"{username}/logs/{session_id}.json"
             
             # Try to read existing logs
             existing_logs = []
@@ -93,8 +94,8 @@ class S3UsageLogger:
         except Exception as e:
             print(f"Error logging API call for {username}: {e}")
     
-    def log_error(self, username, feature_name, endpoint, method, error_message, page_source=None):
-        """Log an error API call."""
+    def log_error(self, username, feature_name, endpoint, method, error_message, session_id, page_source=None):
+        """Log an error API call to the session's logs file."""
         if not self.available:
             return
         
@@ -112,7 +113,7 @@ class S3UsageLogger:
             if page_source:
                 log_entry["page_source"] = page_source
             
-            logs_key = f"{username}/logs.json"
+            logs_key = f"{username}/logs/{session_id}.json"
             
             # Try to read existing logs
             existing_logs = []
@@ -148,6 +149,7 @@ usage_logger = S3UsageLogger()
 def log_usage(feature_name=None):
     """
     Decorator to log API endpoint usage to S3.
+    Creates separate log files for each app session (one per app startup/quit cycle).
     
     Usage:
         @app.route('/api/<username>/screenshot', methods=['POST'])
@@ -162,6 +164,7 @@ def log_usage(feature_name=None):
         @wraps(func)
         def wrapper(*args, **kwargs):
             username = request.headers.get('X-Username', 'unknown')
+            session_id = request.headers.get('X-Session-ID', 'unknown')
             endpoint = request.path
             method = request.method
             page_source = request.headers.get('X-Page-Source', None)
@@ -187,6 +190,7 @@ def log_usage(feature_name=None):
                     method=method,
                     status_code=status_code,
                     response_time_ms=response_time_ms,
+                    session_id=session_id,
                     page_source=page_source
                 )
                 
@@ -203,10 +207,8 @@ def log_usage(feature_name=None):
                     endpoint=endpoint,
                     method=method,
                     error_message=str(e),
+                    session_id=session_id,
                     page_source=page_source
-                    endpoint=endpoint,
-                    method=method,
-                    error_message=str(e)
                 )
                 raise
         

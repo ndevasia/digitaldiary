@@ -33,14 +33,19 @@ if (typeof window !== 'undefined' && !window.__digitalDiaryFetchAuthPatched) {
   function getPageNameFromHash() {
     const hash = window.location.hash;
     
-    if (hash.includes('scrapbook-editor')) return 'ScrapbookEditorPage';
+    // Check for scrapbook editor first - any path /scrapbook/... with something after
+    // Scrapbook editor has a path like #/scrapbook/id or #/scrapbook/123
+    if (hash.startsWith('#/scrapbook/') && hash.length > '#/scrapbook/'.length) {
+      return 'ScrapbookEditorPage';
+    }
+    
     if (hash.includes('files')) return 'FilesPage';
     if (hash.includes('friends')) return 'FriendsPage';
     if (hash.includes('games')) return 'GamesPage';
     if (hash.includes('stats')) return 'StatsPage';
     if (hash.includes('settings')) return 'SettingsPage';
     if (hash.includes('scrapbook')) return 'ScrapbookPage';
-    if (hash.includes('home') || hash === '#/') return 'HomePage';
+    if (hash.includes('home') || hash === '#/' || hash === '') return 'HomePage';
     
     // Extract from hash path if no match
     if (hash) {

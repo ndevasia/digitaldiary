@@ -516,10 +516,8 @@ function GamesPage() {
           
           <div className="bg-white rounded-lg border border-gray-200 p-8">
             {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[1, 2, 3, 4, 5, 6].map((_, index) => (
-                  <div key={index} className="animate-pulse bg-blue-100 h-48 rounded"></div>
-                ))}
+              <div className="text-center py-12">
+                <p className="text-gray-500">Loading apps...</p>
               </div>
             ) : error ? (
               <div className="text-center py-12">

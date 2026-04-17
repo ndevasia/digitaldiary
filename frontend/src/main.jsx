@@ -23,6 +23,48 @@ if (typeof window !== 'undefined' && !window.__digitalDiaryFetchAuthPatched) {
   const originalFetch = window.fetch.bind(window);
   const isFileProtocol = window.location.protocol === 'file:';
 
+  /**
+   * Extract page name from window.location.hash
+   */
+  function getPageNameFromHash() {
+    const hash = window.location.hash;
+    
+    if (hash.includes('scrapbook-editor')) return 'ScrapbookEditorPage';
+    if (hash.includes('files')) return 'FilesPage';
+    if (hash.includes('friends')) return 'FriendsPage';
+    if (hash.includes('games')) return 'GamesPage';
+    if (hash.includes('stats')) return 'StatsPage';
+    if (hash.includes('settings')) return 'SettingsPage';
+    if (hash.includes('scrapbook')) return 'ScrapbookPage';
+    if (hash.includes('home') || hash === '#/') return 'HomePage';
+    
+    // Extract from hash path if no match
+    if (hash) {
+      const routePath = hash.split('/')[1];
+      if (routePath) {
+        return routePath.charAt(0).toUpperCase() + routePath.slice(1);
+      }
+    }
+    
+    return 'HomePage';
+  }
+
+  /**
+   * Generate or retrieve session ID that persists for app lifetime
+   */
+  function getOrCreateSessionId() {
+    let sessionId = sessionStorage.getItem('digitaldiary.sessionId');
+    
+    if (!sessionId) {
+      const timestamp = new Date().toISOString().replace(/[:\-]/g, '').slice(0, 15);
+      const randomStr = Math.random().toString(36).substring(2, 10);
+      sessionId = `${timestamp}-${randomStr}`;
+      sessionStorage.setItem('digitaldiary.sessionId', sessionId);
+    }
+    
+    return sessionId;
+  }
+
   window.fetch = (input, init = {}) => {
     const rawUrl = typeof input === 'string' ? input : input?.url;
 
@@ -32,6 +74,10 @@ if (typeof window !== 'undefined' && !window.__digitalDiaryFetchAuthPatched) {
         const headers = new Headers(init.headers);
         headers.set('X-Username', AUTH_USERNAME || '');
         headers.set('X-User-Secret', AUTH_SECRET || '');
+        
+        // Add page source and session ID headers
+        headers.set('X-Page-Source', getPageNameFromHash());
+        headers.set('X-Session-ID', getOrCreateSessionId());
 
         // Vite proxy only exists in dev server. In packaged Electron (file://),
         // route API calls directly to the configured backend origin.

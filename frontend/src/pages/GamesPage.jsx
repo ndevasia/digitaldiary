@@ -505,20 +505,20 @@ function GamesPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full">
       <div className="flex-1 p-8 overflow-y-auto">
         <header className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
         </header>
         
-        <section className="mb-8">
+        <section className="mb-8 w-full">
           <h2 className="text-xl font-medium text-gray-700 mb-4">Apps</h2>
           
-          <div className="bg-white rounded-lg border border-gray-200 p-8">
+          <div className="bg-white rounded-lg border border-gray-200 p-8 w-full">
             {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
                 {[1, 2, 3, 4, 5, 6].map((_, index) => (
-                  <div key={index} className="animate-pulse bg-blue-100 h-48 rounded"></div>
+                  <div key={index} className="animate-pulse bg-blue-100 h-48 w-full rounded"></div>
                 ))}
               </div>
             ) : error ? (

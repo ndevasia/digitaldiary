@@ -204,6 +204,18 @@ function createMainWindow() {
         mainWindow.webContents.openDevTools();
     }
 
+    mainWindow.on('minimize', () => {
+        if (overlayWindow) {
+            overlayWindow.send('main-window-closed');
+        }
+    });
+
+    mainWindow.on('restore', () => {
+        if (overlayWindow) {
+            overlayWindow.send('main-window-opened');
+        }
+    });
+
     mainWindow.on('closed', () => {
         app.quit();
     });
@@ -254,26 +266,14 @@ function setupIPC() {
     });
 
     ipcMain.on('open-main-window', () => {
-        if (!mainWindow) {
-            createMainWindow();
-        } else {
-            mainWindow.show();
-            mainWindow.focus();
-        }
-
-        // Notify the overlay window that the main window is open
-        if (overlayWindow && overlayWindow.webContents && !overlayWindow.webContents.isDestroyed()) {
-            overlayWindow.webContents.send('main-window-opened');
+        if (mainWindow) {
+            mainWindow.restore();
         }
     });
 
     ipcMain.on('close-main-window', () => {
         if (mainWindow) {
             mainWindow.minimize();
-            // Notify the overlay window that the main window is closed
-            if (overlayWindow && overlayWindow.webContents && !overlayWindow.webContents.isDestroyed()) {
-                overlayWindow.webContents.send('main-window-closed');
-            }
         }
     });
 

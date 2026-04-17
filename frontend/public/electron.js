@@ -2,10 +2,42 @@ const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
+const dotenv = require('dotenv');
+dotenv.config();
 
 let overlayWindow;
 let mainWindow;
 let pythonProcess;
+let isQuitting = false;
+let isBeforeQuitRunning = false;
+
+function forceShutdown(exitCode = 0) {
+    if (isQuitting) {
+        return;
+    }
+
+    isQuitting = true;
+
+    try {
+        if (pythonProcess) {
+            pythonProcess.kill();
+        }
+    } catch (e) {
+        console.error("Error killing python process:", e);
+    }
+
+    try {
+        BrowserWindow.getAllWindows().forEach((win) => {
+            if (!win.isDestroyed()) {
+                win.destroy();
+            }
+        });
+    } catch (e) {
+        console.error("Error destroying windows during shutdown:", e);
+    }
+
+    app.exit(exitCode);
+}
 
 // Check if we're in development mode
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -84,7 +116,7 @@ function createOverlayWindow() {
 
         overlayWindow = new BrowserWindow({
             width: 64,
-            height: 300,
+            height: 350,
             minWidth: 64,
             minHeight: 100,
         x: width - 100,
@@ -128,6 +160,7 @@ function createOverlayWindow() {
     // Ensure overlayWindow reference is cleared when it's closed
     overlayWindow.on('closed', () => {
         overlayWindow = null;
+        app.quit();
     });
 }
 
@@ -172,11 +205,7 @@ function createMainWindow() {
     }
 
     mainWindow.on('closed', () => {
-        mainWindow = null;
-        // Notify the overlay window that the main window is closed
-        if (overlayWindow && overlayWindow.webContents && !overlayWindow.webContents.isDestroyed()) {
-            overlayWindow.webContents.send('main-window-closed');
-        }
+        app.quit();
     });
 }
 
@@ -200,29 +229,29 @@ function setupIPC() {
         }
     });
 
-        // Resizing: main process uses global cursor position
-        let resizeInterval = null;
+    // Resizing: main process uses global cursor position
+    let resizeInterval = null;
 
-        ipcMain.on('start-resize', () => {
-            if (!overlayWindow) return;
-            const startMouse = screen.getCursorScreenPoint();
-            const startBounds = overlayWindow.getBounds();
+    ipcMain.on('start-resize', () => {
+        if (!overlayWindow) return;
+        const startMouse = screen.getCursorScreenPoint();
+        const startBounds = overlayWindow.getBounds();
 
-            if (resizeInterval) clearInterval(resizeInterval);
-            resizeInterval = setInterval(() => {
-                const currentMouse = screen.getCursorScreenPoint();
-                const newWidth = Math.max(64, startBounds.width + (currentMouse.x - startMouse.x));
-                const newHeight = Math.max(100, startBounds.height + (currentMouse.y - startMouse.y));
-                overlayWindow.setResizable(true);
-                overlayWindow.setSize(Math.round(newWidth), Math.round(newHeight));
-                overlayWindow.setResizable(false);
-            }, 16);
+        if (resizeInterval) clearInterval(resizeInterval);
+        resizeInterval = setInterval(() => {
+            const currentMouse = screen.getCursorScreenPoint();
+            const newWidth = Math.max(64, startBounds.width + (currentMouse.x - startMouse.x));
+            const newHeight = Math.max(100, startBounds.height + (currentMouse.y - startMouse.y));
+            overlayWindow.setResizable(true);
+            overlayWindow.setSize(Math.round(newWidth), Math.round(newHeight));
+            overlayWindow.setResizable(false);
+        }, 16);
 
-            ipcMain.once('stop-resize', () => {
-                clearInterval(resizeInterval);
-                resizeInterval = null;
-            });
+        ipcMain.once('stop-resize', () => {
+            clearInterval(resizeInterval);
+            resizeInterval = null;
         });
+    });
 
     ipcMain.on('open-main-window', () => {
         if (!mainWindow) {
@@ -240,11 +269,17 @@ function setupIPC() {
 
     ipcMain.on('close-main-window', () => {
         if (mainWindow) {
-            mainWindow.close();
+            mainWindow.minimize();
             // Notify the overlay window that the main window is closed
             if (overlayWindow && overlayWindow.webContents && !overlayWindow.webContents.isDestroyed()) {
                 overlayWindow.webContents.send('main-window-closed');
             }
+        }
+    });
+
+    ipcMain.on('open-stats-window', () => {
+        if (mainWindow) {
+            mainWindow.webContents.send('navigate-to-stats');
         }
     });
 
@@ -282,46 +317,76 @@ app.on('activate', () => {
 });
 
 app.on('before-quit', async (event) => {
+    if (isBeforeQuitRunning) {
+        return;
+    }
+
+    isBeforeQuitRunning = true;
     event.preventDefault();
 
     console.log("App is quitting, attempting to end sessions...");
 
-    // End any sessions open
-    // This is done in the rendering process so
-    // we don't need to figure out the API URL here in the main process
-    if (BrowserWindow.getAllWindows().length > 0) {
-        await BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(`
-            (async () => {
-                try {
-                const username = localStorage.getItem('username') || 'User';
-                const userSecret = localStorage.getItem('userSecret') || '';
-                await fetch('/api/' + encodeURIComponent(username) + '/session/end', {
-                    method: 'POST',
-                    headers: {
-                        'X-Username': username,
-                        'X-User-Secret': userSecret
-                    }
-                })
-                } catch (e) {};
-                return 0;
-            })()
-        `);
-    } else {
-        // we're just gonna hardcode the server if there are no windows open
-        try {
-            const username = process.env.VITE_USERNAME || 'User';
-            const userSecret = process.env.VITE_USER_SECRET || '';
-            await fetch(`http://127.0.0.1:5001/api/${encodeURIComponent(username)}/session/end`, {
-                method: 'POST',
-                headers: {
-                    'X-Username': username,
-                    'X-User-Secret': userSecret
-                }
-            });
-        } catch (e) {
-            console.error("Error ending session on quit:", e);
-        }
-    }
+    // End any sessions open, but never let this block process shutdown.
+    const quitCleanupTimeoutMs = 2000;
 
-    app.exit();
+    try {
+        const cleanupPromise = (async () => {
+            if (BrowserWindow.getAllWindows().length > 0) {
+                await BrowserWindow.getAllWindows()[0].webContents.executeJavaScript(`
+                    (async () => {
+                        try {
+                            const username = localStorage.getItem('username') || 'User';
+                            const userSecret = localStorage.getItem('userSecret') || '';
+                            await fetch('/api/' + encodeURIComponent(username) + '/session/end', {
+                                method: 'POST',
+                                headers: {
+                                    'X-Username': username,
+                                    'X-User-Secret': userSecret
+                                }
+                            })
+                        } catch (e) {};
+                        return 0;
+                    })()
+                `);
+            } else {
+                try {
+                    const username = process.env.VITE_USERNAME || 'User';
+                    const userSecret = process.env.VITE_USER_SECRET || '';
+                    await fetch(`${process.env.VITE_API_BASE_URL}/api/${encodeURIComponent(username)}/session/end`, {
+                        method: 'POST',
+                        headers: {
+                            'X-Username': username,
+                            'X-User-Secret': userSecret
+                        }
+                    });
+                } catch (e) {
+                    console.error("Error ending session on quit:", e);
+                }
+            }
+        })();
+
+        await Promise.race([
+            cleanupPromise,
+            new Promise((resolve) => setTimeout(resolve, quitCleanupTimeoutMs))
+        ]);
+    } catch (e) {
+        console.error("Quit cleanup failed:", e);
+    } finally {
+        forceShutdown(0);
+    }
+});
+
+process.on('SIGINT', () => {
+    console.log("SIGINT received, forcing Electron shutdown...");
+    forceShutdown(0);
+});
+
+process.on('SIGTERM', () => {
+    console.log("SIGTERM received, forcing Electron shutdown...");
+    forceShutdown(0);
+});
+
+process.on('SIGBREAK', () => {
+    console.log("SIGBREAK received, forcing Electron shutdown...");
+    forceShutdown(0);
 });

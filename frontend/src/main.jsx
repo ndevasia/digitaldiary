@@ -15,6 +15,10 @@ import Sidebar from './components/Sidebar.jsx';
 import { UserContext } from './context/UserContext.jsx';
 import { MediaCacheProvider } from './context/MediaCacheContext.jsx';
 
+const ipcRenderer = typeof window !== 'undefined' && typeof window.require === 'function'
+  ? window.require('electron').ipcRenderer
+  : null;
+
 const AUTH_USERNAME = import.meta.env.VITE_USERNAME;
 const AUTH_SECRET = import.meta.env.VITE_USER_SECRET;
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5001';
@@ -63,6 +67,19 @@ function MainApp() {
     }
     localStorage.setItem('userSecret', AUTH_SECRET || '');
   }, [currentUsername]);
+
+  useEffect(() => {
+    if (!ipcRenderer) return undefined;
+
+    const handleNavigateToStats = () => {
+      window.location.hash = '#/stats';
+    };
+
+    ipcRenderer.on('navigate-to-stats', handleNavigateToStats);
+    return () => {
+      ipcRenderer.removeListener('navigate-to-stats', handleNavigateToStats);
+    };
+  }, []);
 
   if (isOverlay) {
     return (

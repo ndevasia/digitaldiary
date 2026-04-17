@@ -42,7 +42,7 @@ function App() {
     const [audioRecordingState, setAudioRecordingState] = useState(INACTIVE);
     const [screenRecordingState, setScreenRecordingState] = useState(INACTIVE);
     const screenRecordingUID = useRef(null);
-    const [isMaximized, setIsMaximized] = useState(false);
+    const [isMaximized, setIsMaximized] = useState(true);
     const { invalidateCache } = useCacheInvalidation();
 
     // Add effect to listen for main window open/close events
@@ -291,6 +291,10 @@ function App() {
         }
     };
 
+    const goToStatsPage = () => {
+        ipcRenderer.send('open-stats-window');
+    };
+
     // Open main window function
     const openMainWindow = () => {
         ipcRenderer.send('open-main-window');
@@ -343,12 +347,11 @@ function App() {
                                 isActive={audioRecordingState == ACTIVE}
                                 // tooltip="Record Audio"
                             />
-                            <Link to="/">
-                                <IconButton
-                                    icon={BarChart2}
-                                    // tooltip="View Statistics"
-                                />
-                            </Link>
+                            <IconButton
+                                icon={BarChart2}
+                                // tooltip="View Statistics"
+                                onClick={goToStatsPage}
+                            />
                             <IconButton
                                 icon={isMaximized ? Minimize : Maximize}
                                 onClick={toggleMainWindow}

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, dialog, Notification } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -204,6 +204,8 @@ function createMainWindow() {
         mainWindow.webContents.openDevTools();
     }
     
+    mainWindow.show();
+    
     mainWindow.on('closed', () => {
         app.quit();
     });
@@ -225,7 +227,7 @@ function setupIPC() {
         app.quit();
     });
 
-    ipcMain.on('close-window', () => {
+        ipcMain.on('close-window', () => {
         const currentWindow = BrowserWindow.getFocusedWindow();
         if(currentWindow) {
             currentWindow.close();
@@ -283,6 +285,42 @@ function setupIPC() {
 
     ipcMain.on('get-root-path', (event) => {
         event.returnValue = app.getAppPath();
+    });
+
+    ipcMain.on('show-error', async (event, { message, title }) => {
+        try {
+            // First try to show dialog on main window
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.show();
+                mainWindow.focus();
+                
+                await dialog.showMessageBox(mainWindow, {
+                    type: 'error',
+                    title: title || 'Error',
+                    message: message,
+                    buttons: ['OK']
+                });
+            } else {
+                // Fallback: use native Notification
+                const notification = new Notification({
+                    title: title || 'Error',
+                    body: message,
+                    icon: path.join(__dirname, 'assets', 'icon.png') // Optional icon
+                });
+                notification.show();
+            }
+        } catch (err) {
+            // Final fallback: use native Notification
+            try {
+                const notification = new Notification({
+                    title: title || 'Error',
+                    body: message
+                });
+                notification.show();
+            } catch (notifErr) {
+                // Silent fail
+            }
+        }
     });
 }
 

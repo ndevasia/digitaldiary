@@ -240,7 +240,7 @@ def test_endpoint():
 def get_media_aws(username):
     try:
         # List objects in the specified user's directory in S3
-        prefix = f"{username}/"
+        prefix = f"{username}/media/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
 
         if 'Contents' not in response:
@@ -256,7 +256,6 @@ def get_media_aws(username):
             # Format: username/session_id/filename
             parts = item['Key'].split('/')
             s3_username = parts[0]
-            session_id = parts[1] if len(parts) > 2 else None
 
             # Convert S3 username to integer user_id
             owner_user_id = get_user_id_from_username(s3_username)
@@ -292,14 +291,13 @@ def get_media_aws(username):
             # Transform into media data type format
             media_item = {
                 "media_id": idx,
-                "s3_key": item['Key'],
+                "s3_key": item['Key'], # for deletion reference
                 "type": media_type,
                 "media_url": media_url,
                 "timestamp": item['LastModified'].isoformat(),
                 "owner_user_id": owner_user_id,
-                "session_id": session_id,
-                "app_name": session_id if session_id else "app1",  # Use session_id if available, else fallback
-                "s3_key": item['Key']  # Add the actual S3 key for deletion
+                "session_id": None,    # will be overridden by S3 metadata if available
+                "app_name": "No app",  # Fallback if no S3 metadata
             }
 
             # Apply custom metadata from S3 object headers
@@ -362,12 +360,12 @@ def latest_screenshot(username):
     """Returns the URL for the latest screenshot"""
     try:
         # List all objects under USERNAME prefix to find any screenshots
-        prefix = username + "/screenshot_"
+        prefix = username + "/media/screenshots/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
 
         if 'Contents' in response:
             # Find all screenshot files (recursively from any session folder)
-            screenshot_files = [file for file in response['Contents'] if 'screenshot_' in file['Key']]
+            screenshot_files = response['Contents']
 
             if screenshot_files:
                 latest_file = sorted(screenshot_files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
@@ -396,7 +394,7 @@ def get_random_screenshot_by_days(username, days):
         # Extract just the date part (year, month, day) for comparison
         # target_date_only = target_date.date()
         
-        prefix = username + "/screenshot_"
+        prefix = username + "/media/screenshots/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
         
         if 'Contents' in response:
@@ -449,7 +447,7 @@ def upload_screenshot(username):
         user_with = request.form.get('user_with', '')
         
         # Generate presigned URL for upload
-        object_name = f"{username}/{file.filename}"
+        object_name = f"{username}/media/screenshots/{file.filename}"
         url = s3_client.generate_presigned_url(
             'put_object',
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -493,7 +491,7 @@ def start_screen_recording(username):
 
         # Extract metadata from request body
         data = request.json or {}
-        app_name = data.get('app_name', '')
+        app_name = data.get('app_name', 'No app')
         user_with = data.get('user_with', '')
 
         port = random.randint(SRT_PORT_MIN, SRT_PORT_MAX)
@@ -506,7 +504,7 @@ def start_screen_recording(username):
         caller_url = f"srt://{public_host}:{port}"
 
         file_uid = datetime.now().strftime(f"{port}%Y%m%d_%H%M%S")
-        filename = f"recording_{file_uid}.mkv"
+        filename = f"recording_{file_uid}.mp4"
         ffmpeg_output = os.path.normpath(os.path.join(RECORDINGS_DIR, filename))
         
         log_message(f"Output file path: {ffmpeg_output}")
@@ -596,13 +594,13 @@ def stop_screen_recording(username, file_uid):
         del recording_processes[file_uid]
         log_message("Stopped ffmpeg for screen recording.")
 
-        filename = f"recording_{file_uid}.mkv"
+        filename = f"recording_{file_uid}.mp4"
         ffmpeg_output = os.path.normpath(os.path.join(RECORDINGS_DIR, filename))
         video_url = None
 
         # Upload the recording to S3
         try:
-            object_name = f"{username}/recordings/{filename}"
+            object_name = f"{username}/media/screen_recordings/{filename}"
             url = s3_client.generate_presigned_url(
                 'put_object',
                 Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -674,7 +672,7 @@ def upload_audio_recording(username):
         user_with = request.form.get('user_with', '')
         
         # Generate presigned URL for upload
-        object_name = f"{username}/recordings/{file.filename}"
+        object_name = f"{username}/media/audio_recordings/{file.filename}"
         url = s3_client.generate_presigned_url(
             'put_object',
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},

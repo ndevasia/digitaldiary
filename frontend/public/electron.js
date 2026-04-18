@@ -284,6 +284,23 @@ function setupIPC() {
     ipcMain.on('get-root-path', (event) => {
         event.returnValue = app.getAppPath();
     });
+
+    ipcMain.on('get-active-display', (event) => {
+        const cursorPoint = screen.getCursorScreenPoint();
+        const display = screen.getDisplayNearestPoint(cursorPoint);
+        const scaleFactor = display.scaleFactor || 1;
+        event.returnValue = {
+            x: display.nativeOrigin.x,
+            y: display.nativeOrigin.y,
+            width: display.bounds.width,
+            height: display.bounds.height,
+            scaleFactor,
+            physicalX: Math.round(display.nativeOrigin.x * scaleFactor),
+            physicalY: Math.round(display.nativeOrigin.y * scaleFactor),
+            physicalWidth: Math.round(display.bounds.width * scaleFactor),
+            physicalHeight: Math.round(display.bounds.height * scaleFactor)
+        }
+    });
 }
 
 

@@ -376,7 +376,14 @@ class FFMpeg {
         switch (platform) {
             case 'win':
                 // Put new args at the front of existing args to avoid vframes conflict
-                args.unshift('-f', 'gdigrab', '-i', 'desktop');
+                const activeDisplay = ipcRenderer.sendSync('get-active-display');
+                args.unshift(
+                    '-f', 'gdigrab', 
+                    '-offset_x', activeDisplay.physicalX.toString(), 
+                    '-offset_y', activeDisplay.physicalY.toString(), 
+                    '-video_size', activeDisplay.physicalWidth.toString() 
+                        + 'x' + activeDisplay.physicalHeight.toString(), 
+                    '-i', 'desktop');
                 break;
             case 'mac':
                 const process = spawnSync(

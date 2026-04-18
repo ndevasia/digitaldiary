@@ -301,6 +301,7 @@ class FFMpeg {
                 return;
             }
 
+            let hasResolved = false;
             this.currentAudioRecordingName = `audio_recording_${Date.now()}`;
             this.audioProcess = spawn(
                 this.path, 
@@ -315,14 +316,30 @@ class FFMpeg {
 
             this.audioProcess.on('error', (err) => {
                 this.audioProcess = null;
-                reject(new Error(`Failed to start FFMpeg audio recording: ${err.message}`));
+                if (!hasResolved) {
+                    hasResolved = true;
+                    reject(new Error(`Failed to start FFMpeg audio recording: ${err.message}`));
+                }
+            });
+
+            this.audioProcess.on('exit', (code) => {
+                if (!hasResolved) {
+                    hasResolved = true;
+                    this.audioProcess = null;
+                    if (code !== 0) {
+                        reject(new Error(`FFMpeg audio recording process exited with error code ${code}`));
+                    }
+                }
             });
 
             this.audioProcess.stderr.on('data', (data) => {
                 if (VERBOSE)
                     console.log(`FFMpeg stderr: ${data}`);
                 if (data.toString().includes('size=')) {
-                    resolve();
+                    if (!hasResolved) {
+                        hasResolved = true;
+                        resolve();
+                    }
                 }
             });
         });

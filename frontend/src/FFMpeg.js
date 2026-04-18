@@ -430,8 +430,15 @@ class FFMpeg {
         const args = ['-hide_banner'];
         switch (platform) {
             case 'win':
+                const activeDisplay = ipcRenderer.sendSync('get-active-display');
                 // Use GDI grab for screen capture
-                args.push('-f', 'gdigrab', '-i', 'desktop');
+                args.push(
+                    '-f', 'gdigrab', 
+                    '-offset_x', activeDisplay.physicalX.toString(), 
+                    '-offset_y', activeDisplay.physicalY.toString(), 
+                    '-video_size', activeDisplay.physicalWidth.toString() 
+                        + 'x' + activeDisplay.physicalHeight.toString(), 
+                    '-i', 'desktop');
                 break;
             case 'mac':
                 // DEBUG INFO: Print out Apple devices

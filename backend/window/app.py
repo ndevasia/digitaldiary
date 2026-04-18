@@ -496,11 +496,12 @@ def start_screen_recording(username):
 
         port = random.randint(SRT_PORT_MIN, SRT_PORT_MAX)
         public_host = resolve_srt_public_host()
-        # FFmpeg SRT listener is most compatible using empty-host form: srt://:<port>
-        if SRT_BIND_HOST in ('0.0.0.0', '::', ''):
-            listen_url = f"srt://:{port}"
-        else:
-            listen_url = f"srt://{SRT_BIND_HOST}:{port}"
+        # Some FFmpeg/SRT builds reject empty-host listener URLs (srt://:<port>).
+        # Always provide an explicit bind host for listener mode.
+        bind_host = (SRT_BIND_HOST or '').strip()
+        if bind_host in ('', '::'):
+            bind_host = '0.0.0.0'
+        listen_url = f"srt://{bind_host}:{port}"
         caller_url = f"srt://{public_host}:{port}"
 
         file_uid = datetime.now().strftime(f"{port}%Y%m%d_%H%M%S")

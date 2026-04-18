@@ -1204,6 +1204,43 @@ def get_friends(username):
         print(f"Error in get_friends: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+# Scrapbook action logging endpoints
+@app.route('/api/<username>/scrapbook/log-add-media', methods=['POST'])
+@log_usage(feature_name="scrapbook_add_media")
+def log_add_media(username):
+    """Log when media is added to a scrapbook"""
+    try:
+        data = request.json or {}
+        # Details like media type, media_id, etc. can be included
+        return jsonify({"status": "success", "action": "add_media"}), 200
+    except Exception as e:
+        print(f"Error logging add media: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/<username>/scrapbook/log-change-background', methods=['POST'])
+@log_usage(feature_name="scrapbook_change_background")
+def log_change_background(username):
+    """Log when background color is changed"""
+    try:
+        data = request.json or {}
+        # Details like color code can be included
+        return jsonify({"status": "success", "action": "change_background"}), 200
+    except Exception as e:
+        print(f"Error logging change background: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/<username>/scrapbook/log-add-sticker', methods=['POST'])
+@log_usage(feature_name="scrapbook_add_sticker")
+def log_add_sticker(username):
+    """Log when a sticker is added to a scrapbook"""
+    try:
+        data = request.json or {}
+        # Details like sticker emoji can be included
+        return jsonify({"status": "success", "action": "add_sticker"}), 200
+    except Exception as e:
+        print(f"Error logging add sticker: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     # Ensure user.json is present when the app starts
     ensure_user_json_exists()

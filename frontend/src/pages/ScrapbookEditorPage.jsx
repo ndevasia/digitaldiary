@@ -376,6 +376,45 @@ function ScrapbookEditorPage() {
     }, 3200);
   };
 
+  const logScrapbookAction = async (actionType, details = {}) => {
+    try {
+      // Determine which endpoint to use based on action type
+      let endpoint;
+      switch (actionType) {
+        case 'add_media':
+          endpoint = `${apiBasePath}/scrapbook/log-add-media`;
+          break;
+        case 'change_background':
+          endpoint = `${apiBasePath}/scrapbook/log-change-background`;
+          break;
+        case 'add_sticker':
+          endpoint = `${apiBasePath}/scrapbook/log-add-sticker`;
+          break;
+      }
+
+      // Skip if no endpoint matched (shouldn't happen with current action types)
+      if (!endpoint) return;
+
+      await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Secret': localStorage.getItem('auth_token') || ''
+        },
+        body: JSON.stringify({
+          action: actionType,
+          scrapbook_id: scrapbookId,
+          ...details
+        })
+      }).catch((err) => {
+        // Log silently to avoid disrupting user experience
+        console.debug('Scrapbook action logging failed:', err);
+      });
+    } catch (err) {
+      console.debug('Scrapbook action logging error:', err);
+    }
+  };
+
   // Refresh presigned URLs for saved items once fresh media is available
   useEffect(() => {
     if (!hasHydratedItems || media.length === 0) return;
@@ -429,6 +468,13 @@ function ScrapbookEditorPage() {
 
     setItems((prev) => [...prev, droppedItem]);
     setSelectedItemId(droppedItem.id);
+    
+    // Log this action to session
+    logScrapbookAction('add_media', {
+      media_type: mediaItem.type,
+      media_id: mediaId || s3Key,
+      method: 'drag_drop'
+    });
   };
 
   const addMediaToCanvas = (entry) => {
@@ -449,6 +495,12 @@ function ScrapbookEditorPage() {
 
     setItems((prev) => [...prev, nextItem]);
     setSelectedItemId(nextItem.id);
+    
+    // Log this action to session
+    logScrapbookAction('add_media', {
+      media_type: entry.type,
+      media_id: entry.media_id
+    });
   };
 
   const onBoardItemMouseDown = (event, item) => {
@@ -542,6 +594,11 @@ function ScrapbookEditorPage() {
 
     if (updated) {
       setScrapbook((prev) => ({ ...(prev || {}), ...updated }));
+      
+      // Log this action to session
+      logScrapbookAction('change_background', {
+        color: color
+      });
     }
   };
 
@@ -578,6 +635,13 @@ function ScrapbookEditorPage() {
       setItems((prev) => [...prev, nextItem]);
       setSelectedItemId(nextItem.id);
       showNotice('Decoration image added.');
+      
+      // Log this action to session
+      logScrapbookAction('add_media', {
+        media_type: 'local_decoration',
+        file_name: file.name || 'Decoration',
+        method: 'local_upload'
+      });
     } catch {
       showNotice('Could not add that image.');
     }
@@ -599,6 +663,11 @@ function ScrapbookEditorPage() {
 
     setItems((prev) => [...prev, nextItem]);
     setSelectedItemId(nextItem.id);
+    
+    // Log this action to session
+    logScrapbookAction('add_sticker', {
+      sticker: sticker
+    });
   };
 
   const startRenamingScrapbook = () => {

@@ -2,6 +2,8 @@
   "name": "frontend",
   "private": true,
   "version": "0.0.0",
+  "description": "Digital Diary desktop client",
+  "author": "Digital Diary",
   "main": "public/electron.js",
   "scripts": {
     "start": "vite",
@@ -9,7 +11,12 @@
     "dev-delayed": "vite && (sleep 2 && electron .)",
     "build": "vite build",
     "electron:dev": "vite build && electron .",
-    "electron:build": "vite build && electron-packager . DigitalDiary --out=../dist/ --overwrite --extra-resource=../bin --extra-resource=.env"
+    "electron:build": "vite build && electron-builder",
+    "electron:build:win:x64": "node -e \"const fs=require('fs'); const p='../bin/win/x64/ffmpeg.exe'; if(!fs.existsSync(p)){ console.error('Missing required binary: ' + p); process.exit(1);} \" && vite build && electron-builder --win --x64",
+    "electron:build:win:arm64": "node -e \"const fs=require('fs'); const p='../bin/win/arm64/ffmpeg.exe'; if(!fs.existsSync(p)){ console.error('Missing required binary: ' + p); process.exit(1);} \" && vite build && electron-builder --win --arm64",
+    "electron:build:mac": "node -e \"if (process.platform !== 'darwin') { console.error('Mac builds must be run on macOS.'); process.exit(1); }\" && vite build && electron-builder --mac --universal",
+    "electron:build:mac:x64": "node -e \"if (process.platform !== 'darwin') { console.error('Mac x64 builds must be run on macOS.'); process.exit(1); } const fs=require('fs'); const p='../bin/mac/x64/ffmpeg'; if(!fs.existsSync(p)){ console.error('Missing required binary: ' + p); process.exit(1);} \" && vite build && electron-builder --mac --x64",
+    "electron:build:mac:arm64": "node -e \"if (process.platform !== 'darwin') { console.error('Mac arm64 builds must be run on macOS.'); process.exit(1); } const fs=require('fs'); const p='../bin/mac/arm64/ffmpeg'; if(!fs.existsSync(p)){ console.error('Missing required binary: ' + p); process.exit(1);} \" && vite build && electron-builder --mac --arm64"
   },
   "dependencies": {
     "@electron/remote": "^2.1.2",
@@ -38,25 +45,40 @@
     "wait-on": "^8.0.3"
   },
   "build": {
+    "appId": "com.digitaldiary.app",
+    "productName": "Digital Diary",
     "directories": {
       "output": "../dist"
     },
     "files": [
-      "**/*",
-      "!node_modules/**/*",
-      "!dist/**/*",
-      "!package-lock.json",
-      "!vite.config.*",
-      "!*.md"
+      "dist/**/*",
+      "public/electron.js",
+      "package.json",
+      "node_modules/**/*"
     ],
-    "extraResources": [
-      {
-        "from": "../bin",
-        "to": "bin"
-      }
-    ],
-    "extraFiles": [
-      "bin/${os}/${arch}/*"
-    ]
+    "mac": {
+      "extraResources": [
+        {
+          "from": "../bin/mac/${arch}",
+          "to": "bin/mac/${arch}"
+        }
+      ],
+      "target": [
+        "zip",
+        "dir"
+      ]
+    },
+    "win": {
+      "extraResources": [
+        {
+          "from": "../bin/win/${arch}",
+          "to": "bin/win/${arch}"
+        }
+      ],
+      "target": [
+        "zip",
+        "dir"
+      ]
+    }
   }
 }

@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { Upload, X, Image, Camera } from 'lucide-react';
+import { Upload, X, Image, Camera, Pencil } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
 
 function HeroImage({ onImageChange }) {
     const currentUsername = useContext(UserContext).username || 'User';
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
     const apiBasePath = `${API_BASE_URL}/api/${encodeURIComponent(currentUsername)}`;
+    const [isLoading, setIsLoading] = useState(true);
     const [heroImage, setHeroImage] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [showHeroEditOptions, setShowHeroEditOptions] = useState(false);
+    const [isHeroHovered, setIsHeroHovered] = useState(false);
     const [allScreenshots, setAllScreenshots] = useState([]);
     const [loadingAllScreenshots, setLoadingAllScreenshots] = useState(false);
     const [showScreenshotSelector, setShowScreenshotSelector] = useState(false);
@@ -33,6 +35,7 @@ function HeroImage({ onImageChange }) {
             if (data.url) {
                 console.log('Setting hero image from backend:', data.url);
                 setHeroImage(data.url);
+                setIsLoading(false);
                 setNoScreenshotsAvailable(false);
                 
                 // Notify parent component about the change
@@ -42,10 +45,12 @@ function HeroImage({ onImageChange }) {
             } else {
                 console.log('No hero image returned from backend');
                 setNoScreenshotsAvailable(true);
+                setIsLoading(false);
             }
         } catch (error) {
             console.error('Error fetching hero image:', error);
             setNoScreenshotsAvailable(true);
+            setIsLoading(false);
         }
     };
     
@@ -138,10 +143,6 @@ function HeroImage({ onImageChange }) {
         fileInputRef.current.click();
     };
     
-    const handleHeroImageClick = () => {
-        setShowHeroEditOptions(true);
-    };
-    
     const handleSelectFromScreenshots = () => {
         fetchAllScreenshots();
         setShowScreenshotSelector(true);
@@ -159,7 +160,7 @@ function HeroImage({ onImageChange }) {
             const response = await fetch(`${apiBasePath}/upload-hero-image`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ media_url: screenshot.media_url })
+                body: JSON.stringify({ media_key: screenshot.s3_key })
             });
             
             if (!response.ok) {
@@ -185,8 +186,8 @@ function HeroImage({ onImageChange }) {
         <div className="mb-8">
             <div 
                 className="relative h-96 md:h-[32rem] w-full rounded-lg overflow-hidden cursor-pointer"
-                onMouseEnter={() => setShowHeroEditOptions(true)}
-                onMouseLeave={() => setShowHeroEditOptions(false)}
+                onMouseEnter={() => setIsHeroHovered(true)}
+                onMouseLeave={() => setIsHeroHovered(false)}
             >
                 {heroImage ? (
                     <>
@@ -194,12 +195,29 @@ function HeroImage({ onImageChange }) {
                             src={heroImage} 
                             alt="Hero" 
                             className="w-full h-full object-contain bg-gray-100"
-                            onClick={handleHeroImageClick}
                         />
+
+                        {/* Hover edit button */}
+                        {isHeroHovered && !showHeroEditOptions && (
+                            <button
+                                onClick={() => setShowHeroEditOptions(true)}
+                                className="absolute top-4 right-4 bg-white/90 text-gray-800 p-2 rounded-full hover:bg-white transition-all shadow-sm"
+                                aria-label="Edit hero image"
+                            >
+                                <Pencil size={18} />
+                            </button>
+                        )}
                         
-                        {/* Edit options that appear on hover */}
+                        {/* Edit options that appear after clicking edit */}
                         {showHeroEditOptions && (
                             <div className="absolute inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center gap-4">
+                                <button
+                                    onClick={() => setShowHeroEditOptions(false)}
+                                    className="absolute top-4 right-4 bg-white/90 text-gray-800 p-2 rounded-full hover:bg-white transition-all shadow-sm"
+                                    aria-label="Close hero image edit options"
+                                >
+                                    <X size={18} />
+                                </button>
                                 <button 
                                     onClick={handleSelectFromScreenshots}
                                     className="bg-white/90 text-gray-800 px-4 py-2 rounded-lg hover:bg-white transition-all flex items-center gap-2 shadow-sm"
@@ -217,15 +235,32 @@ function HeroImage({ onImageChange }) {
                             </div>
                         )}
                     </>
-                ) : (
+                ) : !isLoading ? (
                     <div 
-                        className="w-full h-full bg-gradient-to-r from-blue-100 to-teal-100 flex flex-col items-center justify-center cursor-pointer"
-                        onClick={triggerFileInput}
+                        className="w-full h-full bg-gradient-to-r from-blue-100 to-teal-100 flex flex-col items-center justify-center px-4"
                     >
                         <Upload size={40} className="text-teal-500 mb-2" />
-                        <p className="text-gray-600 font-medium">Upload a hero image</p>
-                        <p className="text-gray-500 text-sm mt-1">Click to select from your computer</p>
+                        <p className="text-gray-600 font-medium">Set your hero image</p>
+                        <p className="text-gray-500 text-sm mt-1 text-center">Choose from your screenshots or upload one from your computer.</p>
+                        <div className="mt-5 flex flex-col sm:flex-row gap-3">
+                            <button
+                                onClick={handleSelectFromScreenshots}
+                                className="bg-white/90 text-gray-800 px-4 py-2 rounded-lg hover:bg-white transition-all flex items-center justify-center gap-2 shadow-sm"
+                            >
+                                <Image size={18} />
+                                <span>Choose from Screenshots</span>
+                            </button>
+                            <button
+                                onClick={triggerFileInput}
+                                className="bg-teal-500 text-white px-4 py-2 rounded-lg hover:bg-teal-600 transition-all flex items-center justify-center gap-2 shadow-sm"
+                            >
+                                <Upload size={18} />
+                                <span>Upload Image</span>
+                            </button>
+                        </div>
                     </div>
+                ) : (
+                    <div className="w-full h-full bg-gradient-to-r from-blue-100 to-teal-100 flex flex-col items-center justify-center"></div>
                 )}
                 <input 
                     type="file" 

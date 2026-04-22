@@ -1022,64 +1022,91 @@ def get_profile_pic(username):
 @log_usage(feature_name="upload_hero_image")
 def upload_hero_image(username):
     try:
-        if 'file' not in request.files:
-            return jsonify({"error": "No file part"}), 400
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({"error": "No selected file"}), 400
-        
-        # Simple extension check
-        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-            return jsonify({"error": "File type not supported"}), 400
-        
-        _, ext = os.path.splitext(file.filename) 
-        ext = ext.lower()
-        object_name = f"{username}/hero{ext}"
+        if 'file' in request.files:
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({"error": "No selected file"}), 400
+            
+            # Simple extension check
+            if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                return jsonify({"error": "File type not supported"}), 400
+            
+            _, ext = os.path.splitext(file.filename) 
+            ext = ext.lower()
+            object_name = f"{username}/hero{ext}"
 
-        content_types = {
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.gif': 'image/gif'
-        }
+            content_types = {
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.gif': 'image/gif'
+            }
 
-        # Ensure pointer is at the start
-        file.seek(0)
+            # Ensure pointer is at the start
+            file.seek(0)
 
-        # Uploads new profile picture first
-        s3_client.upload_fileobj(
-            file,
-            BUCKET_NAME,
-            object_name,
-            # octet-stream used for fallback if unknown extension
-            ExtraArgs={'ContentType': content_types.get(ext, 'application/octet-stream')}
-        )
+            # Uploads new hero image first
+            s3_client.upload_fileobj(
+                file,
+                BUCKET_NAME,
+                object_name,
+                # octet-stream used for fallback if unknown extension
+                ExtraArgs={'ContentType': content_types.get(ext, 'application/octet-stream')}
+            )
 
-        # Clean up old/different extensions
-        existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/hero")
+            # Clean up old/different extensions
+            existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/hero")
 
-        if 'Contents' in existing_files:
-        # Filter out the file we JUST uploaded so we don't delete it
-            delete_keys = [
-                {'Key': obj['Key']} 
-                for obj in existing_files['Contents'] 
-                if obj['Key'] != object_name
-            ]
-            if delete_keys:
-                s3_client.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': delete_keys})
+            if 'Contents' in existing_files:
+            # Filter out the file we JUST uploaded so we don't delete it
+                delete_keys = [
+                    {'Key': obj['Key']} 
+                    for obj in existing_files['Contents'] 
+                    if obj['Key'] != object_name
+                ]
+                if delete_keys:
+                    s3_client.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': delete_keys})
 
-        new_url = s3_client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
-            ExpiresIn=3600
-        )
-        
-        return jsonify({"message": "Success", "url": new_url}), 200
+            new_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+                ExpiresIn=3600
+            )
+            
+            return jsonify({"message": "Success", "url": new_url}), 200
+        else:
+            if 'media_key' not in request.json:
+                return jsonify({"error": "No file or media_key provided"}), 400
+            media_key = request.json['media_key']
+
+            ext = os.path.splitext(media_key)[1].lower()
+            if ext not in ['.png', '.jpg', '.jpeg', '.gif']:
+                return jsonify({"error": "File type not supported in media_key"}), 400
+            object_name = f"{username}/hero{ext}"
+
+            # Remove old hero images with prefix
+            existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/hero")
+            if 'Contents' in existing_files:
+                delete_keys = [{'Key': obj['Key']} for obj in existing_files['Contents']]
+                if delete_keys:
+                    s3_client.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': delete_keys})
+            
+            # Copy the file from the provided media_key to the new location in S3
+            s3_client.copy_object(
+                Bucket=BUCKET_NAME,
+                Key=object_name,
+                CopySource={'Bucket': BUCKET_NAME, 'Key': media_key}
+            )
+            new_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+                ExpiresIn=3600
+            )
+            return jsonify({"message": "Success", "url": new_url}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
-# Retrieve profile picture from directory
+
+# Retrieve hero image from directory
 @app.route('/api/<username>/hero-image', methods=['GET'])
 @log_usage(feature_name="get_hero_image")
 def get_hero_image(username):

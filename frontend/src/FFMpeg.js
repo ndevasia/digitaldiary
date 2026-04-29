@@ -184,23 +184,42 @@ class FFMpeg {
             }
             
             this.currentScreenRecordingName = `recording_${Date.now()}`;
-            const args = [...this.getVideoRecordingArgs()];
+            const args = [...this.getVideoRecordingArgs(withAudio ? audioDevice : null)];
+            const videoEncodingArgs = [
+                '-c:v', 'libx264',
+                '-crf', '28',
+                '-preset', 'veryfast',
+                '-tune', 'zerolatency',
+                '-pix_fmt', 'yuv420p',
+                '-g', '30',
+                '-keyint_min', '30',
+                '-sc_threshold', '0',
+                '-x264-params', 'repeat-headers=1',
+                '-force_key_frames', 'expr:gte(t,n_forced*1)'
+            ];
             
             if (withAudio) {
-                args.push(...this.getAudioRecordingArgs(audioDevice));
                 // Map both video and audio streams
-                args.push('-map', '0:v', '-map', '1:a');
+                args.push('-map', '0:v', '-map', '0:a?');
+                // Add sync flags for audio-video alignment
+                args.push('-async', '1');
                 // Video encoding
-                args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
+                args.push(...videoEncodingArgs);
                 // Audio encoding
                 args.push('-ar', '44100', '-ac', '2', '-c:a', 'aac', '-b:a', '128k');
             } else {
                 // Video only
-                args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
+                args.push(...videoEncodingArgs);
             }
             
             // Output format and destination
-            args.push('-f', 'mpegts', streamDestination);
+            args.push(
+                '-f', 'mpegts',
+                '-mpegts_flags', '+resend_headers',
+                '-muxdelay', '0',
+                '-muxpreload', '0',
+                streamDestination
+            );
             
             console.log('FFMpeg args:', args);
             
@@ -424,9 +443,10 @@ class FFMpeg {
 
     /**
      * Gets the arguments for video recording based on the platform.
+     * @param {string|null} audioDeviceName - For macOS with audio, the audio device to use.
      * @returns {string[]} The arguments for the video recording command.
      */
-    getVideoRecordingArgs() {
+    getVideoRecordingArgs(audioDeviceName = null) {
         const args = ['-hide_banner'];
         switch (platform) {
             case 'win':
@@ -434,6 +454,7 @@ class FFMpeg {
                 // Use GDI grab for screen capture
                 args.push(
                     '-f', 'gdigrab', 
+                    '-framerate', '30',
                     '-offset_x', activeDisplay.physicalX.toString(), 
                     '-offset_y', activeDisplay.physicalY.toString(), 
                     '-video_size', activeDisplay.physicalWidth.toString() 
@@ -450,10 +471,22 @@ class FFMpeg {
                 const devices = this.parseMacDevices(process.stderr.toString());
                 const videoDevices = devices.filter(d => d.type === 'video');
                 const captureDevice = videoDevices.findIndex(d => d.name.toLowerCase().includes('capture'));
-                if (!captureDevice) {
+                if (captureDevice === -1) {
                     throw new Error('No video capture device found for Mac');
                 }
-                args.push('-f', 'avfoundation', '-i', `${captureDevice}:none`);
+                
+                // On macOS, if recording with audio, get the audio device index to combine in single input
+                let audioDeviceIndex = 'none';
+                if (audioDeviceName) {
+                    const audioDevices = devices.filter(d => d.type === 'audio');
+                    const audioIndex = audioDevices.findIndex(d => d.name === audioDeviceName);
+                    if (audioIndex !== -1) {
+                        audioDeviceIndex = audioIndex.toString();
+                    }
+                }
+                
+                // Combine video and audio in single avfoundation input for sync
+                args.push('-f', 'avfoundation', '-i', `${captureDevice}:${audioDeviceIndex}`);
                 break;
             case 'linux':
                 // Use X11 screen capture and ALSA for audio

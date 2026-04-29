@@ -228,7 +228,7 @@ function App() {
             } else if (screenRecordingState === ACTIVE) {
                 fetch(`${apiBasePath}/recording/stop/${screenRecordingUID.current}`, { method: 'POST' }).then(() => {
                     console.log('Notified backend of recording stop');
-                    FFMpeg.stopVideoStream(false).then(() => {
+                    FFMpeg.stopVideoStream(true).then(() => {
                         console.log('Screen recording stopped');
                         setScreenRecordingState(INACTIVE);
                         // Invalidate cache to trigger refetch on pages

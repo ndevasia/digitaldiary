@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext, useRef } from 'react';
-import { ChevronDown, X, Loader, RefreshCw } from 'lucide-react';
+import { ChevronDown, X, Loader, RefreshCw, Download } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
 import { useMediaCache } from '../context/MediaCacheContext.jsx';
 import useCacheInvalidation from '../hooks/useCacheInvalidation.js';
@@ -287,6 +287,38 @@ function FilesPage() {
         setShowModal(false);
     };
 
+    const getScreenshotFileName = (item) => {
+        const appName = (item.app_name || 'screenshot')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '');
+        const dateStamp = item.timestamp
+            ? new Date(item.timestamp).toISOString().split('T')[0]
+            : 'unknown-date';
+        return `${appName || 'screenshot'}-${dateStamp}.png`;
+    };
+
+    const handleDownloadScreenshot = async (item) => {
+        try {
+            const response = await fetch(item.media_url);
+            if (!response.ok) {
+                throw new Error('Unable to download screenshot');
+            }
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = getScreenshotFileName(item);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            console.error('Failed to download screenshot:', error);
+            window.open(item.media_url, '_blank', 'noopener,noreferrer');
+        }
+    };
+
     const startEditing = (s3Key, field, currentValue) => {
         setEditingItemKey(s3Key);
         setEditingField(field);
@@ -447,14 +479,21 @@ function FilesPage() {
                 );
             case 'screenshot':
                 return (
-                    <div className="h-full flex flex-col">
-                        <div className={`${mediaClass} rounded overflow-hidden shadow-sm p-4 flex-grow flex justify-center items-center`}>
+                    <div className="h-full flex flex-col group">
+                        <div className={`${mediaClass} relative rounded overflow-hidden shadow-sm p-4 flex-grow flex justify-center items-center`}>
                             <img 
                                 src={item.media_url} 
                                 alt="Screenshot" 
                                 className="w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
                                 onClick={() => enlargeImage(item.media_url)}
                             />
+                            <button
+                                onClick={() => handleDownloadScreenshot(item)}
+                                className="absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-1 text-xs bg-white/90 border border-gray-300 rounded hover:bg-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Download screenshot"
+                            >
+                                <Download size={14} />
+                            </button>
                         </div>
                         <div className="mt-2">
                             {renderEditableField('App', item.app_name, item, 'app_name', isOwned)}

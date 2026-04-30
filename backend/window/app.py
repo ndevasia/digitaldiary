@@ -521,12 +521,16 @@ def start_screen_recording(username):
         ffmpeg_process = subprocess.Popen(
             [FFMPEG_PATH, 
              '-probesize', '10M',
+             '-analyzeduration', '10M',
+             '-fflags', '+genpts+discardcorrupt',
              '-flags', 'low_delay',
              '-i', listen_url + listen_query,
              '-map', '0:v',   # Map video first
              '-map', '0:a?',   # Map audio second
+             '-async', '1',  # Sync audio to video timestamps
              '-c:v', 'copy',  # Then specify video codec
              '-c:a', 'copy',  # Then specify audio codec
+             '-movflags', '+faststart',
              ffmpeg_output],
             stdin=subprocess.PIPE
         )

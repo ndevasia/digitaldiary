@@ -344,6 +344,7 @@ async function main() {
             const updatedEnv = env.replace(/VITE_USERNAME=.*/g, `VITE_USERNAME=${username}`)
                                   .replace(/VITE_USER_SECRET=.*/g, `VITE_USER_SECRET=${userSecret}`);
             fs.writeFileSync(path.resolve(__dirname, './.env'), updatedEnv);
+            console.log(`Set .env for ${username}: VITE_USERNAME=${username}, VITE_USER_SECRET=${userSecret}`);
             folderLinks.push(await distributeForUser(drive, username));
         }
         const env = fs.readFileSync(path.resolve(__dirname, './.env'), 'utf-8');

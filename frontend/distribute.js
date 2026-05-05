@@ -265,6 +265,8 @@ function readEnvFile() {
 function writeEnvFile(content) {
     ensureEnvFileExists();
     fs.writeFileSync(ENV_PATH, content);
+    // Reload dotenv to update process.env with new values
+    dotenv.config({ path: ENV_PATH, override: true });
 }
 
 async function distributeForUser(drive, username) {

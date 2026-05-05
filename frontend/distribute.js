@@ -11,6 +11,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const GOOGLE_DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive'];
 const GOOGLE_TOKEN_PATH = path.resolve(__dirname, '.gdrive-token.json');
+const ENV_PATH = path.resolve(__dirname, '.env');
 const GOOGLE_DRIVE_PARENT_FOLDER_ID = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || null;
 const GOOGLE_DOC_SHORTCUT_NAME = process.env.GOOGLE_DOC_SHORTCUT_NAME || 'Submission Doc';
 const GOOGLE_DOC_TARGET_ID = process.env.GOOGLE_DOC_TARGET_ID || resolveGoogleDocId(process.env.GOOGLE_DOC_URL || '');
@@ -249,6 +250,23 @@ function getFolderLink(folderId) {
     return `https://drive.google.com/drive/folders/${folderId}?usp=sharing`;
 }
 
+function ensureEnvFileExists() {
+    if (!fs.existsSync(ENV_PATH)) {
+        console.warn(`Frontend .env file not found at ${ENV_PATH}, creating empty file.`);
+        fs.writeFileSync(ENV_PATH, '');
+    }
+}
+
+function readEnvFile() {
+    ensureEnvFileExists();
+    return fs.readFileSync(ENV_PATH, 'utf-8');
+}
+
+function writeEnvFile(content) {
+    ensureEnvFileExists();
+    fs.writeFileSync(ENV_PATH, content);
+}
+
 async function distributeForUser(drive, username) {
     const artifacts = packageAndDistribute(username);
     const folderId = await getOrCreateUserFolder(drive, username);
@@ -340,17 +358,17 @@ async function main() {
                 continue;
             }
 
-            const env = fs.readFileSync(path.resolve(__dirname, './.env'), 'utf-8');
+            const env = readEnvFile();
             const updatedEnv = env.replace(/VITE_USERNAME=.*/g, `VITE_USERNAME=${username}`)
                                   .replace(/VITE_USER_SECRET=.*/g, `VITE_USER_SECRET=${userSecret}`);
-            fs.writeFileSync(path.resolve(__dirname, './.env'), updatedEnv);
+            writeEnvFile(updatedEnv);
             console.log(`Set .env for ${username}: VITE_USERNAME=${username}, VITE_USER_SECRET=${userSecret}`);
             folderLinks.push(await distributeForUser(drive, username));
         }
-        const env = fs.readFileSync(path.resolve(__dirname, './.env'), 'utf-8');
+        const env = readEnvFile();
         const restoredEnv = env.replace(/VITE_USERNAME=.*/g, `VITE_USERNAME=${initialUsername}`)
                                .replace(/VITE_USER_SECRET=.*/g, `VITE_USER_SECRET=${initialSecret}`);
-        fs.writeFileSync(path.resolve(__dirname, './.env'), restoredEnv);
+        writeEnvFile(restoredEnv);
     } else {
         console.log('No username provided, grabbing from .env');
         const username = process.env.VITE_USERNAME;

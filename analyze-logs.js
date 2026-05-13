@@ -71,6 +71,25 @@ async function listUserLogs(username) {
 }
 
 /**
+ * Format timestamp string to readable date format
+ */
+function formatDate(dateString) {
+  if (!dateString || dateString === "Unknown") return dateString;
+  
+  const date = new Date(dateString);
+  const options = {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "UTC"
+  };
+  return date.toLocaleDateString("en-US", options);
+}
+
+/**
  * Parse log filename to extract timestamp
  * Filename format: YYYYMMDDTHHmmss-[hash].json
  */
@@ -166,33 +185,31 @@ async function analyzeUserLogs() {
     userStats.push({
       username,
       lastInteractionTime,
+      lastInteractionTimeFormatted: formatDate(lastInteractionTime),
       totalInteractions,
       logCount: logs.length,
     });
 
-    console.log(`  Last interaction: ${lastInteractionTime}`);
+    console.log(`  Last interaction: ${formatDate(lastInteractionTime)}`);
     console.log(`  Total interactions: ${totalInteractions}`);
     console.log(`  Log files: ${logs.length}\n`);
   }
 
   // Print summary
   console.log("\n=== SUMMARY ===\n");
-  console.log("Username\t\t\tLast Interaction\t\tTotal Interactions");
-  console.log("-".repeat(80));
+  console.log("Username".padEnd(20) + "Last Interaction".padEnd(30) + "Total Interactions");
+  console.log("-".repeat(60));
 
   userStats.sort((a, b) => b.totalInteractions - a.totalInteractions);
 
   for (const stat of userStats) {
     const paddedUsername = stat.username.padEnd(20);
-    console.log(
-      `${paddedUsername}\t${stat.lastInteractionTime}\t${stat.totalInteractions}`
-    );
+    const paddedDate = stat.lastInteractionTimeFormatted.padEnd(30);
+    console.log(`${paddedUsername}${paddedDate}${stat.totalInteractions}`);
   }
 
-  console.log("\n" + "=".repeat(80));
-  console.log(
-    `Total users: ${userStats.length}`
-  );
+  console.log("\n" + "=".repeat(60));
+  console.log(`Total users: ${userStats.length}`);
   const totalAllInteractions = userStats.reduce(
     (sum, stat) => sum + stat.totalInteractions,
     0

@@ -1,0 +1,13 @@
+{
+  "name": "digital-diary",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "analyze-logs": "node analyze-logs.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1042.0",
+    "googleapis": "^171.4.0",
+    "dotenv": "^16.0.0"
+  }
+}

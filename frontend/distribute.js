@@ -286,7 +286,7 @@ async function distributeForUser(drive, username) {
 function packageAndDistribute(username) {
     console.log(`Packaging for ${username}...`);
     try {
-        execSync('npm run electron:build:all', { stdio: 'inherit' });
+        execSync('npm run electron:build:win', { stdio: 'inherit' });
         return getBuildArtifacts();
     } catch (error) {
         console.error(`Error packaging for ${username}:`, error);

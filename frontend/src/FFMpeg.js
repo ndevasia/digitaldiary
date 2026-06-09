@@ -200,13 +200,19 @@ class FFMpeg {
             
             if (withAudio) {
                 // Map both video and audio streams
-                args.push('-map', '0:v', '-map', '0:a?');
+                args.push('-thread_queue_size', '1024', 
+                    '-f', 'dshow', 
+                    '-audio_buffer_size', '50',
+                    '-itsoffset', '1.5',
+                    '-i', `audio=${audioDevice}`);
+                // args.push('-map', '0:v', '-map', '1:a');
                 // Add sync flags for audio-video alignment
-                args.push('-async', '1');
+                args.push('-af', 'aresample=async=1');
                 // Video encoding
                 args.push(...videoEncodingArgs);
                 // Audio encoding
                 args.push('-ar', '44100', '-ac', '2', '-c:a', 'aac', '-b:a', '128k');
+                console.log("WITH AUDIO: " + audioDevice);
             } else {
                 // Video only
                 args.push(...videoEncodingArgs);
@@ -430,7 +436,7 @@ class FFMpeg {
                 const devices = this.parseMacDevices(process.stderr.toString());
                 const videoDevices = devices.filter(d => d.type === 'video');
                 const captureDevice = videoDevices.findIndex(d => d.name.toLowerCase().includes('capture'));
-                if (!captureDevice) {
+                if (captureDevice === -1) {
                     throw new Error('No video capture device found for Mac');
                 }
                 args.unshift('-f', 'avfoundation', '-i', `${captureDevice}:none`);
@@ -453,6 +459,7 @@ class FFMpeg {
                 const activeDisplay = ipcRenderer.sendSync('get-active-display');
                 // Use GDI grab for screen capture
                 args.push(
+                    '-thread_queue_size', '512',
                     '-f', 'gdigrab', 
                     '-framerate', '30',
                     '-offset_x', activeDisplay.physicalX.toString(), 

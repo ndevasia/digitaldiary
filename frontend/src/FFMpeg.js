@@ -184,23 +184,48 @@ class FFMpeg {
             }
             
             this.currentScreenRecordingName = `recording_${Date.now()}`;
-            const args = [...this.getVideoRecordingArgs()];
+            const args = [...this.getVideoRecordingArgs(withAudio ? audioDevice : null)];
+            const videoEncodingArgs = [
+                '-c:v', 'libx264',
+                '-crf', '28',
+                '-preset', 'veryfast',
+                '-tune', 'zerolatency',
+                '-pix_fmt', 'yuv420p',
+                '-g', '30',
+                '-keyint_min', '30',
+                '-sc_threshold', '0',
+                '-x264-params', 'repeat-headers=1',
+                '-force_key_frames', 'expr:gte(t,n_forced*1)'
+            ];
             
             if (withAudio) {
-                args.push(...this.getAudioRecordingArgs(audioDevice));
                 // Map both video and audio streams
-                args.push('-map', '0:v', '-map', '1:a');
+                args.push('-thread_queue_size', '1024', 
+                    '-f', 'dshow', 
+                    '-audio_buffer_size', '50',
+                    '-itsoffset', '1.5',
+                    '-i', `audio=${audioDevice}`);
+                // args.push('-map', '0:v', '-map', '1:a');
+                // Add sync flags for audio-video alignment
+                args.push('-af', 'aresample=async=1');
                 // Video encoding
-                args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
+                args.push(...videoEncodingArgs);
                 // Audio encoding
                 args.push('-ar', '44100', '-ac', '2', '-c:a', 'aac', '-b:a', '128k');
+                console.log("WITH AUDIO: " + audioDevice);
             } else {
                 // Video only
-                args.push('-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast');
+                args.push(...videoEncodingArgs);
             }
             
             // Output format and destination
-            args.push('-f', 'mpegts', streamDestination);
+            args.push(
+                '-f', 'mpegts',
+                '-mpegts_flags', '+resend_headers',
+                '-muxdelay', '0',
+                '-muxpreload', '0',
+                streamDestination
+            );
             
             console.log('FFMpeg args:', args);
             
@@ -301,6 +326,7 @@ class FFMpeg {
                 return;
             }
 
+            let hasResolved = false;
             this.currentAudioRecordingName = `audio_recording_${Date.now()}`;
             this.audioProcess = spawn(
                 this.path, 
@@ -315,14 +341,30 @@ class FFMpeg {
 
             this.audioProcess.on('error', (err) => {
                 this.audioProcess = null;
-                reject(new Error(`Failed to start FFMpeg audio recording: ${err.message}`));
+                if (!hasResolved) {
+                    hasResolved = true;
+                    reject(new Error(`Failed to start FFMpeg audio recording: ${err.message}`));
+                }
+            });
+
+            this.audioProcess.on('exit', (code) => {
+                if (!hasResolved) {
+                    hasResolved = true;
+                    this.audioProcess = null;
+                    if (code !== 0) {
+                        reject(new Error(`FFMpeg audio recording process exited with error code ${code}`));
+                    }
+                }
             });
 
             this.audioProcess.stderr.on('data', (data) => {
                 if (VERBOSE)
                     console.log(`FFMpeg stderr: ${data}`);
                 if (data.toString().includes('size=')) {
-                    resolve();
+                    if (!hasResolved) {
+                        hasResolved = true;
+                        resolve();
+                    }
                 }
             });
         });
@@ -376,7 +418,14 @@ class FFMpeg {
         switch (platform) {
             case 'win':
                 // Put new args at the front of existing args to avoid vframes conflict
-                args.unshift('-f', 'gdigrab', '-i', 'desktop');
+                const activeDisplay = ipcRenderer.sendSync('get-active-display');
+                args.unshift(
+                    '-f', 'gdigrab', 
+                    '-offset_x', activeDisplay.physicalX.toString(), 
+                    '-offset_y', activeDisplay.physicalY.toString(), 
+                    '-video_size', activeDisplay.physicalWidth.toString() 
+                        + 'x' + activeDisplay.physicalHeight.toString(), 
+                    '-i', 'desktop');
                 break;
             case 'mac':
                 const process = spawnSync(
@@ -387,7 +436,7 @@ class FFMpeg {
                 const devices = this.parseMacDevices(process.stderr.toString());
                 const videoDevices = devices.filter(d => d.type === 'video');
                 const captureDevice = videoDevices.findIndex(d => d.name.toLowerCase().includes('capture'));
-                if (!captureDevice) {
+                if (captureDevice === -1) {
                     throw new Error('No video capture device found for Mac');
                 }
                 args.unshift('-f', 'avfoundation', '-i', `${captureDevice}:none`);
@@ -400,14 +449,24 @@ class FFMpeg {
 
     /**
      * Gets the arguments for video recording based on the platform.
+     * @param {string|null} audioDeviceName - For macOS with audio, the audio device to use.
      * @returns {string[]} The arguments for the video recording command.
      */
-    getVideoRecordingArgs() {
+    getVideoRecordingArgs(audioDeviceName = null) {
         const args = ['-hide_banner'];
         switch (platform) {
             case 'win':
+                const activeDisplay = ipcRenderer.sendSync('get-active-display');
                 // Use GDI grab for screen capture
-                args.push('-f', 'gdigrab', '-i', 'desktop');
+                args.push(
+                    '-thread_queue_size', '512',
+                    '-f', 'gdigrab', 
+                    '-framerate', '30',
+                    '-offset_x', activeDisplay.physicalX.toString(), 
+                    '-offset_y', activeDisplay.physicalY.toString(), 
+                    '-video_size', activeDisplay.physicalWidth.toString() 
+                        + 'x' + activeDisplay.physicalHeight.toString(), 
+                    '-i', 'desktop');
                 break;
             case 'mac':
                 // DEBUG INFO: Print out Apple devices
@@ -419,10 +478,22 @@ class FFMpeg {
                 const devices = this.parseMacDevices(process.stderr.toString());
                 const videoDevices = devices.filter(d => d.type === 'video');
                 const captureDevice = videoDevices.findIndex(d => d.name.toLowerCase().includes('capture'));
-                if (!captureDevice) {
+                if (captureDevice === -1) {
                     throw new Error('No video capture device found for Mac');
                 }
-                args.push('-f', 'avfoundation', '-i', `${captureDevice}:none`);
+                
+                // On macOS, if recording with audio, get the audio device index to combine in single input
+                let audioDeviceIndex = 'none';
+                if (audioDeviceName) {
+                    const audioDevices = devices.filter(d => d.type === 'audio');
+                    const audioIndex = audioDevices.findIndex(d => d.name === audioDeviceName);
+                    if (audioIndex !== -1) {
+                        audioDeviceIndex = audioIndex.toString();
+                    }
+                }
+                
+                // Combine video and audio in single avfoundation input for sync
+                args.push('-f', 'avfoundation', '-i', `${captureDevice}:${audioDeviceIndex}`);
                 break;
             case 'linux':
                 // Use X11 screen capture and ALSA for audio

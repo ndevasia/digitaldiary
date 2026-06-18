@@ -1,4 +1,3 @@
-import FFMpeg from "../FFMpeg";
 import { useContext, useEffect, useState } from "react"
 import Sidebar from "../components/Sidebar";
 import { UserContext } from '../context/UserContext.jsx';
@@ -39,6 +38,7 @@ function SettingsPage() {
     }
 
     const fetchDevices = async () => {
+        const { default: FFMpeg } = await import('../FFMpeg.js');
         const devices = await FFMpeg.getDevices();
         setAudioDevices(devices.filter(d => d.type === 'audio'));
     }

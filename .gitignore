@@ -68,3 +68,5 @@ backend/globals.py
 *package-lock.json
 *node_modules
 *dist
+
+.gdrive-token.json

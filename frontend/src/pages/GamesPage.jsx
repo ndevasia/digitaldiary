@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { ChevronLeft, X } from 'lucide-react';
+import { ChevronLeft, X, Download } from 'lucide-react';
 import { UserContext } from '../context/UserContext.jsx';
 import { useMediaCache } from '../context/MediaCacheContext.jsx';
 import VideoPlayer from '../components/VideoPlayer.jsx';
@@ -133,6 +133,38 @@ function GamesPage() {
 
   const closeModal = () => {
     setShowModal(false);
+  };
+
+  const getScreenshotFileName = (item, fallbackPrefix = 'screenshot') => {
+    const appName = (item.app_name || fallbackPrefix)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const dateStamp = item.timestamp
+      ? new Date(item.timestamp).toISOString().split('T')[0]
+      : 'unknown-date';
+    return `${appName || fallbackPrefix}-${dateStamp}.png`;
+  };
+
+  const handleDownloadScreenshot = async (item, fallbackPrefix) => {
+    try {
+      const response = await fetch(item.media_url);
+      if (!response.ok) {
+        throw new Error('Unable to download screenshot');
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = getScreenshotFileName(item, fallbackPrefix);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error('Failed to download screenshot:', error);
+      window.open(item.media_url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const startEditing = (s3Key, field, currentValue) => {
@@ -277,16 +309,28 @@ function GamesPage() {
           return (
             <div 
               key={game.slug} 
-              className="bg-blue-100 rounded overflow-hidden shadow-sm transition-all hover:shadow-md hover:-translate-y-1 cursor-pointer"
+              className="bg-blue-100 rounded overflow-hidden shadow-sm transition-all hover:shadow-md hover:-translate-y-1 cursor-pointer group"
               onClick={() => handleGameClick(game)}
             >
-              <div className="h-40 overflow-hidden bg-blue-50">
+              <div className="h-40 overflow-hidden bg-blue-50 relative">
                 {screenshotMedia ? (
-                  <img 
-                    src={screenshotMedia.media_url} 
-                    alt={game.name} 
-                    className="w-full h-full object-cover"
-                  />
+                  <>
+                    <img 
+                      src={screenshotMedia.media_url} 
+                      alt={game.name} 
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadScreenshot(screenshotMedia, game.name);
+                      }}
+                      className="absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-1 text-xs bg-white/90 border border-gray-300 rounded hover:bg-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Download screenshot"
+                    >
+                      <Download size={14} />
+                    </button>
+                  </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-blue-500 font-semibold">
                     {game.name}
@@ -421,6 +465,13 @@ function GamesPage() {
                   >
                     <X size={16} />
                   </button>
+                  <button
+                    onClick={() => handleDownloadScreenshot(item, selectedGame.name)}
+                    className="absolute top-2 left-2 bg-white hover:bg-gray-100 text-gray-700 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity border border-gray-300"
+                    title="Download screenshot"
+                  >
+                    <Download size={16} />
+                  </button>
                 </div>
               );
             } else if (item.type === 'video') {
@@ -505,19 +556,21 @@ function GamesPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full">
       <div className="flex-1 p-8 overflow-y-auto">
         <header className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-semibold text-gray-700">Hello, {currentUsername}</h1>
         </header>
         
-        <section className="mb-8">
+        <section className="mb-8 w-full">
           <h2 className="text-xl font-medium text-gray-700 mb-4">Apps</h2>
           
-          <div className="bg-white rounded-lg border border-gray-200 p-8">
+          <div className="bg-white rounded-lg border border-gray-200 p-8 w-full">
             {loading ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500">Loading apps...</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                {[1, 2, 3, 4, 5, 6].map((_, index) => (
+                  <div key={index} className="animate-pulse bg-blue-100 h-48 w-full rounded"></div>
+                ))}
               </div>
             ) : error ? (
               <div className="text-center py-12">

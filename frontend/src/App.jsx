@@ -44,6 +44,22 @@ function App() {
     const screenRecordingUID = useRef(null);
     const [isMaximized, setIsMaximized] = useState(true);
     const { invalidateCache } = useCacheInvalidation();
+    const [errorMessage, setErrorMessage] = useState('');
+    const errorTimeoutRef = useRef(null);
+
+    // Helper function to show error messages
+    const showError = (message, title = 'Error') => {
+        // Display error in the overlay UI
+        setErrorMessage(`${title}: ${message}`);
+        
+        // Auto-hide after 5 seconds
+        if (errorTimeoutRef.current) {
+            clearTimeout(errorTimeoutRef.current);
+        }
+        errorTimeoutRef.current = setTimeout(() => {
+            setErrorMessage('');
+        }, 5000);
+    };
 
     // Add effect to listen for main window open/close events
     useEffect(() => {
@@ -56,6 +72,15 @@ function App() {
         return () => {
             ipcRenderer.removeListener('main-window-opened', handleMainWindowOpen);
             ipcRenderer.removeListener('main-window-closed', handleMainWindowClose);
+        };
+    }, []);
+
+    useEffect(() => {
+        // Cleanup error timeout on unmount
+        return () => {
+            if (errorTimeoutRef.current) {
+                clearTimeout(errorTimeoutRef.current);
+            }
         };
     }, []);
 
@@ -135,13 +160,16 @@ function App() {
                     invalidateCache(currentUsername);
                 } else {
                     console.error('Screenshot upload failed');
+                    showError('Failed to upload screenshot. Please try again.', 'Screenshot Error');
                 }
             }).catch((err) => {
                 console.error('Screenshot upload error:', err);
+                showError('Screenshot upload failed: ' + err.message, 'Upload Error');
                 setScreenshotState(INACTIVE);
             });
         }).catch((err) => {
             console.error('Screenshot error:', err);
+            showError('Failed to take screenshot: ' + err.message, 'Screenshot Error');
             setScreenshotState(INACTIVE);
         });
     };
@@ -183,16 +211,19 @@ function App() {
                         screenRecordingUID.current = data.uid;
                         const streamDestination = data.url.replace('44.228.196.10', import.meta.env.VITE_SRT_DEST || '');
                         const withAudio = localStorage.getItem('recordAudioWithScreen') === "true";
+                        if (withAudio) console.log('Screen recording will include audio');
                         const audioDeviceName = localStorage.getItem('audioDeviceName');
                         FFMpeg.startVideoStream(streamDestination, withAudio, audioDeviceName).then(() => {
                             console.log('Screen recording started');
                             setScreenRecordingState(ACTIVE);
                         }).catch((err) => {
                             console.error('Screen recording error:', err);
+                            showError('Failed to start screen recording: ' + err.message, 'Screen Recording Error');
                             setScreenRecordingState(INACTIVE);
                         });
                     }).catch((err) => {
                         console.error('Recording start error:', err);
+                        showError('Failed to start screen recording: ' + err.message, 'Screen Recording Error');
                         setScreenRecordingState(INACTIVE);
                     });
             } else if (screenRecordingState === ACTIVE) {
@@ -205,15 +236,18 @@ function App() {
                         invalidateCache(currentUsername);
                     }).catch((err) => {
                         console.error('Screen recording error:', err);
+                        showError('Failed to stop screen recording: ' + err.message, 'Screen Recording Error');
                         setScreenRecordingState(INACTIVE);
                     });
                 }).catch((err) => {
                     console.error('Screen recording error:', err);
+                    showError('Failed to stop screen recording: ' + err.message, 'Screen Recording Error');
                     setScreenRecordingState(INACTIVE);
                 });
             }
         } catch (error) {
             console.error('Recording error:', error);
+            showError('An error occurred with screen recording: ' + error.message, 'Screen Recording Error');
             setScreenRecordingState(INACTIVE);
         }
     };
@@ -243,6 +277,7 @@ function App() {
                 const audioDeviceName = localStorage.getItem('audioDeviceName');
                 if (!audioDeviceName || audioDeviceName === 'none') {
                     console.error('No valid audio device selected. Please configure one in Settings.');
+                    showError('No audio device selected. Please configure one in Settings.', 'Audio Device Error');
                     setAudioRecordingState(INACTIVE);
                     return;
                 }
@@ -252,6 +287,7 @@ function App() {
                     setAudioRecordingState(ACTIVE);
                 }).catch((err) => {
                     console.error('Audio recording error:', err);
+                    showError('Failed to start audio recording: ' + err.message, 'Audio Recording Error');
                     setAudioRecordingState(INACTIVE);
                 });
             } else if (audioRecordingState === ACTIVE) {
@@ -272,18 +308,22 @@ function App() {
                             invalidateCache(currentUsername);
                         } else {
                             console.error('Audio file upload failed');
+                            showError('Failed to upload audio file. Please try again.', 'Upload Error');
                         }
                     }).catch((err) => {
                         console.error('Audio file upload error:', err);
+                        showError('Failed to upload audio file: ' + err.message, 'Upload Error');
                     });
                     setAudioRecordingState(INACTIVE);
                 }).catch((err) => {
                     console.error('Audio recording error:', err);
+                    showError('Failed to stop audio recording: ' + err.message, 'Audio Recording Error');
                     setAudioRecordingState(INACTIVE);
                 });
             }
         } catch (error) {
             console.error('Audio recording error:', error);
+            showError('An error occurred with audio recording: ' + error.message, 'Audio Recording Error');
         }
     };
 
@@ -310,6 +350,13 @@ function App() {
     return (
         <Router>
             <div className="h-screen w-screen flex flex-col min-w-0 min-h-0 overflow-hidden bg-transparent">
+                {/* Error Banner */}
+                {errorMessage && (
+                    <div className="fixed top-0 left-0 right-0 bg-red-500 text-white p-3 text-sm z-50 shadow-lg">
+                        {errorMessage}
+                    </div>
+                )}
+                
                 {/* Sidebar */}
                 <div
                     className="bg-white flex flex-col min-w-0 min-h-0 p-1 rounded-lg border border-zinc-200 shadow-lg h-full relative"

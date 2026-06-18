@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Download } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer.jsx';
 import { UserContext } from '../context/UserContext.jsx';
 import { useMediaCache } from '../context/MediaCacheContext.jsx';
@@ -166,6 +166,38 @@ function FriendsPage() {
     setShowModal(false);
   };
 
+  const getScreenshotFileName = (item, fallbackPrefix = 'screenshot') => {
+    const appName = (item.app_name || fallbackPrefix)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const dateStamp = item.timestamp
+      ? new Date(item.timestamp).toISOString().split('T')[0]
+      : 'unknown-date';
+    return `${appName || fallbackPrefix}-${dateStamp}.png`;
+  };
+
+  const handleDownloadScreenshot = async (item, fallbackPrefix) => {
+    try {
+      const response = await fetch(item.media_url);
+      if (!response.ok) {
+        throw new Error('Unable to download screenshot');
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = getScreenshotFileName(item, fallbackPrefix);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error('Failed to download screenshot:', error);
+      window.open(item.media_url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   // Render the friends list
   const renderFriendsList = () => {
     if (friends.length === 0) {
@@ -201,16 +233,28 @@ function FriendsPage() {
           return (
             <div 
               key={friendUsername} 
-              className="bg-purple-100 rounded overflow-hidden shadow-sm transition-all hover:shadow-md hover:-translate-y-1 cursor-pointer"
+              className="bg-purple-100 rounded overflow-hidden shadow-sm transition-all hover:shadow-md hover:-translate-y-1 cursor-pointer group"
               onClick={() => handleFriendClick(friendUsername)}
             >
-              <div className="h-40 overflow-hidden bg-purple-50">
+              <div className="h-40 overflow-hidden bg-purple-50 relative">
                 {screenshotMedia ? (
-                  <img 
-                    src={screenshotMedia.media_url} 
-                    alt={friendUsername} 
-                    className="w-full h-full object-cover"
-                  />
+                  <>
+                    <img 
+                      src={screenshotMedia.media_url} 
+                      alt={friendUsername} 
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadScreenshot(screenshotMedia, friendUsername);
+                      }}
+                      className="absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-1 text-xs bg-white/90 border border-gray-300 rounded hover:bg-white opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Download screenshot"
+                    >
+                      <Download size={14} />
+                    </button>
+                  </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-purple-500 font-semibold">
                     {friendUsername}
@@ -305,7 +349,7 @@ function FriendsPage() {
               return (
                 <div 
                   key={item.media_id} 
-                  className={`${mediaClass} rounded overflow-hidden shadow-sm`}
+                  className={`${mediaClass} rounded overflow-hidden shadow-sm relative group`}
                 >
                   <div className="h-40 overflow-hidden bg-purple-50 cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={() => enlargeImage(item.media_url)}>
@@ -315,6 +359,13 @@ function FriendsPage() {
                       className="w-full h-full object-cover"
                     />
                   </div>
+                  <button
+                    onClick={() => handleDownloadScreenshot(item, selectedFriend)}
+                    className="absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-1 text-xs bg-white/90 border border-gray-300 rounded hover:bg-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Download screenshot"
+                  >
+                    <Download size={14} />
+                  </button>
                   <div className="p-4">
                     <div className="text-sm text-gray-700 font-medium mb-1">Screenshot</div>
                     <div className="text-xs text-gray-500">{date}</div>

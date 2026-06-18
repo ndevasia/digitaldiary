@@ -240,7 +240,7 @@ def test_endpoint():
 def get_media_aws(username):
     try:
         # List objects in the specified user's directory in S3
-        prefix = f"{username}/"
+        prefix = f"{username}/media/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
 
         if 'Contents' not in response:
@@ -256,7 +256,6 @@ def get_media_aws(username):
             # Format: username/session_id/filename
             parts = item['Key'].split('/')
             s3_username = parts[0]
-            session_id = parts[1] if len(parts) > 2 else None
 
             # Convert S3 username to integer user_id
             owner_user_id = get_user_id_from_username(s3_username)
@@ -292,14 +291,13 @@ def get_media_aws(username):
             # Transform into media data type format
             media_item = {
                 "media_id": idx,
-                "s3_key": item['Key'],
+                "s3_key": item['Key'], # for deletion reference
                 "type": media_type,
                 "media_url": media_url,
                 "timestamp": item['LastModified'].isoformat(),
                 "owner_user_id": owner_user_id,
-                "session_id": session_id,
-                "app_name": session_id if session_id else "app1",  # Use session_id if available, else fallback
-                "s3_key": item['Key']  # Add the actual S3 key for deletion
+                "session_id": None,    # will be overridden by S3 metadata if available
+                "app_name": "No app",  # Fallback if no S3 metadata
             }
 
             # Apply custom metadata from S3 object headers
@@ -362,12 +360,12 @@ def latest_screenshot(username):
     """Returns the URL for the latest screenshot"""
     try:
         # List all objects under USERNAME prefix to find any screenshots
-        prefix = username + "/screenshot_"
+        prefix = username + "/media/screenshots/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
 
         if 'Contents' in response:
             # Find all screenshot files (recursively from any session folder)
-            screenshot_files = [file for file in response['Contents'] if 'screenshot_' in file['Key']]
+            screenshot_files = response['Contents']
 
             if screenshot_files:
                 latest_file = sorted(screenshot_files, key=lambda x: x['LastModified'], reverse=True)[0]['Key']
@@ -396,7 +394,7 @@ def get_random_screenshot_by_days(username, days):
         # Extract just the date part (year, month, day) for comparison
         # target_date_only = target_date.date()
         
-        prefix = username + "/screenshot_"
+        prefix = username + "/media/screenshots/"
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
         
         if 'Contents' in response:
@@ -449,7 +447,7 @@ def upload_screenshot(username):
         user_with = request.form.get('user_with', '')
         
         # Generate presigned URL for upload
-        object_name = f"{username}/{file.filename}"
+        object_name = f"{username}/media/screenshots/{file.filename}"
         url = s3_client.generate_presigned_url(
             'put_object',
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -493,20 +491,21 @@ def start_screen_recording(username):
 
         # Extract metadata from request body
         data = request.json or {}
-        app_name = data.get('app_name', '')
+        app_name = data.get('app_name', 'No app')
         user_with = data.get('user_with', '')
 
         port = random.randint(SRT_PORT_MIN, SRT_PORT_MAX)
         public_host = resolve_srt_public_host()
-        # FFmpeg SRT listener is most compatible using empty-host form: srt://:<port>
-        if SRT_BIND_HOST in ('0.0.0.0', '::', ''):
-            listen_url = f"srt://:{port}"
-        else:
-            listen_url = f"srt://{SRT_BIND_HOST}:{port}"
+        # Some FFmpeg/SRT builds reject empty-host listener URLs (srt://:<port>).
+        # Always provide an explicit bind host for listener mode.
+        bind_host = (SRT_BIND_HOST or '').strip()
+        if bind_host in ('', '::'):
+            bind_host = '0.0.0.0'
+        listen_url = f"srt://{bind_host}:{port}"
         caller_url = f"srt://{public_host}:{port}"
 
         file_uid = datetime.now().strftime(f"{port}%Y%m%d_%H%M%S")
-        filename = f"recording_{file_uid}.mkv"
+        filename = f"recording_{file_uid}.mp4"
         ffmpeg_output = os.path.normpath(os.path.join(RECORDINGS_DIR, filename))
         
         log_message(f"Output file path: {ffmpeg_output}")
@@ -522,12 +521,16 @@ def start_screen_recording(username):
         ffmpeg_process = subprocess.Popen(
             [FFMPEG_PATH, 
              '-probesize', '10M',
+             '-analyzeduration', '10M',
+             '-fflags', '+genpts+discardcorrupt',
              '-flags', 'low_delay',
              '-i', listen_url + listen_query,
              '-map', '0:v',   # Map video first
              '-map', '0:a?',   # Map audio second
+             '-async', '1',  # Sync audio to video timestamps
              '-c:v', 'copy',  # Then specify video codec
              '-c:a', 'copy',  # Then specify audio codec
+             '-movflags', '+faststart',
              ffmpeg_output],
             stdin=subprocess.PIPE
         )
@@ -596,13 +599,13 @@ def stop_screen_recording(username, file_uid):
         del recording_processes[file_uid]
         log_message("Stopped ffmpeg for screen recording.")
 
-        filename = f"recording_{file_uid}.mkv"
+        filename = f"recording_{file_uid}.mp4"
         ffmpeg_output = os.path.normpath(os.path.join(RECORDINGS_DIR, filename))
         video_url = None
 
         # Upload the recording to S3
         try:
-            object_name = f"{username}/recordings/{filename}"
+            object_name = f"{username}/media/screen_recordings/{filename}"
             url = s3_client.generate_presigned_url(
                 'put_object',
                 Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -674,7 +677,7 @@ def upload_audio_recording(username):
         user_with = request.form.get('user_with', '')
         
         # Generate presigned URL for upload
-        object_name = f"{username}/recordings/{file.filename}"
+        object_name = f"{username}/media/audio_recordings/{file.filename}"
         url = s3_client.generate_presigned_url(
             'put_object',
             Params={'Bucket': BUCKET_NAME, 'Key': object_name},
@@ -1023,64 +1026,91 @@ def get_profile_pic(username):
 @log_usage(feature_name="upload_hero_image")
 def upload_hero_image(username):
     try:
-        if 'file' not in request.files:
-            return jsonify({"error": "No file part"}), 400
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({"error": "No selected file"}), 400
-        
-        # Simple extension check
-        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-            return jsonify({"error": "File type not supported"}), 400
-        
-        _, ext = os.path.splitext(file.filename) 
-        ext = ext.lower()
-        object_name = f"{username}/hero{ext}"
+        if 'file' in request.files:
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({"error": "No selected file"}), 400
+            
+            # Simple extension check
+            if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                return jsonify({"error": "File type not supported"}), 400
+            
+            _, ext = os.path.splitext(file.filename) 
+            ext = ext.lower()
+            object_name = f"{username}/hero{ext}"
 
-        content_types = {
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.gif': 'image/gif'
-        }
+            content_types = {
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.gif': 'image/gif'
+            }
 
-        # Ensure pointer is at the start
-        file.seek(0)
+            # Ensure pointer is at the start
+            file.seek(0)
 
-        # Uploads new profile picture first
-        s3_client.upload_fileobj(
-            file,
-            BUCKET_NAME,
-            object_name,
-            # octet-stream used for fallback if unknown extension
-            ExtraArgs={'ContentType': content_types.get(ext, 'application/octet-stream')}
-        )
+            # Uploads new hero image first
+            s3_client.upload_fileobj(
+                file,
+                BUCKET_NAME,
+                object_name,
+                # octet-stream used for fallback if unknown extension
+                ExtraArgs={'ContentType': content_types.get(ext, 'application/octet-stream')}
+            )
 
-        # Clean up old/different extensions
-        existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/hero")
+            # Clean up old/different extensions
+            existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/hero")
 
-        if 'Contents' in existing_files:
-        # Filter out the file we JUST uploaded so we don't delete it
-            delete_keys = [
-                {'Key': obj['Key']} 
-                for obj in existing_files['Contents'] 
-                if obj['Key'] != object_name
-            ]
-            if delete_keys:
-                s3_client.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': delete_keys})
+            if 'Contents' in existing_files:
+            # Filter out the file we JUST uploaded so we don't delete it
+                delete_keys = [
+                    {'Key': obj['Key']} 
+                    for obj in existing_files['Contents'] 
+                    if obj['Key'] != object_name
+                ]
+                if delete_keys:
+                    s3_client.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': delete_keys})
 
-        new_url = s3_client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': BUCKET_NAME, 'Key': object_name},
-            ExpiresIn=3600
-        )
-        
-        return jsonify({"message": "Success", "url": new_url}), 200
+            new_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+                ExpiresIn=3600
+            )
+            
+            return jsonify({"message": "Success", "url": new_url}), 200
+        else:
+            if 'media_key' not in request.json:
+                return jsonify({"error": "No file or media_key provided"}), 400
+            media_key = request.json['media_key']
+
+            ext = os.path.splitext(media_key)[1].lower()
+            if ext not in ['.png', '.jpg', '.jpeg', '.gif']:
+                return jsonify({"error": "File type not supported in media_key"}), 400
+            object_name = f"{username}/hero{ext}"
+
+            # Remove old hero images with prefix
+            existing_files = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=f"{username}/hero")
+            if 'Contents' in existing_files:
+                delete_keys = [{'Key': obj['Key']} for obj in existing_files['Contents']]
+                if delete_keys:
+                    s3_client.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': delete_keys})
+            
+            # Copy the file from the provided media_key to the new location in S3
+            s3_client.copy_object(
+                Bucket=BUCKET_NAME,
+                Key=object_name,
+                CopySource={'Bucket': BUCKET_NAME, 'Key': media_key}
+            )
+            new_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': object_name},
+                ExpiresIn=3600
+            )
+            return jsonify({"message": "Success", "url": new_url}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
-# Retrieve profile picture from directory
+
+# Retrieve hero image from directory
 @app.route('/api/<username>/hero-image', methods=['GET'])
 @log_usage(feature_name="get_hero_image")
 def get_hero_image(username):
@@ -1204,6 +1234,43 @@ def get_friends(username):
         return jsonify({"friends": friends}), 200
     except Exception as e:
         print(f"Error in get_friends: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# Scrapbook action logging endpoints
+@app.route('/api/<username>/scrapbook/log-add-media', methods=['POST'])
+@log_usage(feature_name="scrapbook_add_media")
+def log_add_media(username):
+    """Log when media is added to a scrapbook"""
+    try:
+        data = request.json or {}
+        # Details like media type, media_id, etc. can be included
+        return jsonify({"status": "success", "action": "add_media"}), 200
+    except Exception as e:
+        print(f"Error logging add media: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/<username>/scrapbook/log-change-background', methods=['POST'])
+@log_usage(feature_name="scrapbook_change_background")
+def log_change_background(username):
+    """Log when background color is changed"""
+    try:
+        data = request.json or {}
+        # Details like color code can be included
+        return jsonify({"status": "success", "action": "change_background"}), 200
+    except Exception as e:
+        print(f"Error logging change background: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/<username>/scrapbook/log-add-sticker', methods=['POST'])
+@log_usage(feature_name="scrapbook_add_sticker")
+def log_add_sticker(username):
+    """Log when a sticker is added to a scrapbook"""
+    try:
+        data = request.json or {}
+        # Details like sticker emoji can be included
+        return jsonify({"status": "success", "action": "add_sticker"}), 200
+    except Exception as e:
+        print(f"Error logging add sticker: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
